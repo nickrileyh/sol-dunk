@@ -132,13 +132,27 @@
     ember: { name: 'Ember', near: ['#ffe8c4', '#ff9a3c', '#e0451a'], far: ['#d4743a', '#7a2a10'], hi: 'rgba(255,255,255,0.45)', vein: 'rgba(120,30,0,0.3)', edge: 'rgba(90,20,0,0.5)', farEdge: 'rgba(60,10,0,0.5)' },
     gold: { name: 'Gold', near: ['#fff8d6', '#ffd84a', '#c99400'], far: ['#d6b04a', '#8a6a10'], hi: 'rgba(255,255,255,0.55)', vein: 'rgba(110,70,0,0.3)', edge: 'rgba(90,60,0,0.55)', farEdge: 'rgba(60,40,0,0.5)' }
   };
+  // Flames: a base palette and a hotter "nova" palette (5+ swishes in a row), edge to white-hot core.
   const FLAMES = {
-    fire: { name: 'Fire', pal: ['#ffe08a', '#ffb340', '#ff8a1f', '#ff5a1f'], trail: '255,150,60' },
-    ice: { name: 'Ice', pal: ['#ffffff', '#c8f4ff', '#7fe3ff', '#3aa8ff'], trail: '120,210,255' },
-    toxic: { name: 'Toxic', pal: ['#f4ffb0', '#c6ff4a', '#6ee35a', '#21c15a'], trail: '150,240,90' },
-    rose: { name: 'Rose', pal: ['#ffe0ee', '#ff9cc4', '#ff5a92', '#e0245e'], trail: '255,110,160' },
-    gold: { name: 'Gold', pal: ['#fffbe0', '#ffe680', '#ffc41a', '#ffa000'], trail: '255,200,60' }
+    fire: { name: 'Fire', base: { outer: [255, 60, 16], mid: [255, 124, 20], inner: [255, 196, 72], core: [255, 244, 212] },
+      nova: { outer: [104, 72, 255], mid: [60, 144, 255], inner: [140, 218, 255], core: [236, 248, 255] },
+      hex: ['#fff1c4', '#ffc65a', '#ff9a2a', '#ff6a1f'], novaHex: ['#bfe8ff', '#7cb8ff', '#9a7bff', '#ffffff'] },
+    ice: { name: 'Ice', base: { outer: [40, 96, 255], mid: [64, 160, 255], inner: [150, 222, 255], core: [240, 252, 255] },
+      nova: { outer: [150, 60, 255], mid: [186, 110, 255], inner: [228, 186, 255], core: [255, 246, 255] } },
+    toxic: { name: 'Toxic', base: { outer: [16, 140, 52], mid: [72, 214, 64], inner: [188, 255, 96], core: [246, 255, 224] },
+      nova: { outer: [0, 140, 170], mid: [30, 210, 214], inner: [150, 255, 236], core: [238, 255, 252] } },
+    rose: { name: 'Rose', base: { outer: [214, 20, 84], mid: [255, 72, 140], inner: [255, 160, 200], core: [255, 236, 246] },
+      nova: { outer: [130, 40, 255], mid: [184, 92, 255], inner: [228, 172, 255], core: [255, 246, 255] } },
+    gold: { name: 'Gold', base: { outer: [230, 110, 0], mid: [255, 170, 20], inner: [255, 222, 110], core: [255, 252, 226] },
+      nova: { outer: [255, 190, 40], mid: [255, 226, 130], inner: [255, 246, 206], core: [255, 255, 255] } }
   };
+  const hex3 = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+  const mix3 = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  for (const F of Object.values(FLAMES)) {
+    F.trail = F.base.mid.join(',');
+    F.hex = F.hex || [F.base.core, F.base.inner, F.base.mid, F.base.outer].map(hex3);
+    F.novaHex = F.novaHex || [F.nova.inner, F.nova.mid, F.nova.outer, F.nova.core].map(hex3);
+  }
   const COS = { ball: BALLS, wing: WINGS, flame: FLAMES };
   const UNLOCKS = [
     { t: 'ball', id: 'classic', lvl: 1 }, { t: 'ball', id: 'retro', lvl: 2 }, { t: 'ball', id: 'neon', lvl: 4 }, { t: 'ball', id: 'frost', lvl: 6 },
@@ -152,6 +166,18 @@
   const eqBall = () => BALLS[profile.eq.ball] || BALLS.classic;
   const eqWing = () => WINGS[profile.eq.wing] || WINGS.angel;
   const eqFlame = () => FLAMES[profile.eq.flame] || FLAMES.fire;
+  const flameHex = (nova) => (nova ? eqFlame().novaHex : eqFlame().hex);
+  const heatHex = (nova, k) => hex3((nova ? eqFlame().nova : eqFlame().base)[k || 'mid']);
+  const heatRgb = (nova, k) => (nova ? eqFlame().nova : eqFlame().base)[k || 'mid'].join(',');
+  const heatText = (nova) => mix3((nova ? eqFlame().nova : eqFlame().base).inner, (nova ? eqFlame().nova : eqFlame().base).core, 0.45).join(',');
+  // the multiplier glow, callouts and streak meter take the equipped flame's colours
+  function applyFlameTheme() {
+    const F = eqFlame(), st = document.documentElement.style, j = (a) => a.join(',');
+    for (const [k, P] of [['heat', F.base], ['nova', F.nova]]) {
+      st.setProperty('--' + k, j(P.mid)); st.setProperty('--' + k + '-hi', j(P.inner));
+      st.setProperty('--' + k + '-edge', j(P.outer)); st.setProperty('--' + k + '-text', j(mix3(P.inner, P.core, 0.45)));
+    }
+  }
 
   // r = what happened in the run (see runFacts)
   const ACH = [
@@ -381,7 +407,7 @@
   // ---------------------------------------------------------------- canvas & view
   // The client shows a 352-unit-wide window of the 400-unit world (a little zoomed in),
   // world y from -10 to 680. Physics never depends on this.
-  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 96;
+  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 84; // the ball sits 24% in, so more of the course shows ahead
   const RV = P.R; // drawn ball radius = collision radius
   const cv = $('game'), cx = cv.getContext('2d');
   let vw = 0, vh = 0, dpr = 1, scale = 1, offX = 0, offY = 0;
@@ -459,23 +485,13 @@
   }
 
   // ---------------------------------------------------------------- fire palette
-  // Fire runs from a near-white core out to red (or the equipped flame's colours); a 5+ swish streak burns blue-white.
-  const FIRE_PAL = { outer: [255, 60, 16], mid: [255, 124, 20], inner: [255, 196, 72], core: [255, 244, 212] };
-  const NOVA_PAL = { outer: [104, 72, 255], mid: [60, 144, 255], inner: [140, 218, 255], core: [236, 248, 255] };
+  // Fire runs from a near-white core out to its edge colour; a 5+ swish streak burns in the flame's hotter "nova"
+  // palette (blue-white for the Fire flame). Every flame skin brings both palettes (FLAMES).
   const palMix = { outer: [0, 0, 0], mid: [0, 0, 0], inner: [0, 0, 0], core: [0, 0, 0] };
-  // other flame skins map their four colours (light to dark) onto core, inner, mid and outer
-  const hexRgb = (h) => { const v = parseInt(h.slice(1), 16); return [v >> 16, (v >> 8) & 255, v & 255]; };
-  const skinPals = {};
-  function skinPal() {
-    const id = profile.eq.flame;
-    if (id === 'fire' || !FLAMES[id]) return FIRE_PAL;
-    const q = FLAMES[id].pal;
-    return skinPals[id] || (skinPals[id] = { core: hexRgb(q[0]), inner: hexRgb(q[1]), mid: hexRgb(q[2]), outer: hexRgb(q[3]) });
-  }
   function flamePal(n) {
-    const F = skinPal();
+    const F = eqFlame(), A = F.base, B = F.nova;
     for (const k in palMix) {
-      const a = F[k], b = NOVA_PAL[k], o = palMix[k];
+      const a = A[k], b = B[k], o = palMix[k];
       o[0] = Math.round(a[0] + (b[0] - a[0]) * n); o[1] = Math.round(a[1] + (b[1] - a[1]) * n); o[2] = Math.round(a[2] + (b[2] - a[2]) * n);
     }
     return palMix;
@@ -535,7 +551,6 @@
   function spawn(o) { if (parts.length > 420) parts.shift(); parts.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 0.6, max: 0.6, size: 3, color: '#fff', kind: 0, rot: 0, vr: 0, drag: 0 }, o)); }
   const texts = [];
   function floatText(x, y, text, sub, color, size) { texts.push({ x, y, text, sub, color, size: size || 20, life: 1.0, max: 1.0 }); }
-  const NOVA_HEX = ['#bfe8ff', '#7cb8ff', '#9a7bff', '#ffffff'];
 
   // ---------------------------------------------------------------- game state
   const ball = {
@@ -841,10 +856,10 @@
     if (o === 'S') {
       setStreakHud('pump');
       const s = run.streak;
-      if (s === 3) { callout('ON FIRE', 'Swish streak ×3', 'fire'); flash('255,150,40', 0.1); }
-      else if (s === 5) { callout('SUPERNOVA', 'Max streak bonus', 'nova'); flash('110,160,255', 0.13); }
-      else if (s >= 10 && s % 5 === 0) { callout(s === 10 ? 'UNSTOPPABLE' : s + ' IN A ROW', s + ' swishes in a row', 'nova'); flash('110,160,255', 0.14); }
-    } else if (was > 0) { setStreakHud('broke'); Sound.streakBreak(); }
+      if (s === 3) { callout('ON FIRE', 'Swish streak ×3', 'fire'); flash(heatRgb(0), 0.1); buzz([10, 25, 14]); }
+      else if (s === 5) { callout('SUPERNOVA', 'Max streak bonus', 'nova'); flash(heatRgb(1), 0.13); buzz([12, 25, 12, 25, 18]); }
+      else if (s >= 10 && s % 5 === 0) { callout(s === 10 ? 'UNSTOPPABLE' : s + ' IN A ROW', s + ' swishes in a row', 'nova'); flash(heatRgb(1), 0.14); }
+    } else if (was > 0) { setStreakHud('broke'); if (was < 2) Sound.streakBreak(); } // 2+ was burning: douse() plays the hiss
     addPoints(pts);
     if (capped) { endWin('maxwin'); return true; }
     return false;
@@ -1128,15 +1143,15 @@
     if (ball.fire > 0.3) v.heat = 1;
     const hx = view.offset + h.x, hy = E.hoopY(h, st.tick * DT);
     if (o === 'S') {
-      const nova = streak >= 5, hot = streak >= 3, pal = nova ? NOVA_HEX : hot ? eqFlame().pal : null;
+      const nova = streak >= 5, hot = streak >= 3, pal = hot ? flameHex(nova) : null;
       for (let i = 0; i < 16; i++) { const a = rnd(0, Math.PI * 2), s = rnd(60, 230); spawn({ x: hx, y: hy + 6, vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.55 - 30, life: 0.55, max: 0.55, size: rnd(1.4, 2.8), color: pal ? pal[i % 4] : '#ffffff', kind: 0, drag: 2.2 }); }
-      spawn({ x: hx, y: hy, kind: 3, life: 0.5, max: 0.5, size: h.w / 2 + P.RP, color: nova ? '#9fc2ff' : hot ? '#ffb067' : '#ffffff' });
+      spawn({ x: hx, y: hy, kind: 3, life: 0.5, max: 0.5, size: h.w / 2 + P.RP, color: nova ? heatHex(1, 'inner') : hot ? heatHex(0, 'inner') : '#ffffff' });
       if (streak === 3 || streak === 5) ignite(nova ? 1 : 0);
       Sound.swish(streak); buzz(10);
     } else { Sound.score(); }
     if (m != null) {
       const label = (o === 'S' ? streakName(streak) : 'Rim') + (pts ? ' +' + pts : '');
-      const col = o === 'S' ? (streak >= 5 ? '#b9d4ff' : streak >= 3 ? '#ffb067' : '#ffffff') : 'rgba(222,230,255,0.75)';
+      const col = o === 'S' ? (streak >= 5 ? heatHex(1, 'inner') : streak >= 3 ? heatHex(0, 'inner') : '#ffffff') : 'rgba(222,230,255,0.75)';
       // up and behind the ball's path, so the label never sits on the ball
       floatText(hx - 14, hy - 64, label, fmtX(m), col, o === 'S' ? 19 + Math.min(streak, 5) * 1.1 : 17);
       if (o === 'S' && (streak === 3 || streak === 5 || streak === 10)) Sound.fire();
@@ -1303,7 +1318,7 @@
       ball.emberAcc += dt * (REDUCED ? 3 : 16) * f;
       while (ball.emberAcc >= 1) {
         ball.emberAcc -= 1;
-        const pal = n > 0.5 ? NOVA_HEX : eqFlame().pal;
+        const pal = flameHex(n > 0.5);
         spawn({ x: dxw + rnd(-0.6, 0.6) * RV, y: dyw + rnd(-0.6, 0.6) * RV, vx: ball.vx * 0.3 + dx * rnd(40, 120) + rnd(-30, 30), vy: ball.vy * 0.3 + dy * rnd(40, 120) - 50, life: rnd(0.45, 0.85), max: 0.85, size: rnd(1, 2.2), color: pal[(Math.random() * 3) | 0], kind: 5, drag: 1.4 });
       }
     }
@@ -1326,29 +1341,37 @@
     view.shake *= Math.exp(-dt * 9);
     view.pulse *= Math.exp(-dt * 3.5);
     view.flash *= Math.exp(-dt * 6);
-    // camera: follows the drawn ball with velocity feed-forward, so the ball holds the same
-    // spot on screen at every speed, and bounces still read as motion
-    const target = dxw - BALL_SX / view.zoom;
-    if (view.camT != null && dt > 0 && Math.abs(target - view.camT) < 60) {
-      view.camV = lerp(view.camV, (target - view.camT) / dt, 1 - Math.exp(-dt * 4));
-    } else if (view.camT == null) view.camX = target;
-    view.camT = target;
-    view.camX += view.camV * dt;
-    view.camX = lerp(view.camX, target, 1 - Math.exp(-dt * (phase === 'play' ? 8 : 5)));
-    // in the lobby, zoom out and lift the world so the demo play fits above the bet sheet
+    // zoom: in the lobby the view zooms out and lifts the world so the demo play fits above the bet
+    // sheet. In a run it pulls back a little on faster levels, whose rings are spaced farther apart,
+    // so the next ring comes into view as early as on level 1.
     let zoomT = 1, centreY = null;
     if (phase === 'lobby' && !ui.lobby.classList.contains('hide')) {
       if (sheetTopC < 0) sheetTopC = ui.lobby.offsetTop;
       const sheetTop = sheetTopC;
       zoomT = clamp((sheetTop - 84) / (360 * scale), 0.55, 1);
       centreY = (64 + sheetTop - 10) / 2;
-    }
+    } else if (phase !== 'lobby' && run.st) zoomT = levelZoom(run.level);
     view.zoom = lerp(view.zoom, zoomT, 1 - Math.exp(-dt * 4));
     const S = scale * view.zoom;
+    // camera: follows the drawn ball with velocity feed-forward, so the ball holds the same
+    // spot on screen at every speed, and bounces still read as motion. In a run the ball keeps its
+    // level-1 spot on screen whatever the zoom, so all of the extra view lies ahead of it, on every
+    // screen size alike (wide screens fade their sides to the same window).
+    const ballSX = offX + BALL_SX * scale, ox0 = (vw - VIEW_W * S) / 2;
+    const target = phase === 'lobby' ? dxw - BALL_SX / view.zoom : dxw - (ballSX - ox0) / S;
+    if (view.camT != null && dt > 0 && Math.abs(target - view.camT) < 60) {
+      view.camV = lerp(view.camV, (target - view.camT) / dt, 1 - Math.exp(-dt * 4));
+    } else if (view.camT == null) view.camX = target;
+    view.camT = target;
+    view.camX += view.camV * dt;
+    view.camX = lerp(view.camX, target, 1 - Math.exp(-dt * (phase === 'play' ? 8 : 5)));
     const oy = (vh - VIEW_H * S) / 2 - VIEW_TOP * S;
     const camYT = centreY == null ? 0 : 300 - (centreY - oy) / S;
     view.camY = lerp(view.camY, camYT, 1 - Math.exp(-dt * 4));
   }
+
+  // how far the view pulls back on a level: rings spread out 4% a level, the view widens 3.5%
+  const levelZoom = (L) => 1 / (1 + 0.035 * (L - 1));
 
   // ---------------------------------------------------------------- rendering
   function render(alpha, bx, by) {
@@ -1361,12 +1384,13 @@
     // the score, huge and quiet, behind everything (Flappy Dunk style); the pot sits in the HUD
     if (phase !== 'lobby' && run.st) {
       const p = view.pulse, best = profile.best[run.di], cy = offY + 205 * scale;
-      const col = run.newBest ? '245,197,66' : run.streak >= 5 ? '159,194,255' : run.streak >= 3 ? '255,159,90' : '255,255,255';
+      const col = run.newBest ? '245,197,66' : run.streak >= 5 ? heatText(1) : run.streak >= 3 ? heatText(0) : '255,255,255';
       const m = multSprite(String(run.score), col), k = (84 + p * 9) / 91;
-      c.globalAlpha = Math.min(1, 0.13 + p * 0.3);
+      view.scoreDim = lerp(view.scoreDim || 1, CALL.busy ? 0.25 : 1, 0.15); // steps back while a callout is up
+      c.globalAlpha = Math.min(1, 0.13 + p * 0.3) * view.scoreDim;
       c.drawImage(m.el, vw / 2 - m.w * k / 2, cy - m.h * k / 2, m.w * k, m.h * k);
       if (best > 0) {
-        c.globalAlpha = run.newBest ? 0.55 : 0.3;
+        c.globalAlpha = (run.newBest ? 0.55 : 0.3) * view.scoreDim;
         c.font = '800 ' + (15 * scale).toFixed(1) + 'px ' + FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
         c.fillStyle = run.newBest ? '#f5c542' : '#ffffff';
         c.fillText(run.newBest ? 'NEW BEST' : 'BEST ' + best, vw / 2, cy + 48 * scale);
@@ -1383,7 +1407,15 @@
     c.setTransform(k, 0, 0, k, (ox + sx) * dpr - view.camX * k, (oy + sy) * dpr - view.camY * k);
     view.bsx = ox + sx + (bx - view.camX) * S; view.bsy = oy + sy + (by - view.camY) * S;
     const worldLeft = view.camX - ox / S, worldW = vw / S;
+    view.wl = view.camX + (offX - ox) / S; view.wr = view.camX + (offX + VIEW_W * scale - ox) / S; // the window everyone sees
+    if (!(view.time - view.hudAt < 0.4)) { // where the HUD ends, so ring labels float below it (small phones)
+      view.hudAt = view.time;
+      const bot = (q) => { const e = document.querySelector(q), r = e && e.getBoundingClientRect(); return r && r.height && r.right > offX && r.left < offX + VIEW_W * scale ? r.bottom : 0; };
+      view.hudBot = phase === 'lobby' ? 0 : Math.max(bot('#hud .hud-left .lvl'), bot('#streak.on'), bot('#hud .hud-mid'));
+    }
+    view.wt = view.hudBot ? view.camY + (view.hudBot - oy) / S : null;
     drawCourt(c, worldLeft, worldW, S, bx, by);
+    if (ball.fire > 0.05 && !ball.hidden && !REDUCED) fireLight(c, bx, by);
 
     const st = view.st;
     const tNow = st ? (phase === 'play' ? (st.tick - 1 + alpha) * DT : st.tick * DT) : 0;
@@ -1400,7 +1432,7 @@
       c.beginPath(); c.moveTo(x, o.h.y0 - o.h.amp); c.lineTo(x, o.h.y0 + o.h.amp); c.stroke(); c.setLineDash([]);
     }
     const tgt = st && !st.done ? st.hoops[st.next] : null;
-    for (const o of vis) o.later = !!(tgt && o.h !== tgt && o.h.st === 0 && st.hoops.indexOf(o.h) > st.next);
+    for (const o of vis) { const j = tgt && o.h !== tgt && o.h.st === 0 ? st.hoops.indexOf(o.h) - st.next : 0; o.later = j > 0 ? (j === 1 ? 0.66 : 0.46) : 0; }
     for (const o of vis) drawRing(c, o, true);
     drawGuide(c, bx, by);
     if (!ball.hidden) drawTrail(c);
@@ -1418,7 +1450,7 @@
     }
 
     // wide screens: fade the sides so everyone sees the same distance ahead
-    if (offX > 2 && view.zoom > 0.98) {
+    if (offX > 2 && (phase !== 'lobby' || view.zoom > 0.98)) {
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       const l = c.createLinearGradient(offX - 40, 0, offX + 6, 0);
       l.addColorStop(0, EDGE); l.addColorStop(1, EDGE0);
@@ -1435,6 +1467,13 @@
   // ---------------------------------------------------------------- court
   // A polished floor that catches the level's light, boards receding toward you, the ball's shadow
   // and, when it burns, the glow of its flame on the boards.
+  function fireLight(c, x, y) {
+    const R = RV * (6 + 3 * ball.fire), g = c.createRadialGradient(x, y, RV, x, y, R), Pf = flamePal(ball.nova);
+    g.addColorStop(0, rgba(Pf.mid, 0.12 * ball.fire)); g.addColorStop(1, rgba(Pf.mid, 0));
+    c.globalCompositeOperation = 'lighter'; c.fillStyle = g;
+    c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fill();
+    c.globalCompositeOperation = 'source-over';
+  }
   function drawCourt(c, left, width, S, bx, by) {
     const lr = glowRgb(), x0 = left - 20, w = width + 40, F = W.FLOOR;
     const fg = c.createLinearGradient(0, F, 0, F + 150);
@@ -1533,7 +1572,7 @@
       c.fillText('CHECKPOINT', 0, -(h.w / 2) * RING_RY - P.RP - 13);
     }
     c.rotate(h.tilt);
-    c.globalAlpha = h.st === 1 ? 0.32 : o.later ? 0.72 : 1;
+    c.globalAlpha = h.st === 1 ? 0.32 : o.later || 1;
     c.drawImage(back ? sp.back : sp.front, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
     c.globalAlpha = 1;
     const rx = h.w / 2, ry = rx * RING_RY;
@@ -1553,13 +1592,15 @@
       c.beginPath(); c.ellipse(0, -P.RP * 0.42, rx, ry, 0, ang - 0.1, ang + 0.1); c.stroke();
       c.globalCompositeOperation = 'source-over';
     }
-    if (next && view.ringStreak >= 3 && !REDUCED) { // on a streak: the next ring burns in the streak colour
-      const a = 0.3 + 0.14 * Math.sin(view.time * 9), nova = view.ringStreak >= 5;
-      c.globalCompositeOperation = 'lighter';
-      c.strokeStyle = (nova ? 'rgba(120,170,255,' : 'rgba(255,140,40,') + a.toFixed(3) + ')';
-      c.lineWidth = 2.6;
-      c.beginPath(); c.ellipse(0, 0, h.w / 2 + P.RP + 3.5, (h.w / 2) * RING_RY + P.RP + 2.5, 0, back ? Math.PI : 0, back ? Math.PI * 2 : Math.PI); c.stroke();
-      c.globalCompositeOperation = 'source-over';
+    if (next && ball.fire > 0.08 && !REDUCED) {
+      // the burning ball lights up the ring it's heading for, brighter as it closes in
+      const k = clamp(1 - Math.abs(x - (view.drawX || 0)) / 170, 0, 1) * ball.fire;
+      if (k > 0.01) {
+        c.globalCompositeOperation = 'lighter';
+        c.strokeStyle = rgba(flamePal(ball.nova).mid, 0.5 * k); c.lineWidth = P.RP * (0.45 + 0.6 * k); c.lineCap = 'round';
+        c.beginPath(); c.ellipse(0, 0, rx, ry, 0, back ? Math.PI : 0, back ? Math.PI * 2 : Math.PI); c.stroke();
+        c.globalCompositeOperation = 'source-over';
+      }
     }
     if (!back && v.flash !== 0) {
       const a = Math.abs(v.flash), frx = rx + P.RP + 3, fry = ry + P.RP + 2;
@@ -1756,7 +1797,8 @@
       c.globalAlpha = clamp(a, 0, 1);
       c.font = '800 ' + (t.size * s).toFixed(1) + 'px ' + FONT_DISPLAY;
       const half = c.measureText(t.text).width / 2 + 8;
-      t.x = clamp(t.x, view.camX + half, view.camX + VIEW_W - half);
+      t.x = clamp(t.x, (view.wl != null ? view.wl : view.camX) + half, (view.wr != null ? view.wr : view.camX + VIEW_W) - half);
+      if (view.wt != null) t.y = Math.max(t.y, view.wt + t.size * 0.9 + 4); // never behind the HUD
       c.fillStyle = t.color; c.fillText(t.text, t.x, t.y);
       if (t.sub) {
         c.font = '700 12px ' + FONT_ROUND;
@@ -1800,8 +1842,23 @@
     }
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden && phase === 'play') pause(); });
-  function pause() { phase = 'paused'; acc = 0; showPrompt('Paused', 'Tap to resume'); }
-  function resume() { hidePrompt(); phase = 'play'; acc = 0; last = performance.now(); }
+  // Resuming counts in 3-2-1, so the ball doesn't drop the moment you tap (faster levels leave little slack)
+  let resumeTimer = 0, resuming = false;
+  function pause() { clearTimeout(resumeTimer); resuming = false; phase = 'paused'; acc = 0; showPrompt('Paused', 'Tap to resume'); }
+  function resume() {
+    if (resuming) return;
+    if (REDUCED) { goPlay(); return; }
+    resuming = true;
+    let n = 3;
+    const tick = () => {
+      if (phase !== 'paused') { resuming = false; return; }
+      if (n === 0) { resuming = false; goPlay(); return; }
+      showPrompt(String(n), 'Get ready'); Sound.click(); n--;
+      resumeTimer = setTimeout(tick, 380);
+    };
+    tick();
+  }
+  function goPlay() { hidePrompt(); phase = 'play'; acc = 0; last = performance.now(); }
   ['gesturestart', 'dblclick'].forEach((n) => document.addEventListener(n, (e) => e.preventDefault()));
 
   $('cashBtn').addEventListener('click', cashOut);
@@ -1840,6 +1897,7 @@
   function howHtml() {
     return `<p><b>Tap</b> to flap. Drop the ball down through every ring. Fly past one, go under it or hit the floor and the run ends.</p>
       <h3>Swish</h3><p>Go through without touching the ring for a swish. Swishes pay more than rim hits, and swishes in a row pay more each time, up to 5 in a row. Your streak carries into the next level.</p>
+      <h3>Fire</h3><p>Two swishes in a row and the ball starts to smoulder. Three and it's <b>on fire</b>; five and it burns at full heat (blue-white with the Fire flame). Touch a rim and the flame goes out. Flames from the locker change the colours, never the pay.</p>
       <h3>Checkpoints</h3><p>Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.</p>
       <h3>Score and XP</h3><p>Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, daily challenges and achievements earn XP, which unlocks balls, wings and flames. Score and XP never change what a run pays.</p>`;
   }
@@ -1875,11 +1933,11 @@
     if (t === 'ball') { drawBallBody(g, s * 0.32, 0.45, BALLS[id]); }
     else if (t === 'wing') { const r = s * 0.29; g.translate(r * 0.95, r * 0.92); drawWing(g, r, -0.1, false, WINGS[id]); }
     else if (FLAME_PATH) {
-      const pal = FLAMES[id].pal, k = s / 30;
+      const Pb = FLAMES[id].base, k = s / 30;
       g.translate(-12 * k, -12.5 * k); g.scale(k, k);
       const gr = g.createLinearGradient(0, 2, 0, 23);
-      gr.addColorStop(0, pal[3]); gr.addColorStop(0.45, pal[2]); gr.addColorStop(0.8, pal[1]); gr.addColorStop(1, pal[0]);
-      g.shadowColor = pal[2]; g.shadowBlur = 10; g.fillStyle = gr; g.fill(FLAME_PATH);
+      gr.addColorStop(0, hex3(Pb.outer)); gr.addColorStop(0.45, hex3(Pb.mid)); gr.addColorStop(0.8, hex3(Pb.inner)); gr.addColorStop(1, hex3(Pb.core));
+      g.shadowColor = hex3(Pb.mid); g.shadowBlur = 10; g.fillStyle = gr; g.fill(FLAME_PATH);
     }
     g.restore();
   }
@@ -1891,6 +1949,7 @@
         const u = UNLOCKS.find((x) => x.t === t && x.id === id);
         if (!isOwned(t, id)) { toast(itemName(u) + ': ' + (u.lvl ? 'reach level ' + u.lvl : ACH_BY[u.ach].desc.toLowerCase()) + ' to unlock'); Sound.click(); return; }
         profile.eq[t] = id; saveAll(); Sound.click(); buzz(8);
+        if (t === 'flame') applyFlameTheme();
         document.querySelectorAll(`#panelBody .item[data-t="${t}"]`).forEach((x) => { const on = x.dataset.id === id; x.classList.toggle('eq', on); x.setAttribute('aria-pressed', String(on)); });
         $('itemName-' + t).textContent = 'Equipped: ' + COS[t][id].name;
       });
@@ -1985,7 +2044,7 @@
       if (snap.profile) fixProfile(Object.assign(profile, snap.profile));
     }
     if (!(wallet.balance >= 0)) wallet.balance = CFG.demoStart;
-    syncMute(); buildLobby(); refreshLobby(); setHudMode(false);
+    syncMute(); applyFlameTheme(); buildLobby(); refreshLobby(); setHudMode(false);
     attract.wait = 0;
     if (document.fonts && document.fonts.load) document.fonts.load('800 20px "Big Shoulders Display"').catch(() => {}); // canvas text uses it too
     requestAnimationFrame((t) => { last = t; frame(t); });
@@ -2003,11 +2062,12 @@
     run, stats, wallet, view, E, PAY, ball, profile, geom: () => ({ scale, offX, offY }),
     phase: () => phase,
     dbg,
-    unfreeze: () => { dbg.frozen = false; resume(); },
+    unfreeze: () => { dbg.frozen = false; goPlay(); },
     tap: () => flapInput(),
     autoplay: (skill) => { autoBot = skill ? BOT.createBot(skill, E.makeRng('auto' + Math.random())) : null; },
     fx: (streak) => { dbg.fx = streak; }, // show the flame for a streak without touching the run
     hold: (on) => { dbg.hold = !!on; },   // stop the clock with the last frame on screen
-    ballScreen: () => ({ x: view.bsx, y: view.bsy })
+    ballScreen: () => ({ x: view.bsx, y: view.bsy }),
+    equip: (t, id) => { if (COS[t] && COS[t][id]) { profile.eq[t] = id; if (t === 'flame') applyFlameTheme(); } } // test hook: try a skin without unlocking it
   };
 })();

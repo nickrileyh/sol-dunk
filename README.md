@@ -31,8 +31,9 @@ Open the server URL in the Phantom or Solflare in-app browser (or desktop with t
 
 ## How a run is kept honest
 
-- **Deterministic engine** (`src/engine.cjs`, v8): fixed 120 Hz physics, integer tap ticks, seeded PRNG, no implementation-dependent math. The same taps always give the same outcome in every browser and on the server.
+- **Deterministic engine** (`src/engine.cjs`, v9): fixed 120 Hz physics, integer tap ticks, seeded PRNG, no implementation-dependent math. The same taps always give the same outcome in every browser and on the server.
 - **Rim contact** (v7–v8): a firm knock bounces; gentle contact just rolls. Friction scales with how hard the hit was. After a knock the forward push fades back in over 0.45 s, so a back-rim hit clanks and drops (often in) instead of the ball ploughing on. The push is steady while the ball sits on a rim, so it can't balance on the edge. Rim effects fire once per knock.
+- **Pace** (v9): the ball gets 4% faster each level and the rings spread out 4% with it, so every level leaves the same time between rims (about 1.6 s on Pro). Deeper levels get harder through tighter, moving and tilted rings and bigger height changes, not through less time to react. The client's camera pulls back 3.5% a level so the next ring stays in view.
 - **Provably fair layouts**: before a run the server commits to `sha256(serverSeed)`. Each level's rings come from `HMAC-SHA256(serverSeed, clientSeed:nonce:level)`. The seed is revealed when the run ends, so anyone can check `GET /api/run/:id`.
 - **Server replay**: the client sends its tap ticks at the end of each level. The server replays them, applies the paytable and the max-win cap, and only then pays. A level submitted faster than real time voids the run.
 
@@ -48,16 +49,18 @@ npm run build
 
 The bot (`src/bot.cjs`) plans each drop with a trajectory solve, then adds human-style error: tap jitter, aim error, misreading moving rings, and occasional lapses. "Average" passes about 98% of Pro level-1 rings and swishes about 74% of them.
 
-**Calibration rule (house mode):** an average player who cashes out at the first checkpoint gets back 90% (10% house edge). Every later level keeps at least a 10% edge against the average player and is priced so a good player can gain at most 5% on it.
+**Calibration rule (house mode):** an average player who cashes out at the first checkpoint gets back 90% (10% house edge). Every later level keeps at least a 10% edge against the average player and is priced so a good player can gain at most 5% on it. Rounding the tables to three decimals never pays over the target.
+
+The bot's aim error grows with ball speed, not with how long it has between rings, so it gains less from v9's wider spacing than a person does. Level 1 didn't change, so the 90% at the first checkpoint holds; deeper levels keep 10–66% edges against the average player.
 
 Return to player when cashing out after checkpoint 1 / 2 / 3, from the simulation (no cap):
 
 | Tier | Average | Good |
 |---|---|---|
-| Rookie (max 50×) | 90 / 81 / 72% | 98 / 100 / 105% |
-| Pro (max 100×) | 90 / 80 / 67% | 99 / 104 / 109% |
-| All-Star (max 250×) | 90 / 72 / 52% | 106 / 111 / 117% |
-| Legend (max 1000×) | 90 / 64 / 42% | 117 / 123 / 129% |
+| Rookie (max 50×) | 90 / 81 / 72% | 98 / 99 / 104% |
+| Pro (max 100×) | 90 / 80 / 68% | 99 / 104 / 109% |
+| All-Star (max 250×) | 90 / 72 / 51% | 106 / 111 / 117% |
+| Legend (max 1000×) | 90 / 63 / 40% | 117 / 123 / 129% |
 
 Full tables for all six skill levels, including pro and perfect bots, are in `sim/out/calibration_final.txt`.
 
@@ -81,7 +84,8 @@ build.cjs          inlines everything into dist/*.html
 sim/               Monte Carlo runner, calibrator, quick stats
 server/            Express API, Solana deposits/withdrawals, replay verification, tests
 tools/             browser checks (Playwright + Chrome): flows.py plays every run outcome,
-                   contact.py freezes rim contacts, audit.py screenshots every screen (to ./shots)
+                   contact.py freezes rim contacts, audit.py screenshots every screen (to ./shots),
+                   speed.py plays deep into a tier and reports how much of the next ring is in view
 ```
 
 ## Working on it

@@ -126,14 +126,15 @@ function calibrate(key) {
         if (MODE === 'house' && L >= 2 && b < prevB) b = prevB; // deeper never pays less per hoop
         target = flow(pats, tableFor(b), mass).ev;
       }
-      // round, then nudge b so the rounded table lands on target
+      // round, then nudge b so the rounded table lands on target; rounding never pays over the target
+      // (at small multipliers one 0.001 step moves a level's return by a few tenths of a percent)
       let best = null;
       for (let k = -60; k <= 60; k++) {
         const bb = b * (1 + k * 0.0005);
         const tab = roundTable(tableFor(bb));
         const ev = flow(pats, tab, mass).ev;
-        const err = Math.abs(ev - target);
-        if (!best || err < best.err) best = { b: bb, tab, ev, err };
+        const err = Math.abs(ev - target), over = ev > target + 1e-9;
+        if (!best || (best.over && !over) || (best.over === over && err < best.err)) best = { b: bb, tab, ev, err, over };
       }
       const f = flow(pats, best.tab, mass);
       mass = f.massOut; rtpPrev = f.ev;

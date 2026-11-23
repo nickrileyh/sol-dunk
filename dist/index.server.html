@@ -36,6 +36,9 @@
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
   --font-round: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
   --font-display: "Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif;
+  /* heat colours of the equipped flame (the game sets these; defaults are the Fire flame) */
+  --heat: 255, 124, 20; --heat-hi: 255, 196, 72; --heat-edge: 255, 60, 16; --heat-text: 255, 218, 136;
+  --nova: 60, 144, 255; --nova-hi: 140, 218, 255; --nova-edge: 104, 72, 255; --nova-text: 183, 230, 255;
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);
   color-scheme: dark;
@@ -84,10 +87,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start;
   pointer-events: none;
 }
-.hud-left { display: flex; flex-direction: column; align-items: flex-start; gap: 9px; }
+/* left: pause, then the level and its rings, then the streak; centre: multiplier and pot; right: sound */
+.hud-left { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .hud-mid { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .hud-right { display: flex; justify-content: flex-end; gap: 8px; }
-.lvl { display: flex; align-items: center; gap: 9px; margin-top: 7px; font-size: 12px; font-weight: 650; color: rgba(255, 255, 255, 0.78); font-variant-numeric: tabular-nums; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7); white-space: nowrap; }
+.hud-left .lvl { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-left: 3px; font-size: 13px; font-weight: 650; color: rgba(255, 255, 255, 0.82); font-variant-numeric: tabular-nums; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7); white-space: nowrap; }
 .segbar { display: grid; grid-template-columns: repeat(6, 12px); gap: 3px; }
 .seg-i { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.16); transition: background 0.25s, transform 0.25s; }
 .seg-i.on { background: rgba(255, 255, 255, 0.5); }
@@ -100,8 +104,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   color: #ffffff; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5);
   transition: color 0.35s, text-shadow 0.35s; white-space: nowrap;
 }
-.score.hot { color: #ffc98f; text-shadow: 0 0 18px rgba(255, 106, 26, 0.85), 0 0 44px rgba(255, 80, 20, 0.45); }
-.score.nova { color: #cfe3ff; text-shadow: 0 0 18px rgba(90, 150, 255, 0.9), 0 0 44px rgba(110, 80, 255, 0.5); }
+.score.hot { color: rgb(var(--heat-text)); text-shadow: 0 0 18px rgba(var(--heat), 0.85), 0 0 44px rgba(var(--heat-edge), 0.45); }
+.score.nova { color: rgb(var(--nova-text)); text-shadow: 0 0 18px rgba(var(--nova), 0.9), 0 0 44px rgba(var(--nova-edge), 0.5); }
 .score.bump { animation: bump 0.45s cubic-bezier(.2, .9, .2, 1); }
 @keyframes bump { 0% { transform: scale(1.2); } 100% { transform: scale(1); } }
 .pot { margin-top: 4px; font-family: var(--font-round); font-weight: 650; font-size: 15px; color: rgba(255, 255, 255, 0.8); font-variant-numeric: tabular-nums; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7); white-space: nowrap; }
@@ -289,8 +293,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 
 /* ---------- streak meter ---------- */
 .streak {
-  position: absolute; left: 14px; top: calc(var(--safe-t) + 90px); /* out of the grid, under the level row */
-  min-width: 108px; padding: 7px 10px 8px; border-radius: 14px;
+  min-width: 108px; padding: 7px 10px 8px; border-radius: 14px; margin-top: 2px;
   background: var(--glass); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px);
   box-shadow: inset 0 0 0 0.5px var(--glass-line), 0 8px 24px rgba(0, 0, 0, 0.3);
   opacity: 0; transform: translateY(-6px) scale(0.96); transform-origin: left top;
@@ -305,12 +308,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .heat i { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.14); transition: background 0.25s; }
 .heat i.f { background: #fff; }
 .streak small { display: block; font-size: 11px; font-weight: 600; color: var(--label-3); white-space: nowrap; }
-.streak.t3 .flame { color: #ff9f0a; filter: drop-shadow(0 0 5px rgba(255, 140, 40, 0.9)); }
-.streak.t3 .heat i.f { background: linear-gradient(90deg, #ffd166, #ff6a1f); }
-.streak.t3 #stkT { color: #ffb340; }
-.streak.t5 .flame { color: #9fc2ff; filter: drop-shadow(0 0 6px rgba(110, 160, 255, 0.95)); }
-.streak.t5 .heat i.f { background: linear-gradient(90deg, #eaf3ff, #6e9bff); }
-.streak.t5 #stkT { color: #b9d4ff; }
+.streak.t3 .flame { color: rgb(var(--heat)); filter: drop-shadow(0 0 5px rgba(var(--heat), 0.9)); }
+.streak.t3 .heat i.f { background: linear-gradient(90deg, rgb(var(--heat-hi)), rgb(var(--heat-edge))); }
+.streak.t3 #stkT { color: rgb(var(--heat-text)); }
+.streak.t5 .flame { color: rgb(var(--nova-hi)); filter: drop-shadow(0 0 6px rgba(var(--nova), 0.95)); }
+.streak.t5 .heat i.f { background: linear-gradient(90deg, rgb(var(--nova-text)), rgb(var(--nova-edge))); }
+.streak.t5 #stkT { color: rgb(var(--nova-text)); }
 .streak.pump { animation: stkPump 0.35s ease-out; }
 @keyframes stkPump { 0% { transform: scale(1); } 40% { transform: scale(1.09); } 100% { transform: scale(1); } }
 .streak.broke { animation: stkBreak 0.65s ease-out forwards; }
@@ -323,7 +326,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 /* ---------- pot ticker ---------- */
 .pot { transition: color 0.35s, text-shadow 0.35s; }
 .pot.up { color: #c9f8d6; text-shadow: 0 0 14px rgba(47, 211, 107, 0.6); }
-.delta { position: absolute; left: 0; right: 0; top: 98px; font-size: 13px; font-weight: 800; color: var(--green); opacity: 0; white-space: nowrap; text-align: center; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6); }
+.delta { position: absolute; left: 0; right: 0; top: 76px; font-size: 13px; font-weight: 800; color: var(--green); opacity: 0; white-space: nowrap; text-align: center; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6); }
 .delta.go { animation: deltaUp 1s ease-out; }
 @keyframes deltaUp { 0% { opacity: 0; transform: translateY(-8px); } 15% { opacity: 1; transform: none; } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(8px); } }
 
@@ -342,8 +345,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 }
 #callout .c2 { margin-top: 4px; font-size: 14px; font-weight: 700; color: rgba(255, 255, 255, 0.78); text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7); }
 #callout .c2:empty { display: none; }
-#callout.fire .c1 { background-image: linear-gradient(180deg, #fff1b8 5%, #ffb340 45%, #ff5a1f 95%); filter: drop-shadow(0 0 16px rgba(255, 120, 30, 0.55)); }
-#callout.nova .c1 { background-image: linear-gradient(180deg, #f4f9ff 5%, #9fc2ff 50%, #6e7bff 95%); filter: drop-shadow(0 0 18px rgba(110, 150, 255, 0.6)); }
+#callout.fire .c1 { background-image: linear-gradient(180deg, rgb(var(--heat-text)) 5%, rgb(var(--heat-hi)) 42%, rgb(var(--heat)) 72%, rgb(var(--heat-edge)) 98%); filter: drop-shadow(0 0 16px rgba(var(--heat), 0.6)); }
+#callout.nova .c1 { background-image: linear-gradient(180deg, #ffffff 5%, rgb(var(--nova-text)) 36%, rgb(var(--nova)) 74%, rgb(var(--nova-edge)) 98%); filter: drop-shadow(0 0 18px rgba(var(--nova), 0.65)); }
 #callout.gold .c1 { background-image: linear-gradient(180deg, #fffbe0 5%, #ffd60a 50%, #ff9f0a 95%); filter: drop-shadow(0 0 16px rgba(255, 200, 20, 0.5)); }
 #callout.green .c1 { background-image: linear-gradient(180deg, #e6ffe9 5%, #30d158 60%, #1fa347 95%); filter: drop-shadow(0 0 14px rgba(48, 209, 88, 0.45)); }
 
@@ -367,9 +370,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .nx-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 15px; font-weight: 600; }
 .nx-h b { font-family: var(--font-display); font-size: 22px; font-weight: 800; line-height: 1; color: #ffb37a; white-space: nowrap; }
 .nx-f { margin-top: 2px; font-size: 13px; color: var(--label-2); }
-.nx-s { display: flex; align-items: center; gap: 5px; margin-top: 9px; font-size: 13px; font-weight: 600; color: #ffb340; }
+.nx-s { display: flex; align-items: center; gap: 5px; margin-top: 9px; font-size: 13px; font-weight: 600; color: rgb(var(--heat-text)); }
 .nx-s svg { width: 14px; height: 14px; fill: currentColor; flex: none; }
-.nx-s.nova { color: #b9d4ff; }
+.nx-s.nova { color: rgb(var(--nova-text)); }
 .nx-r { margin-top: 7px; font-size: 12px; color: var(--label-3); font-variant-numeric: tabular-nums; }
 .nx-s:empty, .nx-r:empty, .nx-f:empty { display: none; }
 .cp-badge { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; vertical-align: 4px; background: rgba(255, 214, 10, 0.18); color: var(--yellow); }
@@ -386,7 +389,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .gain { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 14px; font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--label); white-space: nowrap; animation: gainIn 0.4s cubic-bezier(.2, .9, .2, 1) both; }
 .gain svg { width: 14px; height: 14px; flex: none; }
 .gain.ach svg { color: var(--yellow); }
-.gain.unlock svg { color: #d29bff; }
+.gain.unlock svg { color: rgb(var(--heat-hi)); }
 .gain.daily svg { color: var(--green); }
 .gain.lvl { background: rgba(255, 214, 10, 0.16); color: var(--yellow); }
 @keyframes gainIn { from { opacity: 0; transform: translateY(6px) scale(0.96); } to { opacity: 1; transform: none; } }
@@ -500,6 +503,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
       <span class="xpwrap" aria-hidden="true"><svg class="xpring" viewBox="0 0 36 36"><circle class="trk" cx="18" cy="18" r="15"/><circle class="val" id="xpArc" cx="18" cy="18" r="15"/></svg><svg class="xpstar" viewBox="0 0 24 24"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg></span>
       <span class="lbl num" id="profLv">Level 1</span><span class="dot" id="profDot"></span>
     </button>
+    <div class="lvl play-only"><span id="hudLevel">Level 1</span><span class="segbar" id="pips" aria-hidden="true"></span></div>
     <div class="streak play-only" id="streak" aria-live="polite">
       <div class="stk-top">
         <svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 23c-4.4 0-8-3.1-8-7.5 0-3.3 2-5.6 3.7-7.4.6-.6 1.6-.2 1.6.7 0 1.4.9 2.6 2.1 2.6 1.1 0 1.8-.9 1.8-2.1 0-2.3-1.2-4.2-1.2-6.6 0-.9 1-1.5 1.7-1C17 3.9 20 8.4 20 14.5 20 19.6 16.4 23 12 23Z"/></svg>
@@ -512,7 +516,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   <div class="hud-mid play-only" aria-live="polite">
     <div class="score" id="hudMult">1.00×</div>
     <div class="pot" id="potCap"><span class="sol-ico"></span><span id="hudPot">0.1000</span><span class="unit">SOL</span></div>
-    <div class="lvl"><span id="hudLevel">Level 1</span><span class="segbar" id="pips" aria-hidden="true"></span></div>
     <span class="delta num" id="potDelta"></span>
   </div>
   <div class="hud-right">
@@ -619,7 +622,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 8;
+  const VERSION = 9;
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -648,7 +651,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   const START_Y = 300;
 
   // Difficulty tiers. Arrays are per level (1..8).
-  // speed grows 4% per level, spacing 2%, so the time between rims shrinks as you go deeper.
+  // Speed grows 4% per level and the rings spread out with it (spacing and the first ring's distance
+  // grow 4% too), so every level gives the same time between rims. Deeper levels get harder through
+  // tighter, moving and tilted rims and bigger height changes, not through less time to react.
   const DIFFS = [
     {
       id: 'rookie', name: 'Rookie', blurb: 'Wide rings, gentle pace',
@@ -753,10 +758,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 
   // ---------- levels ----------
   function levelConfig(di, L) {
-    const D = DIFFS[di], k = L - 1;
+    const D = DIFFS[di], k = L - 1, stretch = 1 + 0.04 * k;
     return {
-      speed: D.speed * (1 + 0.04 * k),
-      spacing: D.spacing * (1 + 0.02 * k),
+      speed: D.speed * stretch,
+      spacing: D.spacing * stretch,
+      firstX: FIRST_HOOP_X * stretch,
       hoopW: D.hoopW[k], dy: D.dy[k],
       moveP: D.moveP[k], moveAmp: D.moveAmp[k],
       tiltP: D.tiltP[k], tiltMax: D.tiltMax[k],
@@ -783,12 +789,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
     const C = levelConfig(di, L);
     const rng = makeRng('lvl|' + seed + '|' + di + '|' + L);
     const hoops = [];
-    let x = FIRST_HOOP_X;
+    let x = C.firstX;
     let prevY = START_Y;
     for (let i = 0; i < HOOPS_PER_LEVEL; i++) {
       // fixed number of draws per hoop keeps layouts stable when tuning features
       const r1 = rng(), r2 = rng(), r3 = rng(), r4 = rng(), r5 = rng(), r6 = rng(), r7 = rng(), r8 = rng(), r9 = rng();
-      let gap = FIRST_HOOP_X;
+      let gap = C.firstX;
       if (i > 0) { gap = C.spacing * (0.92 + 0.16 * r9); x += gap; }
       let amp = 0, period = 1, phase = 0;
       if (r2 < C.moveP) {
@@ -989,7 +995,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   if (typeof module === 'object' && module.exports) module.exports = P;
   else root.DunkPaytable = P;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-  return {"PAYTABLE":[[{"rim":1.001,"swish":[1.003,1.004,1.004,1.005,1.005]},{"rim":1.005,"swish":[1.009,1.011,1.013,1.015,1.016]},{"rim":1.008,"swish":[1.017,1.02,1.023,1.027,1.03]},{"rim":1.012,"swish":[1.023,1.028,1.032,1.037,1.042]},{"rim":1.017,"swish":[1.034,1.04,1.047,1.054,1.06]},{"rim":1.023,"swish":[1.047,1.056,1.066,1.075,1.085]},{"rim":1.035,"swish":[1.07,1.085,1.099,1.113,1.127]},{"rim":1.049,"swish":[1.097,1.117,1.136,1.156,1.175]}],[{"rim":1.002,"swish":[1.004,1.005,1.005,1.006,1.007]},{"rim":1.009,"swish":[1.018,1.021,1.025,1.029,1.032]},{"rim":1.014,"swish":[1.027,1.032,1.038,1.043,1.049]},{"rim":1.021,"swish":[1.042,1.051,1.059,1.068,1.076]},{"rim":1.03,"swish":[1.061,1.073,1.085,1.098,1.11]},{"rim":1.044,"swish":[1.088,1.106,1.124,1.141,1.159]},{"rim":1.064,"swish":[1.127,1.152,1.178,1.203,1.229]},{"rim":1.096,"swish":[1.193,1.231,1.27,1.308,1.347]}],[{"rim":1.011,"swish":[1.021,1.026,1.03,1.034,1.039]},{"rim":1.018,"swish":[1.035,1.043,1.05,1.057,1.064]},{"rim":1.027,"swish":[1.054,1.064,1.075,1.086,1.096]},{"rim":1.04,"swish":[1.079,1.095,1.111,1.127,1.143]},{"rim":1.058,"swish":[1.115,1.138,1.161,1.184,1.207]},{"rim":1.083,"swish":[1.165,1.198,1.232,1.265,1.298]},{"rim":1.128,"swish":[1.255,1.307,1.358,1.409,1.46]},{"rim":1.189,"swish":[1.378,1.454,1.529,1.605,1.68]}],[{"rim":1.025,"swish":[1.051,1.061,1.071,1.081,1.092]},{"rim":1.028,"swish":[1.055,1.066,1.077,1.088,1.099]},{"rim":1.041,"swish":[1.081,1.097,1.114,1.13,1.146]},{"rim":1.06,"swish":[1.12,1.143,1.167,1.191,1.215]},{"rim":1.094,"swish":[1.188,1.225,1.263,1.3,1.338]},{"rim":1.138,"swish":[1.276,1.332,1.387,1.442,1.497]},{"rim":1.2,"swish":[1.401,1.481,1.561,1.641,1.721]},{"rim":1.255,"swish":[1.511,1.613,1.715,1.817,1.919]}]],"AVG_CLEAR":[[0.8825,0.8423,0.79,0.7372,0.6527,0.5608,0.4537,0.358],[0.8779,0.7927,0.7113,0.5953,0.4845,0.3847,0.2829,0.1856],[0.7939,0.6499,0.5297,0.4299,0.3346,0.2333,0.1471,0.083],[0.6786,0.5235,0.4219,0.3212,0.219,0.141,0.076,0.0473]],"AVG_SWISH":[[0.7874,0.7551,0.7171,0.6727,0.6298,0.6002,0.5807,0.5567],[0.7426,0.6895,0.649,0.613,0.5916,0.5696,0.5326,0.4883],[0.6558,0.6091,0.5846,0.5608,0.5213,0.4749,0.4311,0.3974],[0.629,0.5911,0.5455,0.4998,0.4597,0.4158,0.3823,0.3527]],"AVG_RTP":[[0.9,0.8094,0.7153,0.611,0.4874,0.3568,0.2383,0.1419],[0.9,0.8012,0.6732,0.5124,0.3488,0.2157,0.1161,0.0532],[0.8993,0.7198,0.5153,0.3392,0.2027,0.1023,0.0454,0.0171],[0.9,0.644,0.4163,0.2405,0.124,0.0559,0.0204,0.0063]],"META":{"mode":"house","guard":1.05,"guardFrom":2,"target":0.9,"weights":{"rim":0.5,"swish":[1,1.2,1.4,1.6,1.8]},"generated":"2026-11-23","engine":8,"samples":24000}};
+  return {"PAYTABLE":[[{"rim":1.001,"swish":[1.003,1.004,1.004,1.005,1.005]},{"rim":1.004,"swish":[1.007,1.009,1.01,1.012,1.013]},{"rim":1.008,"swish":[1.015,1.019,1.022,1.025,1.028]},{"rim":1.01,"swish":[1.02,1.023,1.027,1.031,1.035]},{"rim":1.014,"swish":[1.029,1.035,1.041,1.046,1.052]},{"rim":1.02,"swish":[1.04,1.048,1.056,1.064,1.071]},{"rim":1.029,"swish":[1.059,1.07,1.082,1.094,1.106]},{"rim":1.044,"swish":[1.089,1.107,1.125,1.142,1.16]}],[{"rim":1.002,"swish":[1.004,1.005,1.005,1.006,1.007]},{"rim":1.008,"swish":[1.017,1.02,1.024,1.027,1.03]},{"rim":1.012,"swish":[1.025,1.03,1.035,1.04,1.045]},{"rim":1.019,"swish":[1.037,1.045,1.052,1.06,1.067]},{"rim":1.029,"swish":[1.057,1.069,1.08,1.092,1.103]},{"rim":1.045,"swish":[1.089,1.107,1.125,1.143,1.161]},{"rim":1.065,"swish":[1.131,1.157,1.183,1.21,1.236]},{"rim":1.098,"swish":[1.196,1.236,1.275,1.314,1.354]}],[{"rim":1.011,"swish":[1.021,1.026,1.03,1.034,1.039]},{"rim":1.018,"swish":[1.035,1.043,1.05,1.057,1.064]},{"rim":1.028,"swish":[1.057,1.068,1.08,1.091,1.103]},{"rim":1.043,"swish":[1.085,1.103,1.12,1.137,1.154]},{"rim":1.063,"swish":[1.125,1.151,1.176,1.201,1.226]},{"rim":1.096,"swish":[1.193,1.232,1.27,1.309,1.347]},{"rim":1.138,"swish":[1.275,1.33,1.386,1.441,1.496]},{"rim":1.205,"swish":[1.41,1.492,1.575,1.657,1.739]}],[{"rim":1.025,"swish":[1.051,1.061,1.071,1.081,1.092]},{"rim":1.029,"swish":[1.059,1.07,1.082,1.094,1.106]},{"rim":1.046,"swish":[1.092,1.11,1.129,1.147,1.166]},{"rim":1.068,"swish":[1.136,1.164,1.191,1.218,1.246]},{"rim":1.098,"swish":[1.196,1.236,1.275,1.314,1.354]},{"rim":1.143,"swish":[1.286,1.344,1.401,1.458,1.516]},{"rim":1.208,"swish":[1.417,1.5,1.584,1.667,1.75]},{"rim":1.284,"swish":[1.567,1.681,1.794,1.908,2.021]}]],"AVG_CLEAR":[[0.8825,0.8516,0.8051,0.7629,0.6803,0.5896,0.4848,0.3736],[0.8779,0.7993,0.7201,0.6151,0.498,0.3866,0.2766,0.1805],[0.7939,0.6515,0.5255,0.4162,0.3132,0.2144,0.1301,0.0734],[0.6786,0.5078,0.401,0.297,0.2054,0.132,0.0713,0.0433]],"AVG_SWISH":[[0.7874,0.7589,0.7318,0.6994,0.6624,0.6219,0.5854,0.5402],[0.7426,0.7075,0.6724,0.6242,0.5834,0.54,0.4974,0.458],[0.6558,0.5909,0.533,0.4891,0.4521,0.4168,0.3861,0.3536],[0.629,0.5632,0.5078,0.469,0.4311,0.3887,0.3504,0.3284]],"AVG_RTP":[[0.9,0.8079,0.7242,0.628,0.5107,0.38,0.2543,0.1503],[0.9,0.804,0.6769,0.5186,0.3543,0.2174,0.113,0.0498],[0.8993,0.7177,0.5084,0.3233,0.182,0.091,0.0371,0.0134],[0.9,0.6301,0.4016,0.227,0.1109,0.0476,0.0166,0.0056]],"META":{"mode":"house","guard":1.05,"guardFrom":2,"target":0.9,"weights":{"rim":0.5,"swish":[1,1.2,1.4,1.6,1.8]},"generated":"2026-11-23","engine":9,"samples":24000}};
 });
 </script>
 <script>/*
@@ -1301,13 +1307,27 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
     ember: { name: 'Ember', near: ['#ffe8c4', '#ff9a3c', '#e0451a'], far: ['#d4743a', '#7a2a10'], hi: 'rgba(255,255,255,0.45)', vein: 'rgba(120,30,0,0.3)', edge: 'rgba(90,20,0,0.5)', farEdge: 'rgba(60,10,0,0.5)' },
     gold: { name: 'Gold', near: ['#fff8d6', '#ffd84a', '#c99400'], far: ['#d6b04a', '#8a6a10'], hi: 'rgba(255,255,255,0.55)', vein: 'rgba(110,70,0,0.3)', edge: 'rgba(90,60,0,0.55)', farEdge: 'rgba(60,40,0,0.5)' }
   };
+  // Flames: a base palette and a hotter "nova" palette (5+ swishes in a row), edge to white-hot core.
   const FLAMES = {
-    fire: { name: 'Fire', pal: ['#ffe08a', '#ffb340', '#ff8a1f', '#ff5a1f'], trail: '255,150,60' },
-    ice: { name: 'Ice', pal: ['#ffffff', '#c8f4ff', '#7fe3ff', '#3aa8ff'], trail: '120,210,255' },
-    toxic: { name: 'Toxic', pal: ['#f4ffb0', '#c6ff4a', '#6ee35a', '#21c15a'], trail: '150,240,90' },
-    rose: { name: 'Rose', pal: ['#ffe0ee', '#ff9cc4', '#ff5a92', '#e0245e'], trail: '255,110,160' },
-    gold: { name: 'Gold', pal: ['#fffbe0', '#ffe680', '#ffc41a', '#ffa000'], trail: '255,200,60' }
+    fire: { name: 'Fire', base: { outer: [255, 60, 16], mid: [255, 124, 20], inner: [255, 196, 72], core: [255, 244, 212] },
+      nova: { outer: [104, 72, 255], mid: [60, 144, 255], inner: [140, 218, 255], core: [236, 248, 255] },
+      hex: ['#fff1c4', '#ffc65a', '#ff9a2a', '#ff6a1f'], novaHex: ['#bfe8ff', '#7cb8ff', '#9a7bff', '#ffffff'] },
+    ice: { name: 'Ice', base: { outer: [40, 96, 255], mid: [64, 160, 255], inner: [150, 222, 255], core: [240, 252, 255] },
+      nova: { outer: [150, 60, 255], mid: [186, 110, 255], inner: [228, 186, 255], core: [255, 246, 255] } },
+    toxic: { name: 'Toxic', base: { outer: [16, 140, 52], mid: [72, 214, 64], inner: [188, 255, 96], core: [246, 255, 224] },
+      nova: { outer: [0, 140, 170], mid: [30, 210, 214], inner: [150, 255, 236], core: [238, 255, 252] } },
+    rose: { name: 'Rose', base: { outer: [214, 20, 84], mid: [255, 72, 140], inner: [255, 160, 200], core: [255, 236, 246] },
+      nova: { outer: [130, 40, 255], mid: [184, 92, 255], inner: [228, 172, 255], core: [255, 246, 255] } },
+    gold: { name: 'Gold', base: { outer: [230, 110, 0], mid: [255, 170, 20], inner: [255, 222, 110], core: [255, 252, 226] },
+      nova: { outer: [255, 190, 40], mid: [255, 226, 130], inner: [255, 246, 206], core: [255, 255, 255] } }
   };
+  const hex3 = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
+  const mix3 = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  for (const F of Object.values(FLAMES)) {
+    F.trail = F.base.mid.join(',');
+    F.hex = F.hex || [F.base.core, F.base.inner, F.base.mid, F.base.outer].map(hex3);
+    F.novaHex = F.novaHex || [F.nova.inner, F.nova.mid, F.nova.outer, F.nova.core].map(hex3);
+  }
   const COS = { ball: BALLS, wing: WINGS, flame: FLAMES };
   const UNLOCKS = [
     { t: 'ball', id: 'classic', lvl: 1 }, { t: 'ball', id: 'retro', lvl: 2 }, { t: 'ball', id: 'neon', lvl: 4 }, { t: 'ball', id: 'frost', lvl: 6 },
@@ -1321,6 +1341,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   const eqBall = () => BALLS[profile.eq.ball] || BALLS.classic;
   const eqWing = () => WINGS[profile.eq.wing] || WINGS.angel;
   const eqFlame = () => FLAMES[profile.eq.flame] || FLAMES.fire;
+  const flameHex = (nova) => (nova ? eqFlame().novaHex : eqFlame().hex);
+  const heatHex = (nova, k) => hex3((nova ? eqFlame().nova : eqFlame().base)[k || 'mid']);
+  const heatRgb = (nova, k) => (nova ? eqFlame().nova : eqFlame().base)[k || 'mid'].join(',');
+  const heatText = (nova) => mix3((nova ? eqFlame().nova : eqFlame().base).inner, (nova ? eqFlame().nova : eqFlame().base).core, 0.45).join(',');
+  // the multiplier glow, callouts and streak meter take the equipped flame's colours
+  function applyFlameTheme() {
+    const F = eqFlame(), st = document.documentElement.style, j = (a) => a.join(',');
+    for (const [k, P] of [['heat', F.base], ['nova', F.nova]]) {
+      st.setProperty('--' + k, j(P.mid)); st.setProperty('--' + k + '-hi', j(P.inner));
+      st.setProperty('--' + k + '-edge', j(P.outer)); st.setProperty('--' + k + '-text', j(mix3(P.inner, P.core, 0.45)));
+    }
+  }
 
   // r = what happened in the run (see runFacts)
   const ACH = [
@@ -1550,7 +1582,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   // ---------------------------------------------------------------- canvas & view
   // The client shows a 352-unit-wide window of the 400-unit world (a little zoomed in),
   // world y from -10 to 680. Physics never depends on this.
-  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 96;
+  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 84; // the ball sits 24% in, so more of the course shows ahead
   const RV = P.R; // drawn ball radius = collision radius
   const cv = $('game'), cx = cv.getContext('2d');
   let vw = 0, vh = 0, dpr = 1, scale = 1, offX = 0, offY = 0;
@@ -1628,23 +1660,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   }
 
   // ---------------------------------------------------------------- fire palette
-  // Fire runs from a near-white core out to red (or the equipped flame's colours); a 5+ swish streak burns blue-white.
-  const FIRE_PAL = { outer: [255, 60, 16], mid: [255, 124, 20], inner: [255, 196, 72], core: [255, 244, 212] };
-  const NOVA_PAL = { outer: [104, 72, 255], mid: [60, 144, 255], inner: [140, 218, 255], core: [236, 248, 255] };
+  // Fire runs from a near-white core out to its edge colour; a 5+ swish streak burns in the flame's hotter "nova"
+  // palette (blue-white for the Fire flame). Every flame skin brings both palettes (FLAMES).
   const palMix = { outer: [0, 0, 0], mid: [0, 0, 0], inner: [0, 0, 0], core: [0, 0, 0] };
-  // other flame skins map their four colours (light to dark) onto core, inner, mid and outer
-  const hexRgb = (h) => { const v = parseInt(h.slice(1), 16); return [v >> 16, (v >> 8) & 255, v & 255]; };
-  const skinPals = {};
-  function skinPal() {
-    const id = profile.eq.flame;
-    if (id === 'fire' || !FLAMES[id]) return FIRE_PAL;
-    const q = FLAMES[id].pal;
-    return skinPals[id] || (skinPals[id] = { core: hexRgb(q[0]), inner: hexRgb(q[1]), mid: hexRgb(q[2]), outer: hexRgb(q[3]) });
-  }
   function flamePal(n) {
-    const F = skinPal();
+    const F = eqFlame(), A = F.base, B = F.nova;
     for (const k in palMix) {
-      const a = F[k], b = NOVA_PAL[k], o = palMix[k];
+      const a = A[k], b = B[k], o = palMix[k];
       o[0] = Math.round(a[0] + (b[0] - a[0]) * n); o[1] = Math.round(a[1] + (b[1] - a[1]) * n); o[2] = Math.round(a[2] + (b[2] - a[2]) * n);
     }
     return palMix;
@@ -1704,7 +1726,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   function spawn(o) { if (parts.length > 420) parts.shift(); parts.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 0.6, max: 0.6, size: 3, color: '#fff', kind: 0, rot: 0, vr: 0, drag: 0 }, o)); }
   const texts = [];
   function floatText(x, y, text, sub, color, size) { texts.push({ x, y, text, sub, color, size: size || 20, life: 1.0, max: 1.0 }); }
-  const NOVA_HEX = ['#bfe8ff', '#7cb8ff', '#9a7bff', '#ffffff'];
 
   // ---------------------------------------------------------------- game state
   const ball = {
@@ -2010,10 +2031,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
     if (o === 'S') {
       setStreakHud('pump');
       const s = run.streak;
-      if (s === 3) { callout('ON FIRE', 'Swish streak ×3', 'fire'); flash('255,150,40', 0.1); }
-      else if (s === 5) { callout('SUPERNOVA', 'Max streak bonus', 'nova'); flash('110,160,255', 0.13); }
-      else if (s >= 10 && s % 5 === 0) { callout(s === 10 ? 'UNSTOPPABLE' : s + ' IN A ROW', s + ' swishes in a row', 'nova'); flash('110,160,255', 0.14); }
-    } else if (was > 0) { setStreakHud('broke'); Sound.streakBreak(); }
+      if (s === 3) { callout('ON FIRE', 'Swish streak ×3', 'fire'); flash(heatRgb(0), 0.1); buzz([10, 25, 14]); }
+      else if (s === 5) { callout('SUPERNOVA', 'Max streak bonus', 'nova'); flash(heatRgb(1), 0.13); buzz([12, 25, 12, 25, 18]); }
+      else if (s >= 10 && s % 5 === 0) { callout(s === 10 ? 'UNSTOPPABLE' : s + ' IN A ROW', s + ' swishes in a row', 'nova'); flash(heatRgb(1), 0.14); }
+    } else if (was > 0) { setStreakHud('broke'); if (was < 2) Sound.streakBreak(); } // 2+ was burning: douse() plays the hiss
     addPoints(pts);
     if (capped) { endWin('maxwin'); return true; }
     return false;
@@ -2297,15 +2318,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
     if (ball.fire > 0.3) v.heat = 1;
     const hx = view.offset + h.x, hy = E.hoopY(h, st.tick * DT);
     if (o === 'S') {
-      const nova = streak >= 5, hot = streak >= 3, pal = nova ? NOVA_HEX : hot ? eqFlame().pal : null;
+      const nova = streak >= 5, hot = streak >= 3, pal = hot ? flameHex(nova) : null;
       for (let i = 0; i < 16; i++) { const a = rnd(0, Math.PI * 2), s = rnd(60, 230); spawn({ x: hx, y: hy + 6, vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.55 - 30, life: 0.55, max: 0.55, size: rnd(1.4, 2.8), color: pal ? pal[i % 4] : '#ffffff', kind: 0, drag: 2.2 }); }
-      spawn({ x: hx, y: hy, kind: 3, life: 0.5, max: 0.5, size: h.w / 2 + P.RP, color: nova ? '#9fc2ff' : hot ? '#ffb067' : '#ffffff' });
+      spawn({ x: hx, y: hy, kind: 3, life: 0.5, max: 0.5, size: h.w / 2 + P.RP, color: nova ? heatHex(1, 'inner') : hot ? heatHex(0, 'inner') : '#ffffff' });
       if (streak === 3 || streak === 5) ignite(nova ? 1 : 0);
       Sound.swish(streak); buzz(10);
     } else { Sound.score(); }
     if (m != null) {
       const label = (o === 'S' ? streakName(streak) : 'Rim') + (pts ? ' +' + pts : '');
-      const col = o === 'S' ? (streak >= 5 ? '#b9d4ff' : streak >= 3 ? '#ffb067' : '#ffffff') : 'rgba(222,230,255,0.75)';
+      const col = o === 'S' ? (streak >= 5 ? heatHex(1, 'inner') : streak >= 3 ? heatHex(0, 'inner') : '#ffffff') : 'rgba(222,230,255,0.75)';
       // up and behind the ball's path, so the label never sits on the ball
       floatText(hx - 14, hy - 64, label, fmtX(m), col, o === 'S' ? 19 + Math.min(streak, 5) * 1.1 : 17);
       if (o === 'S' && (streak === 3 || streak === 5 || streak === 10)) Sound.fire();
@@ -2472,7 +2493,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
       ball.emberAcc += dt * (REDUCED ? 3 : 16) * f;
       while (ball.emberAcc >= 1) {
         ball.emberAcc -= 1;
-        const pal = n > 0.5 ? NOVA_HEX : eqFlame().pal;
+        const pal = flameHex(n > 0.5);
         spawn({ x: dxw + rnd(-0.6, 0.6) * RV, y: dyw + rnd(-0.6, 0.6) * RV, vx: ball.vx * 0.3 + dx * rnd(40, 120) + rnd(-30, 30), vy: ball.vy * 0.3 + dy * rnd(40, 120) - 50, life: rnd(0.45, 0.85), max: 0.85, size: rnd(1, 2.2), color: pal[(Math.random() * 3) | 0], kind: 5, drag: 1.4 });
       }
     }
@@ -2495,29 +2516,37 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
     view.shake *= Math.exp(-dt * 9);
     view.pulse *= Math.exp(-dt * 3.5);
     view.flash *= Math.exp(-dt * 6);
-    // camera: follows the drawn ball with velocity feed-forward, so the ball holds the same
-    // spot on screen at every speed, and bounces still read as motion
-    const target = dxw - BALL_SX / view.zoom;
-    if (view.camT != null && dt > 0 && Math.abs(target - view.camT) < 60) {
-      view.camV = lerp(view.camV, (target - view.camT) / dt, 1 - Math.exp(-dt * 4));
-    } else if (view.camT == null) view.camX = target;
-    view.camT = target;
-    view.camX += view.camV * dt;
-    view.camX = lerp(view.camX, target, 1 - Math.exp(-dt * (phase === 'play' ? 8 : 5)));
-    // in the lobby, zoom out and lift the world so the demo play fits above the bet sheet
+    // zoom: in the lobby the view zooms out and lifts the world so the demo play fits above the bet
+    // sheet. In a run it pulls back a little on faster levels, whose rings are spaced farther apart,
+    // so the next ring comes into view as early as on level 1.
     let zoomT = 1, centreY = null;
     if (phase === 'lobby' && !ui.lobby.classList.contains('hide')) {
       if (sheetTopC < 0) sheetTopC = ui.lobby.offsetTop;
       const sheetTop = sheetTopC;
       zoomT = clamp((sheetTop - 84) / (360 * scale), 0.55, 1);
       centreY = (64 + sheetTop - 10) / 2;
-    }
+    } else if (phase !== 'lobby' && run.st) zoomT = levelZoom(run.level);
     view.zoom = lerp(view.zoom, zoomT, 1 - Math.exp(-dt * 4));
     const S = scale * view.zoom;
+    // camera: follows the drawn ball with velocity feed-forward, so the ball holds the same
+    // spot on screen at every speed, and bounces still read as motion. In a run the ball keeps its
+    // level-1 spot on screen whatever the zoom, so all of the extra view lies ahead of it, on every
+    // screen size alike (wide screens fade their sides to the same window).
+    const ballSX = offX + BALL_SX * scale, ox0 = (vw - VIEW_W * S) / 2;
+    const target = phase === 'lobby' ? dxw - BALL_SX / view.zoom : dxw - (ballSX - ox0) / S;
+    if (view.camT != null && dt > 0 && Math.abs(target - view.camT) < 60) {
+      view.camV = lerp(view.camV, (target - view.camT) / dt, 1 - Math.exp(-dt * 4));
+    } else if (view.camT == null) view.camX = target;
+    view.camT = target;
+    view.camX += view.camV * dt;
+    view.camX = lerp(view.camX, target, 1 - Math.exp(-dt * (phase === 'play' ? 8 : 5)));
     const oy = (vh - VIEW_H * S) / 2 - VIEW_TOP * S;
     const camYT = centreY == null ? 0 : 300 - (centreY - oy) / S;
     view.camY = lerp(view.camY, camYT, 1 - Math.exp(-dt * 4));
   }
+
+  // how far the view pulls back on a level: rings spread out 4% a level, the view widens 3.5%
+  const levelZoom = (L) => 1 / (1 + 0.035 * (L - 1));
 
   // ---------------------------------------------------------------- rendering
   function render(alpha, bx, by) {
@@ -2530,12 +2559,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
     // the score, huge and quiet, behind everything (Flappy Dunk style); the pot sits in the HUD
     if (phase !== 'lobby' && run.st) {
       const p = view.pulse, best = profile.best[run.di], cy = offY + 205 * scale;
-      const col = run.newBest ? '245,197,66' : run.streak >= 5 ? '159,194,255' : run.streak >= 3 ? '255,159,90' : '255,255,255';
+      const col = run.newBest ? '245,197,66' : run.streak >= 5 ? heatText(1) : run.streak >= 3 ? heatText(0) : '255,255,255';
       const m = multSprite(String(run.score), col), k = (84 + p * 9) / 91;
-      c.globalAlpha = Math.min(1, 0.13 + p * 0.3);
+      view.scoreDim = lerp(view.scoreDim || 1, CALL.busy ? 0.25 : 1, 0.15); // steps back while a callout is up
+      c.globalAlpha = Math.min(1, 0.13 + p * 0.3) * view.scoreDim;
       c.drawImage(m.el, vw / 2 - m.w * k / 2, cy - m.h * k / 2, m.w * k, m.h * k);
       if (best > 0) {
-        c.globalAlpha = run.newBest ? 0.55 : 0.3;
+        c.globalAlpha = (run.newBest ? 0.55 : 0.3) * view.scoreDim;
         c.font = '800 ' + (15 * scale).toFixed(1) + 'px ' + FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
         c.fillStyle = run.newBest ? '#f5c542' : '#ffffff';
         c.fillText(run.newBest ? 'NEW BEST' : 'BEST ' + best, vw / 2, cy + 48 * scale);
@@ -2552,7 +2582,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
     c.setTransform(k, 0, 0, k, (ox + sx) * dpr - view.camX * k, (oy + sy) * dpr - view.camY * k);
     view.bsx = ox + sx + (bx - view.camX) * S; view.bsy = oy + sy + (by - view.camY) * S;
     const worldLeft = view.camX - ox / S, worldW = vw / S;
+    view.wl = view.camX + (offX - ox) / S; view.wr = view.camX + (offX + VIEW_W * scale - ox) / S; // the window everyone sees
+    if (!(view.time - view.hudAt < 0.4)) { // where the HUD ends, so ring labels float below it (small phones)
+      view.hudAt = view.time;
+      const bot = (q) => { const e = document.querySelector(q), r = e && e.getBoundingClientRect(); return r && r.height && r.right > offX && r.left < offX + VIEW_W * scale ? r.bottom : 0; };
+      view.hudBot = phase === 'lobby' ? 0 : Math.max(bot('#hud .hud-left .lvl'), bot('#streak.on'), bot('#hud .hud-mid'));
+    }
+    view.wt = view.hudBot ? view.camY + (view.hudBot - oy) / S : null;
     drawCourt(c, worldLeft, worldW, S, bx, by);
+    if (ball.fire > 0.05 && !ball.hidden && !REDUCED) fireLight(c, bx, by);
 
     const st = view.st;
     const tNow = st ? (phase === 'play' ? (st.tick - 1 + alpha) * DT : st.tick * DT) : 0;
@@ -2569,7 +2607,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
       c.beginPath(); c.moveTo(x, o.h.y0 - o.h.amp); c.lineTo(x, o.h.y0 + o.h.amp); c.stroke(); c.setLineDash([]);
     }
     const tgt = st && !st.done ? st.hoops[st.next] : null;
-    for (const o of vis) o.later = !!(tgt && o.h !== tgt && o.h.st === 0 && st.hoops.indexOf(o.h) > st.next);
+    for (const o of vis) { const j = tgt && o.h !== tgt && o.h.st === 0 ? st.hoops.indexOf(o.h) - st.next : 0; o.later = j > 0 ? (j === 1 ? 0.66 : 0.46) : 0; }
     for (const o of vis) drawRing(c, o, true);
     drawGuide(c, bx, by);
     if (!ball.hidden) drawTrail(c);
@@ -2587,7 +2625,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
     }
 
     // wide screens: fade the sides so everyone sees the same distance ahead
-    if (offX > 2 && view.zoom > 0.98) {
+    if (offX > 2 && (phase !== 'lobby' || view.zoom > 0.98)) {
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       const l = c.createLinearGradient(offX - 40, 0, offX + 6, 0);
       l.addColorStop(0, EDGE); l.addColorStop(1, EDGE0);
@@ -2604,6 +2642,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   // ---------------------------------------------------------------- court
   // A polished floor that catches the level's light, boards receding toward you, the ball's shadow
   // and, when it burns, the glow of its flame on the boards.
+  function fireLight(c, x, y) {
+    const R = RV * (6 + 3 * ball.fire), g = c.createRadialGradient(x, y, RV, x, y, R), Pf = flamePal(ball.nova);
+    g.addColorStop(0, rgba(Pf.mid, 0.12 * ball.fire)); g.addColorStop(1, rgba(Pf.mid, 0));
+    c.globalCompositeOperation = 'lighter'; c.fillStyle = g;
+    c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fill();
+    c.globalCompositeOperation = 'source-over';
+  }
   function drawCourt(c, left, width, S, bx, by) {
     const lr = glowRgb(), x0 = left - 20, w = width + 40, F = W.FLOOR;
     const fg = c.createLinearGradient(0, F, 0, F + 150);
@@ -2702,7 +2747,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
       c.fillText('CHECKPOINT', 0, -(h.w / 2) * RING_RY - P.RP - 13);
     }
     c.rotate(h.tilt);
-    c.globalAlpha = h.st === 1 ? 0.32 : o.later ? 0.72 : 1;
+    c.globalAlpha = h.st === 1 ? 0.32 : o.later || 1;
     c.drawImage(back ? sp.back : sp.front, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
     c.globalAlpha = 1;
     const rx = h.w / 2, ry = rx * RING_RY;
@@ -2722,13 +2767,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
       c.beginPath(); c.ellipse(0, -P.RP * 0.42, rx, ry, 0, ang - 0.1, ang + 0.1); c.stroke();
       c.globalCompositeOperation = 'source-over';
     }
-    if (next && view.ringStreak >= 3 && !REDUCED) { // on a streak: the next ring burns in the streak colour
-      const a = 0.3 + 0.14 * Math.sin(view.time * 9), nova = view.ringStreak >= 5;
-      c.globalCompositeOperation = 'lighter';
-      c.strokeStyle = (nova ? 'rgba(120,170,255,' : 'rgba(255,140,40,') + a.toFixed(3) + ')';
-      c.lineWidth = 2.6;
-      c.beginPath(); c.ellipse(0, 0, h.w / 2 + P.RP + 3.5, (h.w / 2) * RING_RY + P.RP + 2.5, 0, back ? Math.PI : 0, back ? Math.PI * 2 : Math.PI); c.stroke();
-      c.globalCompositeOperation = 'source-over';
+    if (next && ball.fire > 0.08 && !REDUCED) {
+      // the burning ball lights up the ring it's heading for, brighter as it closes in
+      const k = clamp(1 - Math.abs(x - (view.drawX || 0)) / 170, 0, 1) * ball.fire;
+      if (k > 0.01) {
+        c.globalCompositeOperation = 'lighter';
+        c.strokeStyle = rgba(flamePal(ball.nova).mid, 0.5 * k); c.lineWidth = P.RP * (0.45 + 0.6 * k); c.lineCap = 'round';
+        c.beginPath(); c.ellipse(0, 0, rx, ry, 0, back ? Math.PI : 0, back ? Math.PI * 2 : Math.PI); c.stroke();
+        c.globalCompositeOperation = 'source-over';
+      }
     }
     if (!back && v.flash !== 0) {
       const a = Math.abs(v.flash), frx = rx + P.RP + 3, fry = ry + P.RP + 2;
@@ -2925,7 +2972,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
       c.globalAlpha = clamp(a, 0, 1);
       c.font = '800 ' + (t.size * s).toFixed(1) + 'px ' + FONT_DISPLAY;
       const half = c.measureText(t.text).width / 2 + 8;
-      t.x = clamp(t.x, view.camX + half, view.camX + VIEW_W - half);
+      t.x = clamp(t.x, (view.wl != null ? view.wl : view.camX) + half, (view.wr != null ? view.wr : view.camX + VIEW_W) - half);
+      if (view.wt != null) t.y = Math.max(t.y, view.wt + t.size * 0.9 + 4); // never behind the HUD
       c.fillStyle = t.color; c.fillText(t.text, t.x, t.y);
       if (t.sub) {
         c.font = '700 12px ' + FONT_ROUND;
@@ -2969,8 +3017,23 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
     }
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden && phase === 'play') pause(); });
-  function pause() { phase = 'paused'; acc = 0; showPrompt('Paused', 'Tap to resume'); }
-  function resume() { hidePrompt(); phase = 'play'; acc = 0; last = performance.now(); }
+  // Resuming counts in 3-2-1, so the ball doesn't drop the moment you tap (faster levels leave little slack)
+  let resumeTimer = 0, resuming = false;
+  function pause() { clearTimeout(resumeTimer); resuming = false; phase = 'paused'; acc = 0; showPrompt('Paused', 'Tap to resume'); }
+  function resume() {
+    if (resuming) return;
+    if (REDUCED) { goPlay(); return; }
+    resuming = true;
+    let n = 3;
+    const tick = () => {
+      if (phase !== 'paused') { resuming = false; return; }
+      if (n === 0) { resuming = false; goPlay(); return; }
+      showPrompt(String(n), 'Get ready'); Sound.click(); n--;
+      resumeTimer = setTimeout(tick, 380);
+    };
+    tick();
+  }
+  function goPlay() { hidePrompt(); phase = 'play'; acc = 0; last = performance.now(); }
   ['gesturestart', 'dblclick'].forEach((n) => document.addEventListener(n, (e) => e.preventDefault()));
 
   $('cashBtn').addEventListener('click', cashOut);
@@ -3009,6 +3072,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   function howHtml() {
     return `<p><b>Tap</b> to flap. Drop the ball down through every ring. Fly past one, go under it or hit the floor and the run ends.</p>
       <h3>Swish</h3><p>Go through without touching the ring for a swish. Swishes pay more than rim hits, and swishes in a row pay more each time, up to 5 in a row. Your streak carries into the next level.</p>
+      <h3>Fire</h3><p>Two swishes in a row and the ball starts to smoulder. Three and it's <b>on fire</b>; five and it burns at full heat (blue-white with the Fire flame). Touch a rim and the flame goes out. Flames from the locker change the colours, never the pay.</p>
       <h3>Checkpoints</h3><p>Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.</p>
       <h3>Score and XP</h3><p>Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, daily challenges and achievements earn XP, which unlocks balls, wings and flames. Score and XP never change what a run pays.</p>`;
   }
@@ -3044,11 +3108,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
     if (t === 'ball') { drawBallBody(g, s * 0.32, 0.45, BALLS[id]); }
     else if (t === 'wing') { const r = s * 0.29; g.translate(r * 0.95, r * 0.92); drawWing(g, r, -0.1, false, WINGS[id]); }
     else if (FLAME_PATH) {
-      const pal = FLAMES[id].pal, k = s / 30;
+      const Pb = FLAMES[id].base, k = s / 30;
       g.translate(-12 * k, -12.5 * k); g.scale(k, k);
       const gr = g.createLinearGradient(0, 2, 0, 23);
-      gr.addColorStop(0, pal[3]); gr.addColorStop(0.45, pal[2]); gr.addColorStop(0.8, pal[1]); gr.addColorStop(1, pal[0]);
-      g.shadowColor = pal[2]; g.shadowBlur = 10; g.fillStyle = gr; g.fill(FLAME_PATH);
+      gr.addColorStop(0, hex3(Pb.outer)); gr.addColorStop(0.45, hex3(Pb.mid)); gr.addColorStop(0.8, hex3(Pb.inner)); gr.addColorStop(1, hex3(Pb.core));
+      g.shadowColor = hex3(Pb.mid); g.shadowBlur = 10; g.fillStyle = gr; g.fill(FLAME_PATH);
     }
     g.restore();
   }
@@ -3060,6 +3124,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
         const u = UNLOCKS.find((x) => x.t === t && x.id === id);
         if (!isOwned(t, id)) { toast(itemName(u) + ': ' + (u.lvl ? 'reach level ' + u.lvl : ACH_BY[u.ach].desc.toLowerCase()) + ' to unlock'); Sound.click(); return; }
         profile.eq[t] = id; saveAll(); Sound.click(); buzz(8);
+        if (t === 'flame') applyFlameTheme();
         document.querySelectorAll(`#panelBody .item[data-t="${t}"]`).forEach((x) => { const on = x.dataset.id === id; x.classList.toggle('eq', on); x.setAttribute('aria-pressed', String(on)); });
         $('itemName-' + t).textContent = 'Equipped: ' + COS[t][id].name;
       });
@@ -3154,7 +3219,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
       if (snap.profile) fixProfile(Object.assign(profile, snap.profile));
     }
     if (!(wallet.balance >= 0)) wallet.balance = CFG.demoStart;
-    syncMute(); buildLobby(); refreshLobby(); setHudMode(false);
+    syncMute(); applyFlameTheme(); buildLobby(); refreshLobby(); setHudMode(false);
     attract.wait = 0;
     if (document.fonts && document.fonts.load) document.fonts.load('800 20px "Big Shoulders Display"').catch(() => {}); // canvas text uses it too
     requestAnimationFrame((t) => { last = t; frame(t); });
@@ -3172,12 +3237,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
     run, stats, wallet, view, E, PAY, ball, profile, geom: () => ({ scale, offX, offY }),
     phase: () => phase,
     dbg,
-    unfreeze: () => { dbg.frozen = false; resume(); },
+    unfreeze: () => { dbg.frozen = false; goPlay(); },
     tap: () => flapInput(),
     autoplay: (skill) => { autoBot = skill ? BOT.createBot(skill, E.makeRng('auto' + Math.random())) : null; },
     fx: (streak) => { dbg.fx = streak; }, // show the flame for a streak without touching the run
     hold: (on) => { dbg.hold = !!on; },   // stop the clock with the last frame on screen
-    ballScreen: () => ({ x: view.bsx, y: view.bsy })
+    ballScreen: () => ({ x: view.bsx, y: view.bsy }),
+    equip: (t, id) => { if (COS[t] && COS[t][id]) { profile.eq[t] = id; if (t === 'flame') applyFlameTheme(); } } // test hook: try a skin without unlocking it
   };
 })();
 </script>

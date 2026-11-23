@@ -18,7 +18,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 8;
+  const VERSION = 9;
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -47,7 +47,9 @@
   const START_Y = 300;
 
   // Difficulty tiers. Arrays are per level (1..8).
-  // speed grows 4% per level, spacing 2%, so the time between rims shrinks as you go deeper.
+  // Speed grows 4% per level and the rings spread out with it (spacing and the first ring's distance
+  // grow 4% too), so every level gives the same time between rims. Deeper levels get harder through
+  // tighter, moving and tilted rims and bigger height changes, not through less time to react.
   const DIFFS = [
     {
       id: 'rookie', name: 'Rookie', blurb: 'Wide rings, gentle pace',
@@ -152,10 +154,11 @@
 
   // ---------- levels ----------
   function levelConfig(di, L) {
-    const D = DIFFS[di], k = L - 1;
+    const D = DIFFS[di], k = L - 1, stretch = 1 + 0.04 * k;
     return {
-      speed: D.speed * (1 + 0.04 * k),
-      spacing: D.spacing * (1 + 0.02 * k),
+      speed: D.speed * stretch,
+      spacing: D.spacing * stretch,
+      firstX: FIRST_HOOP_X * stretch,
       hoopW: D.hoopW[k], dy: D.dy[k],
       moveP: D.moveP[k], moveAmp: D.moveAmp[k],
       tiltP: D.tiltP[k], tiltMax: D.tiltMax[k],
@@ -182,12 +185,12 @@
     const C = levelConfig(di, L);
     const rng = makeRng('lvl|' + seed + '|' + di + '|' + L);
     const hoops = [];
-    let x = FIRST_HOOP_X;
+    let x = C.firstX;
     let prevY = START_Y;
     for (let i = 0; i < HOOPS_PER_LEVEL; i++) {
       // fixed number of draws per hoop keeps layouts stable when tuning features
       const r1 = rng(), r2 = rng(), r3 = rng(), r4 = rng(), r5 = rng(), r6 = rng(), r7 = rng(), r8 = rng(), r9 = rng();
-      let gap = FIRST_HOOP_X;
+      let gap = C.firstX;
       if (i > 0) { gap = C.spacing * (0.92 + 0.16 * r9); x += gap; }
       let amp = 0, period = 1, phase = 0;
       if (r2 < C.moveP) {

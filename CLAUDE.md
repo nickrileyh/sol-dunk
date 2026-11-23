@@ -21,7 +21,7 @@ The playable demo is a claude.ai artifact, slug `fb718710-5b6b-4ad8-bf8e-4d9cee1
 
 - **Physics changes need new payouts.** Any change to `src/engine.cjs` (physics, level settings) means bumping `VERSION`, then running `node sim/run.cjs` (about 11 minutes; `node sim/run.cjs 1 <tier> merge` re-runs one tier). After that, run `node sim/calibrate.cjs patterns.json --guard1 9 --guard 1.05 --write`. Wait for "wrote sim/out/patterns.json" before calibrating.
 - **House edge:** an average player gets back about 90% when cashing out at checkpoint 1, with at least a 10% edge per level after that. Check the calibration output.
-- **Before publishing:** `npm run build && SERVER_URL=/ node build.cjs`, `npm test` (server), `python3 tools/flows.py`, `python3 tools/features.py` and `python3 tools/contact.py`.
+- **Before publishing:** `npm run build && SERVER_URL=/ node build.cjs`, `npm test` (server), `python3 tools/flows.py`, `python3 tools/features.py` and `python3 tools/contact.py`. After camera or spacing changes, `python3 tools/speed.py` reports how much of the next ring is in view deep into a run.
 
 ## What the owner has asked for (keep these)
 
@@ -30,4 +30,5 @@ The playable demo is a claude.ai artifact, slug `fb718710-5b6b-4ad8-bf8e-4d9cee1
 - Amounts read as "SOL" text. Don't draw the Solana logo; the owner can drop the official icon in as `src/sol-icon.svg`.
 - Original art only: no Flappy Dunk assets.
 - Rim hits shouldn't carry the ball forward strongly: after a knock, the forward push fades back in (engine `RECOVER`).
+- As the ball speeds up, the rings spread out with it, so deeper levels never leave less time between rims (engine v9). Make deep levels harder in other ways.
 - The ball is drawn at exactly its hitbox size, and rings at exactly their collision size.
