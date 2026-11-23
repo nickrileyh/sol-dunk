@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#05070d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>SOL DUNK</title>
@@ -17,10 +17,24 @@
     <button class="cap glass icon play-only" id="pauseBtn" aria-label="Pause">
       <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="3.6" height="14" rx="1.4"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.4"/></svg>
     </button>
+    <button class="cap glass lobby-only prof" id="profBtn" aria-label="Profile, challenges and locker">
+      <span class="xpwrap" aria-hidden="true"><svg class="xpring" viewBox="0 0 36 36"><circle class="trk" cx="18" cy="18" r="15"/><circle class="val" id="xpArc" cx="18" cy="18" r="15"/></svg><svg class="xpstar" viewBox="0 0 24 24"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z"/></svg></span>
+      <span class="lbl num" id="profLv">Level 1</span><span class="dot" id="profDot"></span>
+    </button>
+    <div class="streak play-only" id="streak" aria-live="polite">
+      <div class="stk-top">
+        <svg class="flame" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 23c-4.4 0-8-3.1-8-7.5 0-3.3 2-5.6 3.7-7.4.6-.6 1.6-.2 1.6.7 0 1.4.9 2.6 2.1 2.6 1.1 0 1.8-.9 1.8-2.1 0-2.3-1.2-4.2-1.2-6.6 0-.9 1-1.5 1.7-1C17 3.9 20 8.4 20 14.5 20 19.6 16.4 23 12 23Z"/></svg>
+        <b class="num" id="stkN">0</b><span id="stkT">Swish</span>
+      </div>
+      <div class="heat" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <small class="num" id="stkNext"></small>
+    </div>
   </div>
   <div class="hud-mid play-only" aria-live="polite">
-    <span class="cap glass pot"><span class="sol-ico"></span><span id="hudPot">0.1000</span><span class="unit">SOL</span></span>
+    <div class="score" id="hudMult">1.00×</div>
+    <div class="pot" id="potCap"><span class="sol-ico"></span><span id="hudPot">0.1000</span><span class="unit">SOL</span></div>
     <div class="lvl"><span id="hudLevel">Level 1</span><span class="segbar" id="pips" aria-hidden="true"></span></div>
+    <span class="delta num" id="potDelta"></span>
   </div>
   <div class="hud-right">
     <button class="cap glass lobby-only" id="balBtn" aria-label="Balance and wallet"><span class="sol-ico"></span><span class="num" id="balTxt">10.00</span><span class="unit">SOL</span><span class="tag" id="balTag">Demo</span></button>
@@ -35,11 +49,12 @@
 
 <div id="prompt" aria-hidden="true"><div class="ring"></div><div class="t" id="promptText">Tap to fly</div><div class="s" id="promptSub"></div></div>
 <div id="banner" aria-live="polite"><div class="b1" id="bannerT"></div><div class="b2" id="bannerS"></div></div>
+<div id="callout" aria-live="polite"><div class="c1" id="callT"></div><div class="c2" id="callS"></div></div>
 
 <section id="lobby" class="sheet" aria-label="Place a bet">
-  <h1 class="title"><span class="accent">SOL</span> DUNK</h1>
+  <h1 class="title">SOL DUNK</h1>
   <p class="subtitle">Tap to flap. Swish to multiply.</p>
-  <div class="seg" role="radiogroup" aria-label="Difficulty" id="diffs"></div>
+  <div class="tiers" role="radiogroup" aria-label="Difficulty" id="diffs"></div>
   <p class="foot" id="diffInfo"></p>
   <div class="group">
     <div class="row">
@@ -52,6 +67,10 @@
     </div>
   </div>
   <div class="chips" id="chips"></div>
+  <button class="daily" id="dailyBtn" aria-label="Daily challenges">
+    <span class="d-ic" id="dailyIc"></span><span class="d-t" id="dailyT">Daily challenges</span><span class="d-p num" id="dailyP"></span>
+    <span class="d-bar" aria-hidden="true"><i id="dailyFill"></i></span>
+  </button>
   <button class="btn btn-primary" id="playBtn">Play <span class="num" id="playAmt">0.1 SOL</span></button>
   <div class="err" id="lobbyErr" role="alert"></div>
   <nav class="links">
@@ -62,22 +81,31 @@
   </nav>
 </section>
 
-<section id="checkpoint" class="card hide" aria-label="Checkpoint">
+<section id="checkpoint" class="card hide" aria-label="Checkpoint" tabindex="-1">
   <div class="kicker" id="cpKicker">Checkpoint</div>
   <div class="card-title" id="cpTitle">Level 1 cleared</div>
   <div class="big"><span class="sol-ico"></span><span id="cpPot">0.0000</span><span class="unit">SOL</span></div>
   <div class="under" id="cpMult">1.00×</div>
-  <div class="actions" style="margin-top:24px">
+  <div class="next" id="cpNext">
+    <div class="nx-h"><span id="cpNextL">Next: Level 2</span><b class="num" id="cpUpTo"></b></div>
+    <div class="nx-s" id="cpStreak"></div>
+  </div>
+  <div class="actions">
     <button class="btn btn-green" id="cashBtn">Cash out<small id="cashAmt">0 SOL</small></button>
     <button class="btn btn-go" id="goBtn">Keep going<small id="goSub">Level 2</small></button>
   </div>
 </section>
 
-<section id="result" class="card hide" aria-label="Run result">
+<section id="result" class="card hide" aria-label="Run result" tabindex="-1">
   <div class="card-title" id="resTitle">Cashed out</div>
   <div class="big" id="resAmount"><span class="sol-ico"></span><span id="resNum">+0</span><span class="unit">SOL</span></div>
   <div class="under muted" id="resSub"></div>
   <div class="tiles" id="resStats"></div>
+  <div class="xp" id="resXp">
+    <div class="xp-h"><span id="xpLvl">Level 1</span><span class="num" id="xpGain"></span></div>
+    <div class="xp-bar"><i id="xpFill"></i></div>
+  </div>
+  <div class="gains" id="resGains"></div>
   <div class="stack">
     <button class="btn btn-primary" id="againBtn">Play again <span class="num" id="againAmt"></span></button>
     <button class="btn btn-plain" id="lobbyBtn">Change bet</button>
