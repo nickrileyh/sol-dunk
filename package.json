@@ -1,0 +1,14 @@
+{
+  "name": "sol-dunk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SOL DUNK: a flap-through-the-rings skill game with SOL betting, checkpoints and calibrated multipliers.",
+  "scripts": {
+    "build": "node build.cjs && SERVER_URL=/ node build.cjs",
+    "sim": "node sim/run.cjs",
+    "sim:quick": "node sim/run.cjs 0.1",
+    "calibrate": "node sim/calibrate.cjs --guard1 9 --guard 1.05 --write",
+    "stats": "node sim/quick.cjs 400",
+    "test": "cd server && npm test"
+  }
+}

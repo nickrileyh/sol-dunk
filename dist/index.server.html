@@ -1,0 +1,2239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SOL DUNK</title>
+<style>/* SOL DUNK — dark, Apple-style.
+   Layout idea: a near-black playfield with one huge, quiet multiplier behind the action; frosted-glass
+   capsules on top; iOS-style sheets for betting and decisions. */
+:root {
+  --bg: #000000;
+  --surface: #1c1c1e;
+  --surface-2: #2c2c2e;
+  --sep: rgba(84, 84, 88, 0.45);
+  --label: #ffffff;
+  --label-2: rgba(235, 235, 245, 0.62);
+  --label-3: rgba(235, 235, 245, 0.32);
+  --orange: #ff9f0a;
+  --red: #ff453a;
+  --green: #30d158;
+  --purple: #bf5af2;
+  --yellow: #ffd60a;
+  --glass: rgba(36, 36, 40, 0.62);
+  --glass-line: rgba(255, 255, 255, 0.1);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-round: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--label);
+  font-family: var(--font); font-size: 15px;
+  overflow: hidden; overscroll-behavior: none; touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
+canvas#game { position: fixed; inset: 0; display: block; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; padding: 0; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.num { font-family: var(--font-round); font-variant-numeric: tabular-nums; }
+.unit { margin-left: 0.28em; font-size: 0.62em; font-weight: 600; letter-spacing: 0.02em; color: var(--label-2); }
+.sol-ico { display: inline-flex; align-items: center; flex: none; }
+.sol-ico:empty { display: none; }
+.sol-ico img { display: block; width: 0.92em; height: 0.92em; margin-right: 0.34em; object-fit: contain; }
+
+/* ---------- glass capsules ---------- */
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px);
+  box-shadow: inset 0 0 0 0.5px var(--glass-line), 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.cap {
+  pointer-events: auto;
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 40px; padding: 0 15px; border-radius: 20px;
+  font-weight: 600; font-size: 15px; color: var(--label);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.cap.icon { width: 40px; height: 40px; border-radius: 20px; padding: 0; justify-content: center; }
+.cap svg { width: 18px; height: 18px; }
+.cap .tag { margin-left: 2px; font-size: 12px; font-weight: 600; color: var(--label-3); }
+
+/* ---------- HUD ---------- */
+#hud {
+  position: fixed; left: 0; right: 0; top: 0; z-index: 5;
+  padding: calc(var(--safe-t) + 10px) 14px 0;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: start;
+  pointer-events: none;
+}
+.hud-left { display: flex; justify-content: flex-start; }
+.hud-mid { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+.hud-right { display: flex; justify-content: flex-end; gap: 8px; }
+.pot { height: 40px; padding: 0 17px; border-radius: 20px; font-family: var(--font-round); font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+.pot .unit { font-size: 0.6em; }
+.lvl { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 600; color: var(--label-2); font-variant-numeric: tabular-nums; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
+.segbar { display: grid; grid-template-columns: repeat(6, 12px); gap: 3px; }
+.seg-i { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.18); transition: background 0.25s, transform 0.25s; }
+.seg-i.on { background: var(--orange); }
+.seg-i.on.sw { background: #fff; }
+.seg-i.cp { background: rgba(255, 214, 10, 0.3); }
+.seg-i.cp.on { background: var(--yellow); }
+.seg-i.now { transform: scaleY(1.6); }
+.hud-lobby #hud { display: flex; justify-content: flex-end; }
+.hud-play .lobby-only { display: none !important; }
+.hud-lobby .play-only { display: none !important; }
+
+/* ---------- prompts ---------- */
+#prompt {
+  position: fixed; left: 50%; top: 64%; transform: translate(-50%, -50%); z-index: 4;
+  pointer-events: none; text-align: center; opacity: 0; transition: opacity 0.25s;
+}
+#prompt.show { opacity: 1; }
+#prompt .t { font-family: var(--font-round); font-weight: 700; font-size: 21px; letter-spacing: -0.01em; }
+#prompt .s { margin-top: 4px; font-size: 14px; color: var(--label-2); }
+#prompt .s:empty { display: none; }
+#prompt .ring { width: 44px; height: 44px; margin: 0 auto 14px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.9); animation: tapHint 1.3s ease-out infinite; }
+@keyframes tapHint { 0% { transform: scale(0.55); opacity: 1; } 100% { transform: scale(1.4); opacity: 0; } }
+#banner {
+  position: fixed; left: 0; right: 0; top: 15%; z-index: 4; pointer-events: none; text-align: center;
+  opacity: 0; transform: translateY(8px) scale(0.98); transition: opacity 0.3s, transform 0.35s cubic-bezier(.2, .9, .2, 1);
+}
+#banner.show { opacity: 1; transform: none; }
+#banner .b1 { font-family: var(--font-round); font-weight: 800; font-size: 30px; letter-spacing: -0.02em; }
+#banner .b2 { margin-top: 4px; font-size: 14px; font-weight: 500; color: var(--label-2); }
+#banner .b2:empty { display: none; }
+
+/* ---------- sheets & cards ---------- */
+.sheet, .card, .panel {
+  position: fixed; z-index: 10; left: 50%;
+  width: min(430px, calc(100% - 16px));
+  background: rgba(28, 28, 30, 0.86);
+  -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.11), 0 24px 60px rgba(0, 0, 0, 0.55);
+  border-radius: 30px;
+  transform: translate(-50%, 0);
+  transition: transform 0.45s cubic-bezier(.2, .9, .2, 1), opacity 0.25s;
+  touch-action: manipulation;
+}
+.sheet { bottom: calc(var(--safe-b) + 8px); padding: 22px 18px 12px; }
+.sheet.hide { transform: translate(-50%, calc(100% + 40px)); opacity: 0; pointer-events: none; }
+.card { top: 50%; transform: translate(-50%, -50%); padding: 26px 18px 18px; text-align: center; }
+.card.hide { transform: translate(-50%, -46%) scale(0.97); opacity: 0; pointer-events: none; }
+
+.title { margin: 0 2px; font-family: var(--font-round); font-weight: 800; font-size: 34px; letter-spacing: -0.025em; line-height: 1.05; }
+.title .accent { background: linear-gradient(95deg, #c77dff 10%, #5ee7c9 90%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.subtitle { margin: 6px 2px 18px; font-size: 15px; color: var(--label-2); }
+
+/* segmented control */
+.seg {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+  background: rgba(118, 118, 128, 0.24); padding: 2px; border-radius: 10px;
+}
+.seg button { height: 32px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--label); transition: background 0.2s; }
+.seg button[aria-checked="true"], .seg button[aria-pressed="true"] { background: #636366; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12); }
+.foot { margin: 10px 4px 14px; font-size: 13px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.foot b { color: var(--label); font-weight: 600; }
+.foot .dim { color: var(--label-3); }
+
+/* grouped rows */
+.group { background: var(--surface-2); border-radius: 12px; overflow: hidden; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 50px; padding: 0 8px 0 16px; }
+.row + .row { box-shadow: inset 0 0.5px 0 var(--sep); }
+.row .k { color: var(--label); font-weight: 500; }
+.row .v { color: var(--label-2); text-align: right; font-variant-numeric: tabular-nums; }
+.stepper { display: flex; align-items: center; gap: 4px; }
+.stepper button { min-width: 40px; height: 32px; border-radius: 8px; background: rgba(118, 118, 128, 0.24); font-size: 14px; font-weight: 600; color: var(--label); }
+.bet-field { display: flex; align-items: baseline; justify-content: center; width: 104px; cursor: text; }
+.bet-field .unit { margin-left: 4px; }
+.bet-input { width: 62px; height: 34px; border: 0; padding: 0; background: transparent; text-align: right; color: var(--label); font-family: var(--font-round); font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; }
+.bet-input:focus { outline: none; }
+.chips { display: flex; gap: 6px; margin: 10px 0 14px; }
+.chips button { flex: 1; height: 32px; border-radius: 16px; background: var(--surface-2); font-size: 14px; font-weight: 600; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.chips button[aria-pressed="true"] { background: rgba(255, 159, 10, 0.18); color: var(--orange); }
+
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+  width: 100%; height: 54px; border-radius: 16px;
+  font-size: 18px; font-weight: 600; letter-spacing: -0.01em;
+  transition: transform 0.12s, opacity 0.15s;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--orange); color: #000; }
+.btn-go { background: #ffffff; color: #000; }
+.btn-green { background: var(--green); color: #000; }
+.btn-plain { background: var(--surface-2); color: var(--label); }
+.btn[disabled] { opacity: 0.4; pointer-events: none; }
+.btn .num { font-weight: 700; }
+.links { display: flex; justify-content: space-around; margin-top: 8px; }
+.links button { font-size: 13px; font-weight: 500; color: var(--label-2); padding: 8px 4px; }
+.err { min-height: 4px; margin: 6px 0 0; font-size: 13px; color: var(--red); text-align: center; }
+.err:empty { margin: 0; }
+.err .link { color: var(--orange); font-weight: 600; font-size: 13px; padding: 2px 0; }
+
+/* checkpoint & result */
+.kicker { font-size: 13px; font-weight: 600; color: var(--label-3); font-variant-numeric: tabular-nums; }
+.card-title { margin: 4px 0 14px; font-family: var(--font-round); font-weight: 700; font-size: 24px; letter-spacing: -0.02em; }
+.big { font-family: var(--font-round); font-weight: 800; font-size: 56px; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.big { white-space: nowrap; }
+.big .unit { font-size: 0.4em; color: var(--label-3); }
+.big .sol-ico { vertical-align: 0.08em; }
+.big .sol-ico img { width: 0.56em; height: 0.56em; margin-right: 0.14em; }
+.big.win .unit, .big.loss .unit { color: inherit; opacity: 0.6; }
+.big.win { color: var(--green); }
+.big.loss { color: var(--red); }
+.under { margin-top: 10px; font-size: 16px; font-weight: 600; color: var(--green); font-variant-numeric: tabular-nums; }
+.under.muted { color: var(--label-2); font-weight: 500; font-size: 15px; }
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.actions .btn { height: 60px; flex-direction: column; gap: 2px; line-height: 1.1; }
+.actions .btn small { font-size: 12px; font-weight: 600; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.stack { display: grid; gap: 10px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 22px 0 18px; }
+.tiles div { background: var(--surface-2); border-radius: 14px; padding: 12px 4px 10px; }
+.tiles b { display: block; font-family: var(--font-round); font-weight: 700; font-size: 22px; font-variant-numeric: tabular-nums; }
+.tiles span { font-size: 12px; font-weight: 500; color: var(--label-2); }
+
+/* panels */
+.panel { top: calc(var(--safe-t) + 10px); bottom: calc(var(--safe-b) + 10px); display: flex; flex-direction: column; overflow: hidden; }
+.panel.hide { transform: translate(-50%, 24px); opacity: 0; pointer-events: none; }
+.panel header { display: flex; align-items: center; justify-content: space-between; padding: 20px 18px 10px; }
+.panel h2 { margin: 0; font-family: var(--font-round); font-weight: 700; font-size: 26px; letter-spacing: -0.02em; }
+.panel .close { width: 30px; height: 30px; border-radius: 15px; background: rgba(118, 118, 128, 0.24); color: var(--label-2); font-size: 13px; font-weight: 700; }
+.panel .body { padding: 4px 18px 26px; overflow-y: auto; font-size: 15px; line-height: 1.5; color: var(--label-2); touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.panel .body h3 { margin: 22px 0 8px 2px; font-size: 13px; font-weight: 600; color: var(--label-3); }
+.panel .body p { margin: 8px 2px; }
+.panel .body b { color: var(--label); font-weight: 600; }
+.panel .seg { margin: 2px 0 14px; }
+.tbl { background: var(--surface-2); border-radius: 12px; padding: 2px 12px; overflow-x: auto; }
+.panel table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
+.panel th { text-align: left; font-size: 12px; font-weight: 600; color: var(--label-3); padding: 10px 4px 6px; }
+.panel td { padding: 10px 4px; color: var(--label); box-shadow: inset 0 0.5px 0 var(--sep); }
+.panel td.r, .panel th.r { text-align: right; }
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { display: flex; justify-content: space-between; gap: 8px; padding: 13px 16px; color: var(--label); font-variant-numeric: tabular-nums; }
+.list li + li { box-shadow: inset 0 0.5px 0 var(--sep); }
+.list li span:first-child { color: var(--label-2); }
+.pos { color: var(--green) !important; } .neg { color: var(--red) !important; }
+.mono { display: block; margin: 4px 0; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--label); word-break: break-all; }
+.switch { position: relative; width: 51px; height: 31px; border-radius: 16px; background: rgba(120, 120, 128, 0.32); transition: background 0.2s; flex: none; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15); transition: transform 0.25s cubic-bezier(.3, 1.3, .5, 1); }
+.switch[aria-checked="true"] { background: var(--green); }
+.switch[aria-checked="true"]::after { transform: translateX(20px); }
+.scrim { position: fixed; inset: 0; z-index: 9; background: rgba(0, 0, 0, 0.5); opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+.scrim.show { opacity: 1; pointer-events: auto; }
+#toast { position: fixed; left: 50%; top: calc(var(--safe-t) + 58px); transform: translate(-50%, -10px); z-index: 20; padding: 12px 18px; border-radius: 22px; font-size: 14px; font-weight: 600; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; max-width: calc(100% - 32px); text-align: center; }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-height: 660px) {
+  .subtitle { display: none; }
+  .title { margin-bottom: 14px; }
+  .foot { margin: 8px 4px 10px; }
+  .chips { margin: 8px 0 10px; }
+  .btn { height: 50px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #prompt .ring { animation: none; }
+  .sheet, .card, .panel { transition: opacity 0.15s; }
+}
+</style>
+</head>
+<body class="hud-lobby">
+<canvas id="game" aria-label="SOL DUNK playfield. Tap or press space to flap."></canvas>
+
+<div id="hud">
+  <div class="hud-left">
+    <button class="cap glass icon play-only" id="pauseBtn" aria-label="Pause">
+      <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6.5" y="5" width="3.6" height="14" rx="1.4"/><rect x="13.9" y="5" width="3.6" height="14" rx="1.4"/></svg>
+    </button>
+  </div>
+  <div class="hud-mid play-only" aria-live="polite">
+    <span class="cap glass pot"><span class="sol-ico"></span><span id="hudPot">0.1000</span><span class="unit">SOL</span></span>
+    <div class="lvl"><span id="hudLevel">Level 1</span><span class="segbar" id="pips" aria-hidden="true"></span></div>
+  </div>
+  <div class="hud-right">
+    <button class="cap glass lobby-only" id="balBtn" aria-label="Balance and wallet"><span class="sol-ico"></span><span class="num" id="balTxt">10.00</span><span class="unit">SOL</span><span class="tag" id="balTag">Demo</span></button>
+    <button class="cap glass icon" id="muteBtn" aria-label="Mute sound">
+      <svg id="muteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+    </button>
+    <button class="cap glass icon lobby-only" id="menuBtn" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="prompt" aria-hidden="true"><div class="ring"></div><div class="t" id="promptText">Tap to fly</div><div class="s" id="promptSub"></div></div>
+<div id="banner" aria-live="polite"><div class="b1" id="bannerT"></div><div class="b2" id="bannerS"></div></div>
+
+<section id="lobby" class="sheet" aria-label="Place a bet">
+  <h1 class="title"><span class="accent">SOL</span> DUNK</h1>
+  <p class="subtitle">Tap to flap. Swish to multiply.</p>
+  <div class="seg" role="radiogroup" aria-label="Difficulty" id="diffs"></div>
+  <p class="foot" id="diffInfo"></p>
+  <div class="group">
+    <div class="row">
+      <label class="k" for="betInput">Bet</label>
+      <div class="stepper">
+        <button id="betHalf" aria-label="Halve bet">½</button>
+        <label class="bet-field"><input id="betInput" class="bet-input" type="text" inputmode="decimal" autocomplete="off" aria-label="Bet in SOL"><span class="unit">SOL</span></label>
+        <button id="betDouble" aria-label="Double bet">2×</button>
+      </div>
+    </div>
+  </div>
+  <div class="chips" id="chips"></div>
+  <button class="btn btn-primary" id="playBtn">Play <span class="num" id="playAmt">0.1 SOL</span></button>
+  <div class="err" id="lobbyErr" role="alert"></div>
+  <nav class="links">
+    <button data-panel="how">How to play</button>
+    <button data-panel="odds">Odds</button>
+    <button data-panel="stats">Stats</button>
+    <button data-panel="fair">Fairness</button>
+  </nav>
+</section>
+
+<section id="checkpoint" class="card hide" aria-label="Checkpoint">
+  <div class="kicker" id="cpKicker">Checkpoint</div>
+  <div class="card-title" id="cpTitle">Level 1 cleared</div>
+  <div class="big"><span class="sol-ico"></span><span id="cpPot">0.0000</span><span class="unit">SOL</span></div>
+  <div class="under" id="cpMult">1.00×</div>
+  <div class="actions" style="margin-top:24px">
+    <button class="btn btn-green" id="cashBtn">Cash out<small id="cashAmt">0 SOL</small></button>
+    <button class="btn btn-go" id="goBtn">Keep going<small id="goSub">Level 2</small></button>
+  </div>
+</section>
+
+<section id="result" class="card hide" aria-label="Run result">
+  <div class="card-title" id="resTitle">Cashed out</div>
+  <div class="big" id="resAmount"><span class="sol-ico"></span><span id="resNum">+0</span><span class="unit">SOL</span></div>
+  <div class="under muted" id="resSub"></div>
+  <div class="tiles" id="resStats"></div>
+  <div class="stack">
+    <button class="btn btn-primary" id="againBtn">Play again <span class="num" id="againAmt"></span></button>
+    <button class="btn btn-plain" id="lobbyBtn">Change bet</button>
+  </div>
+</section>
+
+<div class="scrim" id="scrim"></div>
+<section id="panel" class="panel hide" role="dialog" aria-modal="true" aria-labelledby="panelTitle">
+  <header><h2 id="panelTitle">How to play</h2><button class="close" id="panelClose" aria-label="Close">✕</button></header>
+  <div class="body" id="panelBody"></div>
+</section>
+<div id="toast" class="glass" role="status"></div>
+
+<script>window.SOL_DUNK_CONFIG = {"serverUrl":"/","network":"devnet","demoStart":10,"minBet":0.001,"maxBet":100};</script>
+<script>/*
+ * SOL DUNK — deterministic game engine.
+ *
+ * Shared, byte-for-byte, by the browser game, the Monte Carlo simulator and the
+ * payout server. Every run is a pure function of (level seed, tap ticks), so the
+ * server can replay a player's taps and get exactly the same outcome.
+ *
+ * Determinism rules followed here:
+ *   - fixed 120 Hz timestep, taps are integer tick indices
+ *   - only + - * / Math.sqrt Math.floor Math.imul (all exactly specified by IEEE-754 / ECMAScript)
+ *   - no Math.sin/cos/pow/exp (implementation-defined precision) and no `**`
+ *   - seeded PRNG (cyrb128 + sfc32), integer only
+ */
+(function (root, factory) {
+  const E = factory();
+  if (typeof module === 'object' && module.exports) module.exports = E;
+  else root.DunkEngine = E;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const VERSION = 7;
+  const TICK_HZ = 120;
+  const DT = 1 / TICK_HZ;
+
+  // World units: the playfield is 400 wide x 720 tall. Ball sits 112 from the left edge.
+  const WORLD = { W: 400, H: 720, FLOOR: 652, CEIL: 0, BALL_SX: 112 };
+
+  // Physics. Tap sets vertical velocity (classic flap), gravity pulls down.
+  const PHYS = {
+    G: 1350,        // gravity, units/s^2 (floaty, forgiving)
+    FLAP: 470,      // upward speed after a tap (same hop height, more hang time)
+    VMAX: 640,      // terminal fall speed (no sudden plunges)
+    R: 17,          // ball radius
+    RP: 7,          // rim tube radius (collision pegs at each end of the rim)
+    REST: 0.36,     // restitution off the rim (soft: rim hits often roll in)
+    TFRIC: 0.2,     // tangential damping on a firm rim knock (scaled down for gentle contact)
+    KNOCK: 30,      // normal speed above which a contact is a knock (bounce + rim event); below it the ball rests/rolls
+    VX_K: 5.0       // how fast forward speed recovers after a rim knock (1/s)
+  };
+
+  const HOOPS_PER_LEVEL = 6;
+  const LEVELS = 8;
+  const MAX_TICKS = TICK_HZ * 45;   // a level can never take longer than this
+  const Y_MIN = 220, Y_MAX = 540;   // rim centre band
+  const FIRST_HOOP_X = 250;
+  const START_Y = 300;
+
+  // Difficulty tiers. Arrays are per level (1..8).
+  // speed grows 4% per level, spacing 2%, so the time between rims shrinks as you go deeper.
+  const DIFFS = [
+    {
+      id: 'rookie', name: 'Rookie', blurb: 'Wide rings, gentle pace',
+      speed: 138, spacing: 230, maxWin: 50,
+      hoopW:   [93, 92, 91, 90, 89, 88, 87, 86],
+      dy:      [115, 122, 129, 136, 143, 150, 157, 164],
+      moveP:   [0, 0, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
+      moveAmp: [0, 0, 26, 30, 34, 38, 42, 46],
+      tiltP:   [0, 0, 0, 0, 0.2, 0.3, 0.4, 0.5],
+      tiltMax: [0, 0, 0, 0, 8, 9, 10, 11]
+    },
+    {
+      id: 'pro', name: 'Pro', blurb: 'The classic feel',
+      speed: 148, spacing: 234, maxWin: 100,
+      hoopW:   [91, 90, 89, 88, 87, 86, 85, 84],
+      dy:      [120, 128, 136, 144, 152, 160, 168, 176],
+      moveP:   [0, 0.3, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95],
+      moveAmp: [0, 28, 34, 40, 45, 50, 55, 60],
+      tiltP:   [0, 0, 0, 0.2, 0.3, 0.4, 0.5, 0.6],
+      tiltMax: [0, 0, 0, 8, 10, 11, 12, 13]
+    },
+    {
+      id: 'allstar', name: 'All-Star', blurb: 'Moving rings',
+      speed: 160, spacing: 238, maxWin: 250,
+      hoopW:   [87, 85, 83, 82, 81, 80, 79, 78],
+      dy:      [140, 152, 164, 174, 182, 190, 198, 206],
+      moveP:   [0, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
+      moveAmp: [0, 35, 40, 45, 50, 55, 60, 64],
+      tiltP:   [0, 0, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7],
+      tiltMax: [0, 0, 8, 10, 11, 12, 13, 14]
+    },
+    {
+      id: 'legend', name: 'Legend', blurb: 'Fast and tilted',
+      speed: 170, spacing: 242, maxWin: 1000,
+      hoopW:   [85, 83, 81, 80, 79, 78, 77, 76],
+      dy:      [150, 162, 174, 184, 192, 200, 208, 216],
+      moveP:   [0.25, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1],
+      moveAmp: [30, 37, 42, 47, 52, 56, 60, 64],
+      tiltP:   [0, 0.25, 0.35, 0.45, 0.55, 0.65, 0.75, 0.85],
+      tiltMax: [0, 9, 10, 11, 12, 13, 14, 15]
+    }
+  ];
+
+  const EV = { FLAP: 1, RIM: 2, SWISH: 4, SCORE: 8, MISS: 16, FLOOR: 32, CLEAR: 64, CEIL: 128, BLOCK: 256 };
+
+  // ---------- deterministic PRNG ----------
+  function hashSeed(str) { // cyrb128
+    let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
+    for (let i = 0, k; i < str.length; i++) {
+      k = str.charCodeAt(i);
+      h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+      h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+      h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+      h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+    }
+    h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+    h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+    h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+    h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+    h1 ^= (h2 ^ h3 ^ h4); h2 ^= h1; h3 ^= h1; h4 ^= h1;
+    return [h1 >>> 0, h2 >>> 0, h3 >>> 0, h4 >>> 0];
+  }
+  function sfc32(a, b, c, d) {
+    return function () {
+      a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0;
+      let t = (a + b) | 0;
+      a = b ^ (b >>> 9);
+      b = (c + (c << 3)) | 0;
+      c = (c << 21) | (c >>> 11);
+      d = (d + 1) | 0;
+      t = (t + d) | 0;
+      c = (c + t) | 0;
+      return (t >>> 0) / 4294967296;
+    };
+  }
+  function makeRng(str) {
+    const s = hashSeed(String(str));
+    const r = sfc32(s[0], s[1], s[2], s[3]);
+    for (let i = 0; i < 12; i++) r();
+    return r;
+  }
+
+  // ---------- deterministic trig (small angles only, |x| < 0.6 rad) ----------
+  function dsin(x) { const x2 = x * x; return x * (1 - x2 / 6 * (1 - x2 / 20 * (1 - x2 / 42 * (1 - x2 / 72)))); }
+  function dcos(x) { const x2 = x * x; return 1 - x2 / 2 * (1 - x2 / 12 * (1 - x2 / 30 * (1 - x2 / 56))); }
+
+  // Smooth triangle wave, period 1, range [-1, 1]; close to -cos(2*pi*u) but polynomial.
+  function wave(u) {
+    const p = u - Math.floor(u);
+    const tri = p < 0.5 ? 4 * p - 1 : 3 - 4 * p;
+    return tri * (1.5 - 0.5 * tri * tri);
+  }
+  function waveD(u) {
+    const p = u - Math.floor(u);
+    let tri, d;
+    if (p < 0.5) { tri = 4 * p - 1; d = 4; } else { tri = 3 - 4 * p; d = -4; }
+    return (1.5 - 1.5 * tri * tri) * d;
+  }
+
+  function hoopY(h, t) { return h.amp === 0 ? h.y0 : h.y0 + h.amp * wave(t / h.period + h.phase); }
+  function hoopVY(h, t) { return h.amp === 0 ? 0 : h.amp * waveD(t / h.period + h.phase) / h.period; }
+
+  // ---------- levels ----------
+  function levelConfig(di, L) {
+    const D = DIFFS[di], k = L - 1;
+    return {
+      speed: D.speed * (1 + 0.04 * k),
+      spacing: D.spacing * (1 + 0.02 * k),
+      hoopW: D.hoopW[k], dy: D.dy[k],
+      moveP: D.moveP[k], moveAmp: D.moveAmp[k],
+      tiltP: D.tiltP[k], tiltMax: D.tiltMax[k],
+      periodBase: 3.4 - 0.1 * k
+    };
+  }
+
+  function levelFeatures(di, L) {
+    const C = levelConfig(di, L), C1 = levelConfig(di, 1);
+    const f = [];
+    if (C.moveP > 0) f.push(C.moveP >= 1 ? 'All rims move' : 'Moving rims');
+    if (C.tiltP > 0) f.push('Tilted rims');
+    const sp = Math.round((C.speed / C1.speed - 1) * 100);
+    if (sp > 0) f.push('+' + sp + '% speed');
+    if (C.hoopW < C1.hoopW) f.push('Tighter rims');
+    if (!f.length) f.push('Static rims');
+    return f;
+  }
+
+  // Climb budget: rapid tapping lifts the ball ~350 units/s; the drop into a rim needs ~0.45 s.
+  const CLIMB_RATE = 350, DROP_TIME = 0.45, CLIMB_MARGIN = 40;
+
+  function generateLevel(seed, di, L) {
+    const C = levelConfig(di, L);
+    const rng = makeRng('lvl|' + seed + '|' + di + '|' + L);
+    const hoops = [];
+    let x = FIRST_HOOP_X;
+    let prevY = START_Y;
+    for (let i = 0; i < HOOPS_PER_LEVEL; i++) {
+      // fixed number of draws per hoop keeps layouts stable when tuning features
+      const r1 = rng(), r2 = rng(), r3 = rng(), r4 = rng(), r5 = rng(), r6 = rng(), r7 = rng(), r8 = rng(), r9 = rng();
+      let gap = FIRST_HOOP_X;
+      if (i > 0) { gap = C.spacing * (0.92 + 0.16 * r9); x += gap; }
+      let amp = 0, period = 1, phase = 0;
+      if (r2 < C.moveP) {
+        amp = C.moveAmp * (0.75 + 0.25 * r3);
+        period = C.periodBase * (0.85 + 0.3 * r4);
+        phase = r5;
+      }
+      let y = i === 0 ? 320 + (r1 * 2 - 1) * 45 : prevY + (r1 * 2 - 1) * C.dy;
+      if (y < Y_MIN) y = Y_MIN + (Y_MIN - y) * 0.5;
+      if (y > Y_MAX) y = Y_MAX - (y - Y_MAX) * 0.5;
+      // never ask for more climbing than perfect play can deliver in the time available
+      const T = gap / C.speed;
+      let maxUp = CLIMB_RATE * (T - DROP_TIME) - CLIMB_MARGIN;
+      if (maxUp < 30) maxUp = 30;
+      if (prevY - (y - amp) > maxUp) y = prevY - maxUp + amp;
+      if (y - amp < Y_MIN) y = Y_MIN + amp;
+      if (y + amp > Y_MAX) y = Y_MAX - amp;
+      let tilt = 0;
+      if (r6 < C.tiltP) tilt = (r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * (3.141592653589793 / 180);
+      hoops.push({ i, x, y0: y, w: C.hoopW, amp, period, phase, tilt, c: dcos(tilt), s: dsin(tilt), cp: i === HOOPS_PER_LEVEL - 1 });
+      prevY = y;
+    }
+    return { seed: String(seed), di, L, speed: C.speed, startY: START_Y, hoops, endX: x + C.spacing };
+  }
+
+  // ---------- simulation ----------
+  function createState(level) {
+    const hs = new Array(level.hoops.length);
+    for (let i = 0; i < hs.length; i++) {
+      const h = level.hoops[i];
+      hs[i] = { i: h.i, x: h.x, y0: h.y0, w: h.w, amp: h.amp, period: h.period, phase: h.phase, tilt: h.tilt, c: h.c, s: h.s, cp: h.cp, st: 0, touched: false };
+    }
+    return {
+      level, hoops: hs, speed: level.speed,
+      ball: { x: 0, y: level.startY, vx: level.speed, vy: 0 },
+      tick: 0, next: 0, prevLy: NaN, contact: false,
+      done: false, result: null, missKind: null,
+      outcomes: [], flaps: 0, rimHits: 0, impact: 0, ev: 0
+    };
+  }
+
+  function miss(st, h, kind) {
+    h.st = 2; st.done = true; st.result = 'miss';
+    st.missKind = h.touched ? 'rimout' : kind;
+  }
+
+  function hoopInteract(st, h, t) {
+    const b = st.ball, P = PHYS;
+    const half = h.w * 0.5;
+    if (b.x - h.x < -(half + P.R + 40)) { st.prevLy = NaN; return 0; }
+    let ev = 0;
+    const hy = hoopY(h, t), hvy = hoopVY(h, t);
+    const c = h.c, s = h.s, mn = P.R + P.RP;
+
+    // rim pegs (the two ends of the rim as seen from the side)
+    for (let side = -1; side <= 1; side += 2) {
+      const px = h.x + side * half * c, py = hy + side * half * s;
+      const dx = b.x - px, dy = b.y - py, d2 = dx * dx + dy * dy;
+      if (d2 < mn * mn) {
+        st.contact = true;
+        const d = Math.sqrt(d2) || 1e-9, nx = dx / d, ny = dy / d;
+        b.x = px + nx * mn; b.y = py + ny * mn;
+        const rvx = b.vx, rvy = b.vy - hvy;
+        const vn = rvx * nx + rvy * ny;
+        if (vn < 0) {
+          const tx = -ny, ty = nx, vt = rvx * tx + rvy * ty;
+          const imp = -vn, firm = imp > P.KNOCK;
+          // A knock bounces; resting or rolling contact just stops the ball sinking into the rim.
+          // Friction scales with how hard the hit was, so the ball can roll off (or in) instead of
+          // sticking to the edge of the rim while gravity and the forward push balance out.
+          const fr = imp >= 120 ? P.TFRIC : P.TFRIC * (imp / 120) * (imp / 120);
+          const vn2 = firm ? -P.REST * vn : 0, vt2 = vt * (1 - fr);
+          b.vx = vn2 * nx + vt2 * tx;
+          b.vy = vn2 * ny + vt2 * ty + hvy;
+          if (firm || !h.touched) { st.impact = imp; st.rimHits++; ev |= EV.RIM; }
+          h.touched = true;
+        }
+      }
+    }
+
+    // hoop-local frame (x along the rim, y toward the rim's "down" side)
+    const dx = b.x - h.x, dy = b.y - hy;
+    const lx = dx * c + dy * s, ly = -dx * s + dy * c;
+
+    // score: centre crosses the rim line downward, inside the opening
+    const pl = st.prevLy;
+    if (pl === pl && pl < 0 && ly >= 0 && lx > -half && lx < half) {
+      h.st = 1;
+      st.outcomes.push(h.touched ? 'R' : 'S');
+      ev |= EV.SCORE | (h.touched ? 0 : EV.SWISH);
+      st.next++; st.prevLy = NaN;
+      if (h.cp) { st.done = true; st.result = 'clear'; ev |= EV.CLEAR; }
+      return ev;
+    }
+
+    // no net: the ball may rise up through the ring; only a downward pass scores.
+    // the ring is missed once the ball is fully past its far side without scoring.
+    if (lx > half + P.RP + P.R + 2) { miss(st, h, ly < 0 ? 'over' : 'under'); ev |= EV.MISS; }
+    st.prevLy = ly;
+    return ev;
+  }
+
+  // Advance one tick. `tap` = the player tapped at the start of this tick.
+  function step(st, tap) {
+    if (st.done) return 0;
+    const b = st.ball, P = PHYS;
+    let ev = 0;
+    if (tap) { b.vy = -P.FLAP; st.flaps++; ev |= EV.FLAP; }
+    b.vy += P.G * DT; if (b.vy > P.VMAX) b.vy = P.VMAX;
+    // Forward flight eases back to level speed. While the ball rests on a rim the push is steady
+    // instead, so it can't find a balancing point on the edge: it rolls in or drops off.
+    const onRim = st.contact; st.contact = false;
+    if (onRim) { if (b.vx < st.speed) { b.vx += st.speed * (P.VX_K * DT); if (b.vx > st.speed) b.vx = st.speed; } }
+    else b.vx += (st.speed - b.vx) * (P.VX_K * DT);
+    b.x += b.vx * DT; b.y += b.vy * DT;
+    st.tick++;
+    const t = st.tick * DT;
+    if (b.y < WORLD.CEIL + P.R) { b.y = WORLD.CEIL + P.R; if (b.vy < 0) b.vy = 0; ev |= EV.CEIL; }
+    const h = st.hoops[st.next];
+    if (h) ev |= hoopInteract(st, h, t);
+    if (!st.done && b.y > WORLD.FLOOR - P.R) { st.done = true; st.result = 'floor'; ev |= EV.FLOOR; }
+    if (!st.done && st.tick >= MAX_TICKS) { st.done = true; st.result = 'miss'; st.missKind = 'timeout'; ev |= EV.MISS; }
+    st.ev = ev;
+    return ev;
+  }
+
+  // Validate a tap list: sorted, unique, integer ticks, first tap at 0.
+  function validTaps(taps) {
+    if (!Array.isArray(taps) || taps.length === 0 || taps.length > 4000) return false;
+    if (taps[0] !== 0) return false;
+    for (let i = 0; i < taps.length; i++) {
+      const v = taps[i];
+      if (typeof v !== 'number' || v !== Math.floor(v) || v < 0 || v > MAX_TICKS) return false;
+      if (i > 0 && v <= taps[i - 1]) return false;
+    }
+    return true;
+  }
+
+  // Replay a level from a tap list. Used by the server to verify a client's run.
+  function replay(level, taps) {
+    const st = createState(level);
+    let ti = 0;
+    const n = taps.length;
+    while (!st.done) {
+      let tap = false;
+      if (ti < n && taps[ti] === st.tick) { tap = true; ti++; }
+      step(st, tap);
+    }
+    return { result: st.result, missKind: st.missKind, outcomes: st.outcomes.slice(), ticks: st.tick, flaps: st.flaps, extraTaps: n - ti };
+  }
+
+  // ---------- payouts ----------
+  // pt = PAYTABLE[di][L-1] = { rim, swish: [x1, x2, x3, x4, x5plus] }
+  function hoopMultiplier(pt, outcome, streak) {
+    if (outcome === 'S') return pt.swish[(streak < pt.swish.length ? streak : pt.swish.length) - 1];
+    return pt.rim;
+  }
+
+  // Walk a level's outcomes from a starting total multiplier and starting swish streak
+  // (the streak carries over between levels); applies the max-win cap.
+  // Returns { total, streak, steps: [{o, streak, m, total}], capped, capIndex }
+  function applyLevel(pt, outcomes, startTotal, cap, startStreak) {
+    let total = startTotal, streak = startStreak || 0;
+    const steps = [];
+    for (let i = 0; i < outcomes.length; i++) {
+      const o = outcomes[i];
+      streak = o === 'S' ? streak + 1 : 0;
+      const m = hoopMultiplier(pt, o, streak);
+      total = total * m;
+      if (cap && total >= cap) {
+        total = cap;
+        steps.push({ o, streak, m, total });
+        return { total, streak, steps, capped: true, capIndex: i };
+      }
+      steps.push({ o, streak, m, total });
+    }
+    return { total, streak, steps, capped: false, capIndex: -1 };
+  }
+
+  return {
+    VERSION, TICK_HZ, DT, WORLD, PHYS, HOOPS_PER_LEVEL, LEVELS, MAX_TICKS, Y_MIN, Y_MAX, DIFFS, EV,
+    makeRng, hashSeed, dsin, dcos, wave, waveD, hoopY, hoopVY,
+    levelConfig, levelFeatures, generateLevel, createState, step, replay, validTaps,
+    hoopMultiplier, applyLevel
+  };
+});
+</script>
+<script>/* Generated by sim/calibrate.cjs — do not edit by hand.
+ * Mode "house": an average player gets back 90% when cashing out at checkpoint 1; each later level keeps
+ * at least a 10% edge against the average player and lets a strong player gain at most 5% on it.
+ * PAYTABLE[difficulty][level-1] = { rim, swish: [streak1..5+] }. AVG_RTP = average-player return if cashing out after each level. */
+(function (root, factory) {
+  const P = factory();
+  if (typeof module === 'object' && module.exports) module.exports = P;
+  else root.DunkPaytable = P;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  return {"PAYTABLE":[[{"rim":1.001,"swish":[1.001,1.002,1.002,1.002,1.003]},{"rim":1.003,"swish":[1.006,1.007,1.008,1.009,1.01]},{"rim":1.008,"swish":[1.017,1.02,1.024,1.027,1.031]},{"rim":1.011,"swish":[1.023,1.027,1.032,1.036,1.041]},{"rim":1.016,"swish":[1.033,1.04,1.046,1.053,1.059]},{"rim":1.025,"swish":[1.049,1.059,1.069,1.078,1.088]},{"rim":1.038,"swish":[1.076,1.091,1.106,1.121,1.136]},{"rim":1.052,"swish":[1.105,1.126,1.146,1.167,1.188]}],[{"rim":1.006,"swish":[1.011,1.013,1.016,1.018,1.02]},{"rim":1.01,"swish":[1.021,1.025,1.029,1.033,1.037]},{"rim":1.014,"swish":[1.029,1.034,1.04,1.046,1.052]},{"rim":1.022,"swish":[1.045,1.054,1.063,1.072,1.081]},{"rim":1.033,"swish":[1.066,1.08,1.093,1.106,1.12]},{"rim":1.046,"swish":[1.092,1.111,1.129,1.148,1.166]},{"rim":1.069,"swish":[1.138,1.166,1.194,1.222,1.249]},{"rim":1.103,"swish":[1.206,1.248,1.289,1.33,1.372]}],[{"rim":1.015,"swish":[1.03,1.036,1.043,1.049,1.055]},{"rim":1.019,"swish":[1.038,1.045,1.053,1.06,1.068]},{"rim":1.028,"swish":[1.056,1.067,1.078,1.09,1.101]},{"rim":1.039,"swish":[1.079,1.095,1.111,1.126,1.142]},{"rim":1.06,"swish":[1.119,1.143,1.167,1.19,1.214]},{"rim":1.09,"swish":[1.181,1.217,1.253,1.289,1.326]},{"rim":1.14,"swish":[1.281,1.337,1.393,1.45,1.506]},{"rim":1.213,"swish":[1.427,1.512,1.598,1.683,1.768]}],[{"rim":1.028,"swish":[1.056,1.067,1.079,1.09,1.101]},{"rim":1.028,"swish":[1.056,1.067,1.079,1.09,1.101]},{"rim":1.04,"swish":[1.08,1.096,1.113,1.129,1.145]},{"rim":1.063,"swish":[1.127,1.152,1.178,1.203,1.228]},{"rim":1.1,"swish":[1.2,1.24,1.28,1.32,1.36]},{"rim":1.149,"swish":[1.297,1.357,1.416,1.476,1.535]},{"rim":1.228,"swish":[1.457,1.548,1.64,1.731,1.822]},{"rim":1.297,"swish":[1.594,1.712,1.831,1.95,2.068]}]],"AVG_CLEAR":[[0.8905,0.8627,0.783,0.7256,0.6322,0.5303,0.428,0.3258],[0.8379,0.7567,0.6714,0.5658,0.4539,0.36,0.2477,0.1572],[0.7539,0.627,0.5121,0.4203,0.313,0.2005,0.1158,0.0585],[0.6568,0.5106,0.4004,0.2945,0.1835,0.108,0.0552,0.0295]],"AVG_SWISH":[[0.8077,0.7799,0.7324,0.687,0.6412,0.6099,0.5906,0.5668],[0.7526,0.7002,0.6607,0.6229,0.6023,0.581,0.5472,0.505],[0.6685,0.6232,0.5938,0.5705,0.533,0.4929,0.4575,0.4286],[0.6442,0.6035,0.5561,0.5123,0.4741,0.442,0.4129,0.3895]],"AVG_RTP":[[0.8994,0.8095,0.7122,0.5978,0.4608,0.3244,0.2113,0.1195],[0.9001,0.7799,0.6253,0.4601,0.3037,0.1801,0.0902,0.0374],[0.8998,0.7055,0.4957,0.3187,0.1818,0.0852,0.034,0.0111],[0.8997,0.6328,0.387,0.2126,0.0979,0.0379,0.0127,0.0034]],"META":{"mode":"house","guard":1.05,"guardFrom":2,"target":0.9,"weights":{"rim":0.5,"swish":[1,1.2,1.4,1.6,1.8]},"generated":"2026-11-23","engine":7,"samples":24000}};
+});
+</script>
+<script>/*
+ * SOL DUNK — human-like autopilot.
+ *
+ * Used by the simulator to measure how players of different skill fare, and by the
+ * lobby attract mode (skill "perfect"). It plans the "final drop" into the next rim
+ * with a single-tap trajectory solve, cruises above the rim otherwise, and adds the
+ * kinds of error real players make: tap timing jitter, aim error (where along the rim
+ * they drop), misjudging moving rims, and the occasional lapse.
+ */
+(function (root, factory) {
+  const B = factory(root.DunkEngine || (typeof require === 'function' ? require('./engine.cjs') : null));
+  if (typeof module === 'object' && module.exports) module.exports = B;
+  else root.DunkBot = B;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (E) {
+  'use strict';
+  const P = E.PHYS, W = E.WORLD, DT = E.DT;
+
+  // Skill presets. timing = tap jitter (s, sd); aim = drop-point error (units, sd);
+  // tail = share of hoops with a much bigger aim error; lapse = chance per hoop of a
+  // badly mistimed final tap; moveK/tiltK = extra aim error on moving / tilted rims.
+  const SKILLS = {
+    novice:  { timing: 0.085, aim: 22,  tail: 0.20, tailK: 2.2, lapse: 0.040, phase: 0.15, moveK: 1.0, tiltK: 0.9, cruise: 40, cruiseSd: 15, minGap: 0.15, commit: 0.17 },
+    casual:  { timing: 0.068, aim: 18,  tail: 0.16, tailK: 2.1, lapse: 0.022, phase: 0.11, moveK: 0.9, tiltK: 0.8, cruise: 38, cruiseSd: 12, minGap: 0.14, commit: 0.16 },
+    average: { timing: 0.055, aim: 15,  tail: 0.12, tailK: 2.0, lapse: 0.012, phase: 0.085, moveK: 0.8, tiltK: 0.7, cruise: 36, cruiseSd: 10, minGap: 0.13, commit: 0.15 },
+    good:    { timing: 0.042, aim: 11,  tail: 0.10, tailK: 2.0, lapse: 0.006, phase: 0.06, moveK: 0.7, tiltK: 0.6, cruise: 35, cruiseSd: 8, minGap: 0.12, commit: 0.15 },
+    pro:     { timing: 0.030, aim: 8,   tail: 0.08, tailK: 1.9, lapse: 0.003, phase: 0.04, moveK: 0.6, tiltK: 0.5, cruise: 34, cruiseSd: 6, minGap: 0.11, commit: 0.14 },
+    perfect: { timing: 0, aim: 0, tail: 0, tailK: 1, lapse: 0, phase: 0, moveK: 0, tiltK: 0, cruise: 34, cruiseSd: 0, minGap: 0.10, commit: 0.12 }
+  };
+  const AIM_BIAS = 3; // aim slightly toward the back rim: the front rim is met at a shallower angle
+
+  function gauss(rng) {
+    let u = 0, v = 0;
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(6.283185307179586 * v);
+  }
+
+  function createBot(skill, rng) {
+    const p = typeof skill === 'string' ? SKILLS[skill] : skill;
+    return { p, rng, sched: -1, lastTap: -1000, key: -1, aimDX: 0, aimDY: 0, phaseErr: 0, cruise: 36, lapse: false, lapseShift: 0, h: null, fine: p.timing === 0 };
+  }
+
+  function perceivedY(bot, t) { return E.hoopY(bot.h, t + bot.phaseErr) + bot.aimDY; }
+
+  function acquire(bot, st, h) {
+    const p = bot.p, rng = bot.rng;
+    bot.key = st.next; bot.h = h;
+    // average vertical rim speed, used to scale error on moving rims
+    const mv = h.amp ? (h.amp * 3.0 / h.period) : 0;
+    const tiltDeg = Math.abs(h.tilt) * 57.29577951308232;
+    const speedK = st.speed / 165;
+    let sd = p.aim * speedK * (1 + p.moveK * mv / 100) * (1 + p.tiltK * tiltDeg / 20);
+    if (p.tail && rng() < p.tail) sd *= p.tailK;
+    bot.aimDX = AIM_BIAS + (sd ? gauss(rng) * sd : 0);
+    bot.aimDY = 0; // height misjudgement barely moves the drop point; aim error covers it
+    bot.phaseErr = p.phase && h.amp ? gauss(rng) * p.phase : 0;
+    bot.cruise = p.cruise + (p.cruiseSd ? gauss(rng) * p.cruiseSd : 0);
+    bot.lapse = p.lapse > 0 && rng() < p.lapse;
+    bot.lapseShift = (rng() < 0.5 ? -1 : 1) * (0.09 + 0.12 * rng());
+    bot.tiltSeen = true;
+  }
+
+  // Best single "final" tap: tap in k ticks, then free-fall through the rim.
+  function planFinal(bot, st, vx) {
+    const b = st.ball, h = bot.h, t0 = st.tick * DT;
+    const aimX = h.x + bot.aimDX * h.c;
+    const tn = bot.tiltSeen ? h.s / h.c : 0;
+    const stepK = bot.fine ? 1 : 2;
+    let best = null;
+    for (let k = 0; k <= 100; k += stepK) {
+      const tk = k * DT;
+      let yk;
+      const vyk = b.vy + P.G * tk;
+      if (vyk > P.VMAX) { const tc = (P.VMAX - b.vy) / P.G; yk = b.y + b.vy * tc + 0.5 * P.G * tc * tc + P.VMAX * (tk - tc); }
+      else yk = b.y + b.vy * tk + 0.5 * P.G * tk * tk;
+      if (yk > W.FLOOR - P.R - 6) break;
+      const xk = b.x + vx * tk;
+      if (xk > aimX - 8) break;
+      if (yk - (P.FLAP * P.FLAP) / (2 * P.G) < P.R + 2) continue; // would bonk the ceiling
+      let hy = perceivedY(bot, t0 + tk + 0.35) + (aimX - h.x) * tn, s = NaN, xc = aimX;
+      const iters = (h.amp || tn) ? 4 : 1;
+      for (let it = 0; it < iters; it++) {
+        const disc = P.FLAP * P.FLAP + 2 * P.G * (hy - yk);
+        if (disc < 0) { s = NaN; break; }
+        s = (P.FLAP + Math.sqrt(disc)) / P.G;
+        xc = xk + vx * s;
+        hy = perceivedY(bot, t0 + tk + s) + (xc - h.x) * tn;
+      }
+      if (!(s > 0)) continue;
+      const vc = -P.FLAP + P.G * s;
+      const err = Math.abs(xc - aimX);
+      const cost = err + (vc < 320 ? (320 - vc) * 0.08 : 0);
+      if (!best || cost < best.cost) best = { k, cost, err, xc, vc };
+    }
+    return best;
+  }
+
+  function crossNoTap(bot, st, vx) {
+    const b = st.ball, h = bot.h, t0 = st.tick * DT;
+    const tn = bot.tiltSeen ? h.s / h.c : 0;
+    let hy = perceivedY(bot, t0) + (b.x - h.x) * tn, s = NaN;
+    const iters = (h.amp || tn) ? 4 : 1;
+    for (let it = 0; it < iters; it++) {
+      const disc = b.vy * b.vy + 2 * P.G * (hy - b.y);
+      if (disc < 0) { s = NaN; break; }
+      s = (-b.vy + Math.sqrt(disc)) / P.G;
+      hy = perceivedY(bot, t0 + s) + (b.x + vx * s - h.x) * tn;
+    }
+    if (!(s > 0)) return null;
+    return { xc: b.x + vx * s, vc: b.vy + P.G * s };
+  }
+
+  function schedule(bot, st, k, final) {
+    const p = bot.p;
+    let jit = p.timing ? gauss(bot.rng) * p.timing : 0;
+    if (final && bot.lapse) { jit += bot.lapseShift; bot.lapse = false; }
+    const when = st.tick + k + Math.round(jit / DT);
+    if (when <= st.tick) { bot.lastTap = st.tick; return true; }
+    bot.sched = when;
+    return false;
+  }
+
+  // Decide whether to tap on the tick that is about to run (index st.tick).
+  function decide(bot, st) {
+    if (st.done) return false;
+    const p = bot.p;
+    if (bot.sched >= 0 && bot.key !== st.next) bot.sched = -1; // target scored: drop the stale tap
+    if (bot.sched >= 0) {
+      if (st.tick >= bot.sched) { bot.sched = -1; bot.lastTap = st.tick; return true; }
+      return false;
+    }
+    if ((st.tick - bot.lastTap) * DT < p.minGap) return false;
+    if (!bot.fine && (st.tick & 1)) return false; // humans decide ~60x/s, not 120x/s
+    const h = st.hoops[st.next];
+    if (!h) return false;
+    if (bot.key !== st.next) acquire(bot, st, h);
+    const b = st.ball;
+    const vx = b.vx < st.speed * 0.85 ? (b.vx + st.speed) * 0.5 : st.speed;
+    const aimX = h.x + bot.aimDX * h.c;
+    const horizon = Math.round(p.commit / DT);
+
+    // already on a line into the rim? then just wait
+    const nt = crossNoTap(bot, st, vx);
+    const fin = planFinal(bot, st, vx);
+    if (nt && nt.vc > 150) {
+      const e = Math.abs(nt.xc - aimX);
+      if (e <= 10 || (fin && e <= fin.err + 3)) return false;
+      if (nt.xc > aimX && (!fin || fin.xc > aimX)) return false; // too high: taps only make it later
+    }
+    if (fin && fin.err < 12) {
+      if (fin.k <= horizon) return schedule(bot, st, fin.k, true);
+      return false;
+    }
+    // cruise: keep the ball a little above the rim until the drop lines up
+    const hyNow = perceivedY(bot, st.tick * DT);
+    // close to the rim and above it, or already past its centre: a tap can only hurt
+    if (b.x > aimX - 60 && b.y < hyNow - P.R) return false;
+    if (b.x > h.x - 6 && b.y < hyNow + P.R) return false;
+    let yc = hyNow - bot.cruise;
+    if (yc < P.R + 30) yc = P.R + 30;
+    if (b.vy < 0 && b.y < yc + 40) return false; // still rising
+    let tau;
+    if (b.y >= yc) tau = 0;
+    else {
+      const disc = b.vy * b.vy + 2 * P.G * (yc - b.y);
+      tau = (-b.vy + Math.sqrt(disc)) / P.G;
+    }
+    const k = Math.round(tau / DT);
+    if (k <= horizon) return schedule(bot, st, k, false);
+    return false;
+  }
+
+  return { SKILLS, createBot, decide, gauss, AIM_BIAS };
+});
+</script>
+<script>/* SOL DUNK — browser client. Rendering, input, audio, betting flow. */
+(() => {
+  'use strict';
+  const E = window.DunkEngine, PAY = window.DunkPaytable, BOT = window.DunkBot;
+  const CFG = Object.assign({ serverUrl: null, network: 'devnet', demoStart: 10, minBet: 0.001, maxBet: 100, solIconUrl: null }, window.SOL_DUNK_CONFIG || {});
+  const W = E.WORLD, P = E.PHYS, DT = E.DT, NL = E.LEVELS, NH = E.HOOPS_PER_LEVEL, EV = E.EV;
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const round9 = (x) => Math.round(x * 1e9) / 1e9;
+  const FONT_ROUND = 'ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+
+  // ---------------------------------------------------------------- format
+  function fmtSol(x) { const a = Math.abs(x); return x.toFixed(a >= 100 ? 2 : a >= 10 ? 3 : 4); }
+  function fmtBal(x) { return x >= 1 ? x.toFixed(2) : x.toFixed(4); }
+  function fmtBet(x) { return (Math.round(x * 1e4) / 1e4).toString(); }
+  function fmtMult(m) { return (m < 10 ? m.toFixed(2) : m < 100 ? m.toFixed(1) : Math.round(m).toString()) + '×'; }
+  function fmtX(m) { return '×' + m.toFixed(3); }
+
+  // ---------------------------------------------------------------- storage
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('soldunk.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('soldunk.' + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } }
+  };
+
+  // ---------------------------------------------------------------- sha256 / hmac (sync, for provably-fair seeds)
+  const K256 = new Uint32Array([
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+    0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+    0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+    0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2]);
+  const ror = (x, n) => (x >>> n) | (x << (32 - n));
+  function sha256(msg) {
+    const l = msg.length, total = ((l + 9 + 63) >> 6) << 6;
+    const buf = new Uint8Array(total); buf.set(msg); buf[l] = 0x80;
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(total - 4, (l * 8) >>> 0); dv.setUint32(total - 8, Math.floor(l / 536870912));
+    let h0 = 0x6a09e667, h1 = 0xbb67ae85, h2 = 0x3c6ef372, h3 = 0xa54ff53a, h4 = 0x510e527f, h5 = 0x9b05688c, h6 = 0x1f83d9ab, h7 = 0x5be0cd19;
+    const w = new Uint32Array(64);
+    for (let off = 0; off < total; off += 64) {
+      for (let i = 0; i < 16; i++) w[i] = dv.getUint32(off + i * 4);
+      for (let i = 16; i < 64; i++) {
+        const s0 = ror(w[i - 15], 7) ^ ror(w[i - 15], 18) ^ (w[i - 15] >>> 3);
+        const s1 = ror(w[i - 2], 17) ^ ror(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+        w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+      }
+      let a = h0, b = h1, c = h2, d = h3, e = h4, f = h5, g = h6, h = h7;
+      for (let i = 0; i < 64; i++) {
+        const t1 = (h + (ror(e, 6) ^ ror(e, 11) ^ ror(e, 25)) + ((e & f) ^ (~e & g)) + K256[i] + w[i]) | 0;
+        const t2 = ((ror(a, 2) ^ ror(a, 13) ^ ror(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) | 0;
+        h = g; g = f; f = e; e = (d + t1) | 0; d = c; c = b; b = a; a = (t1 + t2) | 0;
+      }
+      h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0; h4 = (h4 + e) | 0; h5 = (h5 + f) | 0; h6 = (h6 + g) | 0; h7 = (h7 + h) | 0;
+    }
+    const out = new Uint8Array(32), od = new DataView(out.buffer);
+    [h0, h1, h2, h3, h4, h5, h6, h7].forEach((v, i) => od.setUint32(i * 4, v >>> 0));
+    return out;
+  }
+  function hmac256(key, msg) {
+    if (key.length > 64) key = sha256(key);
+    const k = new Uint8Array(64); k.set(key);
+    const ip = new Uint8Array(64 + msg.length), op = new Uint8Array(96);
+    for (let i = 0; i < 64; i++) { ip[i] = k[i] ^ 0x36; op[i] = k[i] ^ 0x5c; }
+    ip.set(msg, 64); op.set(sha256(ip), 64);
+    return sha256(op);
+  }
+  const utf8 = (s) => new TextEncoder().encode(s);
+  const hex = (u) => Array.from(u, (b) => b.toString(16).padStart(2, '0')).join('');
+  function randomHex(n) { const a = new Uint8Array(n); if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(a); else for (let i = 0; i < n; i++) a[i] = (Math.random() * 256) | 0; return hex(a); }
+  // Level seed = HMAC-SHA256(serverSeed, clientSeed:nonce:level). Same derivation on the server.
+  function deriveLevelSeed(serverSeed, clientSeed, nonce, level) { return hex(hmac256(utf8(serverSeed), utf8(clientSeed + ':' + nonce + ':' + level))); }
+
+  // ---------------------------------------------------------------- settings / stats / wallet
+  const settings = Object.assign({ sound: true, haptics: true }, store.get('settings', {}));
+  const stats = Object.assign({ runs: 0, wagered: 0, returned: 0, best: 0, hoops: 0, swishes: 0, deepest: 0, history: [] }, store.get('stats', {}));
+  const prefs = Object.assign({ di: 1, bet: 0.1 }, store.get('prefs', {}));
+  const wallet = { balance: store.get('balance', CFG.demoStart), nonce: store.get('nonce', 0) };
+  function saveAll() {
+    store.set('settings', settings); store.set('stats', stats); store.set('prefs', prefs);
+    store.set('balance', wallet.balance); store.set('nonce', wallet.nonce);
+  }
+
+  // ---------------------------------------------------------------- audio (synthesized, no assets)
+  const Sound = (() => {
+    let ac = null, master = null, noise = null;
+    function ctx() {
+      if (ac) return ac;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try {
+        ac = new AC();
+        master = ac.createGain(); master.gain.value = 0.55; master.connect(ac.destination);
+        noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+        const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      } catch (e) { ac = null; }
+      return ac;
+    }
+    function unlock() { const c = ctx(); if (c && c.state === 'suspended') c.resume().catch(() => {}); }
+    function on() { return settings.sound && ctx() && ac.state === 'running'; }
+    function env(g, t, a, d, peak) {
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(peak, t + a);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+    }
+    function tone(freq, t, dur, type, peak, to) {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t);
+      if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+      env(g, t, 0.005, dur, peak); o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+    }
+    function hiss(t, dur, f0, f1, q, peak, type) {
+      const s = ac.createBufferSource(); s.buffer = noise;
+      const f = ac.createBiquadFilter(); f.type = type || 'bandpass'; f.Q.value = q || 1;
+      f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+      const g = ac.createGain(); env(g, t, 0.01, dur, peak);
+      s.connect(f); f.connect(g); g.connect(master); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
+    }
+    const SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.5, 1568, 1760];
+    return {
+      unlock,
+      flap() { if (!on()) return; const t = ac.currentTime; hiss(t, 0.08, 800, 1600, 1.2, 0.13); tone(200, t, 0.06, 'sine', 0.05, 130); },
+      swish(streak) {
+        if (!on()) return; const t = ac.currentTime;
+        hiss(t, 0.26, 5200, 1800, 0.8, 0.2, 'bandpass');
+        const n = SCALE[Math.min(SCALE.length - 1, Math.max(0, streak - 1))];
+        tone(n, t + 0.02, 0.34, 'sine', 0.13); tone(n * 2, t + 0.02, 0.2, 'sine', 0.035);
+      },
+      rim(power) {
+        if (!on()) return; const t = ac.currentTime, p = clamp(power / 500, 0.15, 1);
+        [430, 1130, 1720].forEach((f, i) => tone(f * rnd(0.98, 1.02), t, 0.22 - i * 0.05, 'sine', 0.1 * p / (i + 1)));
+      },
+      score() { if (!on()) return; const t = ac.currentTime; tone(659.25, t, 0.16, 'sine', 0.09); tone(987.77, t + 0.05, 0.2, 'sine', 0.06); },
+      fire() { if (!on()) return; const t = ac.currentTime; hiss(t, 0.5, 300, 2400, 0.7, 0.18, 'lowpass'); },
+      checkpoint() { if (!on()) return; const t = ac.currentTime; [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, t + i * 0.085, 0.32, 'sine', 0.1)); },
+      cash() { if (!on()) return; const t = ac.currentTime; for (let i = 0; i < 9; i++) tone(rnd(1700, 2600), t + i * 0.045, 0.09, 'sine', 0.05); tone(1046.5, t, 0.45, 'sine', 0.07); },
+      bust() { if (!on()) return; const t = ac.currentTime; tone(300, t, 0.45, 'triangle', 0.09, 90); tone(110, t + 0.02, 0.25, 'sine', 0.12, 45); },
+      click() { if (!on()) return; tone(1400, ac.currentTime, 0.025, 'sine', 0.035); }
+    };
+  })();
+  function buzz(ms) { if (settings.haptics && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } }
+
+  // ---------------------------------------------------------------- bank: demo (local) and server (real SOL)
+  const LocalBank = {
+    real: false,
+    cur: null,
+    balance() { return wallet.balance; },
+    async start(di, bet) {
+      if (!(bet >= CFG.minBet)) throw new Error('Minimum bet is ' + CFG.minBet + ' SOL');
+      if (bet > wallet.balance + 1e-12) throw new Error('Not enough demo SOL for that bet.');
+      wallet.balance = round9(wallet.balance - bet);
+      const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
+      saveAll();
+      this.cur = { di, bet, serverSeed, clientSeed, nonce, level: 1, total: 1, streak: 0 };
+      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, levelSeed: deriveLevelSeed(serverSeed, clientSeed, nonce, 1) };
+    },
+    // Re-verifies the level by replaying the taps, exactly as the server does.
+    async level(L, taps) {
+      const c = this.cur;
+      const def = E.generateLevel(deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, L), c.di, L);
+      const r = E.replay(def, taps);
+      const a = E.applyLevel(PAY.PAYTABLE[c.di][L - 1], r.outcomes, c.total, E.DIFFS[c.di].maxWin, c.streak);
+      c.total = a.total; c.streak = a.streak; c.level = L;
+      const status = a.capped ? 'maxwin' : r.result === 'clear' ? (L >= NL ? 'final' : 'checkpoint') : 'bust';
+      let payout = 0;
+      if (status === 'maxwin' || status === 'final') payout = this._pay();
+      return { status, total: c.total, payout, serverSeed: status === 'checkpoint' ? null : c.serverSeed };
+    },
+    async next() { const c = this.cur; c.level++; return { levelSeed: deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, c.level) }; },
+    async cashout() { const payout = this._pay(); return { payout, serverSeed: this.cur.serverSeed }; },
+    _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); saveAll(); return payout; }
+  };
+
+  // Real SOL: talks to server/server.mjs. Only active when SOL_DUNK_CONFIG.serverUrl is set.
+  const ServerBank = {
+    real: true, token: null, address: null, bal: 0, runId: null,
+    async api(path, body) {
+      const res = await fetch(CFG.serverUrl.replace(/\/$/, '') + path, {
+        method: body ? 'POST' : 'GET',
+        headers: Object.assign({ 'content-type': 'application/json' }, this.token ? { authorization: 'Bearer ' + this.token } : {}),
+        body: body ? JSON.stringify(body) : undefined
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || ('Server error ' + res.status));
+      if (typeof j.balance === 'number') this.bal = j.balance / 1e9;
+      return j;
+    },
+    provider() { return (window.phantom && window.phantom.solana) || (window.solana && window.solana.isPhantom ? window.solana : null) || window.solflare || null; },
+    async connect() {
+      const p = this.provider();
+      if (!p) throw new Error('No Solana wallet found. Open this page in Phantom or Solflare.');
+      const r = await p.connect();
+      this.address = (r && r.publicKey ? r.publicKey : p.publicKey).toString();
+      const { message } = await this.api('/api/auth/nonce', { address: this.address });
+      const signed = await p.signMessage(utf8(message), 'utf8');
+      const sig = signed.signature || signed;
+      const j = await this.api('/api/auth/verify', { address: this.address, signature: b58encode(new Uint8Array(sig)) });
+      this.token = j.token;
+      await this.api('/api/me');
+    },
+    balance() { return this.bal; },
+    async deposit(sol) {
+      const p = this.provider();
+      const { message } = await this.api('/api/deposit/prepare', { lamports: Math.round(sol * 1e9) });
+      const r = await p.request({ method: 'signAndSendTransaction', params: { message } });
+      return this.api('/api/deposit/confirm', { signature: r.signature });
+    },
+    async withdraw(sol) { return this.api('/api/withdraw', { lamports: Math.round(sol * 1e9) }); },
+    async start(di, bet) {
+      const clientSeed = randomHex(8);
+      const j = await this.api('/api/run/start', { difficulty: di, lamports: Math.round(bet * 1e9), clientSeed });
+      this.runId = j.runId;
+      return { seedHash: j.serverSeedHash, clientSeed, nonce: j.nonce, levelSeed: j.levelSeed };
+    },
+    async level(L, taps) {
+      const j = await this.api('/api/run/level', { runId: this.runId, level: L, taps });
+      return { status: j.status, total: j.total, payout: (j.payoutLamports || 0) / 1e9, serverSeed: j.serverSeed || null };
+    },
+    async next() { return this.api('/api/run/continue', { runId: this.runId }); },
+    async cashout() { const j = await this.api('/api/run/cashout', { runId: this.runId }); return { payout: j.payoutLamports / 1e9, serverSeed: j.serverSeed }; }
+  };
+  const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  function b58encode(bytes) {
+    const digits = [0];
+    for (const byte of bytes) {
+      let carry = byte;
+      for (let j = 0; j < digits.length; j++) { carry += digits[j] << 8; digits[j] = carry % 58; carry = (carry / 58) | 0; }
+      while (carry) { digits.push(carry % 58); carry = (carry / 58) | 0; }
+    }
+    let s = ''; for (const b of bytes) { if (b === 0) s += '1'; else break; }
+    for (let i = digits.length - 1; i >= 0; i--) s += B58[digits[i]];
+    return s;
+  }
+  let bank = LocalBank;
+
+  // ---------------------------------------------------------------- canvas & view
+  // The client shows a 352-unit-wide window of the 400-unit world (a little zoomed in),
+  // world y from -10 to 680. Physics never depends on this.
+  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 96;
+  const RV = P.R; // drawn ball radius = collision radius
+  const cv = $('game'), cx = cv.getContext('2d');
+  let vw = 0, vh = 0, dpr = 1, scale = 1, offX = 0, offY = 0;
+  let bgEl = null;      // cached backdrop, rebuilt on resize
+  let sheetTopC = -1;   // cached top of the bet sheet (layout read only when it changes)
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    bgEl = null; sheetTopC = -1;
+    vw = window.innerWidth; vh = window.innerHeight;
+    cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
+    cv.style.width = vw + 'px'; cv.style.height = vh + 'px';
+    scale = Math.min(vw / VIEW_W, vh / VIEW_H);
+    offX = (vw - VIEW_W * scale) / 2;
+    offY = (vh - VIEW_H * scale) / 2 - VIEW_TOP * scale;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // One quiet backdrop for every level: a graphite field, a soft overhead light and a vignette.
+  // Painted once at half resolution (smooth gradients scale up invisibly); one blit per frame.
+  function backdrop() {
+    if (bgEl) return bgEl;
+    const el = document.createElement('canvas');
+    el.width = Math.max(2, Math.round(vw * 0.5)); el.height = Math.max(2, Math.round(vh * 0.5));
+    const g = el.getContext('2d');
+    g.scale(el.width / vw, el.height / vh);
+    const lg = g.createLinearGradient(0, 0, 0, vh);
+    lg.addColorStop(0, '#05070d'); lg.addColorStop(0.6, '#090c14'); lg.addColorStop(1, '#10131b');
+    g.fillStyle = lg; g.fillRect(0, 0, vw, vh);
+    // a deep blue night glow from above, the same on every level
+    const top = vh * 0.18, R0 = Math.max(vw, vh) * 0.8;
+    const rg = g.createRadialGradient(vw / 2, top, 0, vw / 2, top, R0);
+    rg.addColorStop(0, 'rgba(48,110,255,0.20)'); rg.addColorStop(0.45, 'rgba(48,110,255,0.06)'); rg.addColorStop(1, 'rgba(48,110,255,0)');
+    g.fillStyle = rg; g.fillRect(0, 0, vw, vh);
+    const vg = g.createRadialGradient(vw / 2, vh * 0.45, Math.min(vw, vh) * 0.35, vw / 2, vh * 0.45, Math.max(vw, vh) * 0.82);
+    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+    g.fillStyle = vg; g.fillRect(0, 0, vw, vh);
+    return (bgEl = el);
+  }
+  // the big multiplier behind play, rasterised once per value instead of every frame
+  const mult = { key: '', el: null, w: 0, h: 0 };
+  function multSprite(text, col) {
+    const px = 91 * scale * dpr; // largest drawn size (with pulse), in device pixels
+    const key = text + '|' + col + '|' + px.toFixed(1);
+    if (mult.key === key) return mult;
+    const el = mult.el || document.createElement('canvas');
+    const font = '700 ' + px.toFixed(1) + 'px ' + FONT_ROUND;
+    let g = el.getContext('2d');
+    g.font = font;
+    const w = Math.ceil(g.measureText(text).width + px * 0.25), h = Math.ceil(px * 1.35);
+    el.width = w; el.height = h;
+    g = el.getContext('2d');
+    g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = 'rgb(' + col + ')'; g.fillText(text, w / 2, h / 2);
+    Object.assign(mult, { key, el, w: w / dpr, h: h / dpr });
+    return mult;
+  }
+
+  // a short, soft motion trail behind the ball (world space)
+  const trail = [];
+  const TRAIL_T = 0.16;
+  function pushTrail(x, y) {
+    if (ball.hidden || REDUCED) { trail.length = 0; return; }
+    const lastP = trail[trail.length - 1];
+    if (lastP && Math.abs(lastP.x - x) + Math.abs(lastP.y - y) > 80) trail.length = 0; // teleports leave no streak
+    trail.push({ x, y, t: view.time });
+    while (trail.length > 2 && view.time - trail[0].t > TRAIL_T) trail.shift();
+  }
+  function drawTrail(c) {
+    const n = trail.length;
+    if (n < 3) return;
+    const head = trail[n - 1], tail = trail[0];
+    const len = Math.hypot(head.x - tail.x, head.y - tail.y);
+    if (len < 6) return;
+    const L = [], Rt = [];
+    for (let i = 0; i < n; i++) {
+      const a = trail[Math.max(0, i - 1)], b = trail[Math.min(n - 1, i + 1)], p = trail[i];
+      let dx = b.x - a.x, dy = b.y - a.y; const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+      const w = RV * 0.9 * Math.pow(i / (n - 1), 0.6);
+      L.push(p.x - dy * w, p.y + dx * w); Rt.push(p.x + dy * w, p.y - dx * w);
+    }
+    c.beginPath(); c.moveTo(L[0], L[1]);
+    for (let i = 2; i < L.length; i += 2) c.lineTo(L[i], L[i + 1]);
+    for (let i = Rt.length - 2; i >= 0; i -= 2) c.lineTo(Rt[i], Rt[i + 1]);
+    c.closePath();
+    const g = c.createLinearGradient(tail.x, tail.y, head.x, head.y);
+    const a = Math.min(1, len / 36) * 0.26;
+    g.addColorStop(0, 'rgba(255,150,60,0)'); g.addColorStop(1, 'rgba(255,150,60,' + a.toFixed(3) + ')');
+    c.fillStyle = g; c.fill();
+  }
+
+  // faint dust for depth
+  const DUST = [];
+  for (let i = 0; i < 46; i++) DUST.push({ x: (i * 137.5) % 1000, y: (i * 91.3) % 720, r: 0.6 + (i % 5) * 0.35, p: 0.08 + (i % 4) * 0.06, a: 0.05 + (i % 3) * 0.04 });
+
+  // ---------------------------------------------------------------- particles & texts
+  const parts = [];
+  function spawn(o) { if (parts.length > 420) parts.shift(); parts.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, g: 0, life: 0.6, max: 0.6, size: 3, color: '#fff', kind: 0, rot: 0, vr: 0, drag: 0 }, o)); }
+  const texts = [];
+  function floatText(x, y, text, sub, color, size) { texts.push({ x, y, text, sub, color, size: size || 20, life: 1.0, max: 1.0 }); }
+  const SOL_FLAME = ['#bf5af2', '#8e6bff', '#40c8e0', '#5ee7c9'];
+  const FIRE = ['#ffe08a', '#ffb340', '#ff8a1f', '#ff5a1f'];
+
+  // ---------------------------------------------------------------- game state
+  const ball = {
+    x: 0, y: 300, px: 0, py: 300, ox: 0, oy: 0, rot: 0, rv: 0, flap: 0, flapV: 0, fire: 0, solFire: false, vy: 0, vx: 160, glide: null, fall: null, hidden: false,
+    tilt: 0, tiltV: 0,        // whole ball + wings lean: kicks back on a flap, noses down as it falls
+    st: 0, stV: 0,            // takeoff stretch (springy)
+    sq: 0, sqV: 0, sqX: 0, sqY: -1, // impact squash along the contact normal
+    lastRim: -1
+  };
+  const view = { st: null, offset: 0, prevHoops: [], camX: 0, camY: 0, camV: 0, camT: null, zoom: 1, shake: 0, time: 0, pulse: 0 };
+  let phase = 'lobby'; // lobby | ready | play | clearing | checkpoint | over | paused
+  let pendingTap = false, acc = 0;
+  const run = { di: 1, bet: 0.1, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, taps: [], seedHash: '', clientSeed: '', nonce: 0, serverSeed: '', levelSeed: '', st: null, busy: false };
+  const attract = { st: null, bot: null, wait: 0, level: 1, streak: 0, acc: 0, tap: false };
+  // rings from the level just played that are already behind the ball (never the unplayed ones ahead)
+  function keepBehind(st) {
+    if (!st) return [];
+    return st.hoops.filter((h) => view.offset + h.x + h.w < ball.x - 4 && h.st !== 0).map((h) => ({ h, off: view.offset, t: st.tick * DT }));
+  }
+  function hoopVis(h) { return h.vis || (h.vis = { flash: 0 }); }
+
+  // ---------------------------------------------------------------- HUD / DOM
+  const ui = {
+    pot: $('hudPot'), level: $('hudLevel'), pips: $('pips'), bal: $('balTxt'), balTag: $('balTag'),
+    prompt: $('prompt'), promptT: $('promptText'), promptS: $('promptSub'),
+    banner: $('banner'), bannerT: $('bannerT'), bannerS: $('bannerS'),
+    lobby: $('lobby'), cp: $('checkpoint'), res: $('result'), panel: $('panel'), scrim: $('scrim'), toast: $('toast')
+  };
+  // numbers roll to their new value instead of jumping
+  function countUp(el, from, to, fmt, ms) {
+    const id = (el._cu = (el._cu || 0) + 1);
+    if (REDUCED || !(Math.abs(to - from) > 1e-12)) { el.textContent = fmt(to); return; }
+    const t0 = performance.now();
+    const tick = (t) => {
+      if (el._cu !== id) return;
+      const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmt(from + (to - from) * e);
+      if (k < 1) requestAnimationFrame(tick);
+    };
+    el.textContent = fmt(from);
+    requestAnimationFrame(tick);
+  }
+  let potShown = 0;
+  function setPot(animate) {
+    const v = run.bet * run.total;
+    if (animate) countUp(ui.pot, potShown, v, fmtSol, 320); else { ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = fmtSol(v); }
+    potShown = v;
+  }
+  function setPips(st) {
+    let h = '';
+    for (let i = 0; i < NH; i++) {
+      const o = st ? st.outcomes[i] : null;
+      const now = st && !st.done && i === st.next;
+      h += '<span class="seg-i' + (i === NH - 1 ? ' cp' : '') + (o ? ' on' + (o === 'S' ? ' sw' : '') : '') + (now ? ' now' : '') + '"></span>';
+    }
+    ui.pips.innerHTML = h;
+    ui.level.textContent = 'Level ' + run.level;
+  }
+  function setBalance() {
+    ui.bal.textContent = fmtBal(bank.balance());
+    ui.balTag.textContent = bank.real ? (CFG.network === 'mainnet-beta' ? '' : 'Devnet') : 'Demo';
+  }
+  function showPrompt(t, s) { ui.promptT.textContent = t; ui.promptS.textContent = s || ''; ui.prompt.classList.add('show'); }
+  function hidePrompt() { ui.prompt.classList.remove('show'); }
+  let bannerTimer = 0;
+  function banner(t, s, ms) {
+    ui.bannerT.textContent = t; ui.bannerS.textContent = s || '';
+    ui.banner.classList.add('show'); clearTimeout(bannerTimer);
+    bannerTimer = setTimeout(() => ui.banner.classList.remove('show'), ms || 1300);
+  }
+  let toastTimer = 0;
+  function toast(msg) { ui.toast.textContent = msg; ui.toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => ui.toast.classList.remove('show'), 2600); }
+  // optional SOL token icon next to amounts: set SOL_DUNK_CONFIG.solIconUrl to the official asset
+  if (CFG.solIconUrl) document.querySelectorAll('.sol-ico').forEach((el) => { const im = new Image(); im.alt = ''; im.src = CFG.solIconUrl; el.appendChild(im); });
+  function setHudMode(play) { document.body.classList.toggle('hud-play', play); document.body.classList.toggle('hud-lobby', !play); }
+  function show(el, on) { el.classList.toggle('hide', !on); }
+
+  // ---------------------------------------------------------------- lobby
+  const CHIPS = [0.01, 0.05, 0.1, 0.5, 1];
+  function avgClear(di, L) { return PAY.AVG_CLEAR[di][L - 1]; }
+  function buildLobby() {
+    const d = $('diffs');
+    d.innerHTML = E.DIFFS.map((D, i) => `<button role="radio" id="diff${i}" data-di="${i}" aria-checked="${i === prefs.di}">${D.name}</button>`).join('');
+    d.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { prefs.di = +b.dataset.di; Sound.click(); refreshLobby(); saveAll(); }));
+    $('chips').innerHTML = CHIPS.map((c) => `<button data-chip="${c}" aria-pressed="false">${c}</button>`).join('');
+    $('chips').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { setBet(+b.dataset.chip); Sound.click(); }));
+    $('betHalf').addEventListener('click', () => { setBet(prefs.bet / 2); Sound.click(); });
+    $('betDouble').addEventListener('click', () => { setBet(prefs.bet * 2); Sound.click(); });
+    const inp = $('betInput');
+    inp.addEventListener('input', () => { const v = parseFloat(inp.value.replace(',', '.')); if (v > 0) { prefs.bet = v; refreshLobby(true); } });
+    inp.addEventListener('blur', () => { setBet(prefs.bet); });
+    inp.addEventListener('focus', () => { try { inp.select(); } catch (e) { /* ignore */ } });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { inp.blur(); startRun(); } });
+    $('playBtn').addEventListener('click', () => startRun());
+  }
+  function setBet(v) {
+    const max = Math.min(CFG.maxBet, Math.max(CFG.minBet, bank.balance()));
+    prefs.bet = clamp(Math.round(v * 1e4) / 1e4, CFG.minBet, max);
+    refreshLobby(); saveAll();
+  }
+  function refreshLobby(keepInput) {
+    sheetTopC = -1;
+    const di = prefs.di, D = E.DIFFS[di];
+    document.querySelectorAll('#diffs button').forEach((b) => b.setAttribute('aria-checked', String(+b.dataset.di === di)));
+    $('diffInfo').innerHTML = `${D.blurb} · Win up to <b>${fmtBet(prefs.bet * D.maxWin)} SOL</b> <span class="dim">(${D.maxWin}×)</span>`;
+    if (!keepInput) $('betInput').value = fmtBet(prefs.bet);
+    $('playAmt').textContent = fmtBet(prefs.bet) + ' SOL';
+    document.querySelectorAll('#chips button').forEach((b) => b.setAttribute('aria-pressed', String(Math.abs(+b.dataset.chip - prefs.bet) < 1e-9)));
+    const short = prefs.bet > bank.balance() + 1e-12, broke = bank.balance() < CFG.minBet;
+    $('playBtn').disabled = short;
+    const err = $('lobbyErr');
+    if (broke && !bank.real) err.innerHTML = 'You\u2019re out of demo SOL. <button class="link" id="quickReset">Reset to ' + CFG.demoStart + ' SOL</button>';
+    else err.textContent = short ? 'That bet is more than your balance.' : '';
+    const qr = $('quickReset');
+    if (qr) qr.addEventListener('click', () => { wallet.balance = CFG.demoStart; saveAll(); setBet(Math.min(prefs.bet, CFG.demoStart)); toast('Demo balance reset to ' + CFG.demoStart + ' SOL'); });
+    setBalance();
+  }
+
+  // ---------------------------------------------------------------- run flow
+  async function startRun() {
+    if (run.busy || (phase !== 'lobby' && phase !== 'over')) return;
+    Sound.unlock();
+    const bet = prefs.bet;
+    run.busy = true;
+    try {
+      const r = await bank.start(prefs.di, bet);
+      Object.assign(run, { di: prefs.di, bet, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.levelSeed });
+      $('lobbyErr').textContent = '';
+    } catch (e) {
+      $('lobbyErr').textContent = e.message; run.busy = false;
+      if (ui.lobby.classList.contains('hide')) { toast(e.message); backToLobby(); }
+      return;
+    }
+    run.busy = false;
+    stats.runs++; stats.wagered = round9(stats.wagered + bet); saveAll();
+    show(ui.lobby, false); show(ui.res, false); show(ui.cp, false);
+    setHudMode(true); setBalance();
+    beginLevel(true);
+  }
+
+  function beginLevel(first) {
+    const def = E.generateLevel(run.levelSeed, run.di, run.level);
+    const prev = view.st;
+    view.prevHoops = keepBehind(prev);
+    view.offset = first && prev ? ball.x + 140 : ball.x + 24;
+    run.st = E.createState(def); view.st = run.st; run.taps = []; run.lvlStart = run.total;
+    if (autoBot) autoBot = BOT.createBot(autoBot.p, E.makeRng('auto' + Math.random()));
+    settleOffset();
+    ball.glide = { fx: ball.x, fy: ball.y, tx: view.offset, ty: def.startY, t: 0, d: 0.55 };
+    ball.fall = null; ball.hidden = false;
+    phase = 'ready';
+    setPips(run.st); setPot();
+    if (run.level > 1) banner('Level ' + run.level, '', 1200);
+    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', '');
+  }
+
+  function settleOffset() { ball.x += ball.ox; ball.y += ball.oy; ball.ox = 0; ball.oy = 0; }
+  function beginPlay() {
+    hidePrompt();
+    const fx = ball.x + ball.ox, fy = ball.y + ball.oy; // where the ball is drawn right now
+    ball.glide = null;
+    ball.x = view.offset + run.st.ball.x; ball.y = run.st.ball.y; ball.px = ball.x; ball.py = ball.y;
+    ball.ox = fx - ball.x; ball.oy = fy - ball.y;
+    phase = 'play'; pendingTap = true; acc = DT;
+  }
+
+  let autoBot = null; // test hook: window.__solDunk.autoplay('pro')
+  const dbg = { freezeOnRim: false, frozen: false }; // test hook: freeze on the frame of a rim contact
+  function physicsTick() {
+    const st = run.st, b = st.ball;
+    ball.px = view.offset + b.x; ball.py = b.y;
+    if (autoBot && st.tick > 0 && BOT.decide(autoBot, st)) pendingTap = true;
+    const tap = pendingTap; pendingTap = false;
+    if (tap) run.taps.push(st.tick);
+    const hi = st.next;
+    const ev = E.step(st, tap);
+    ball.x = view.offset + b.x; ball.y = b.y; ball.vy = b.vy; ball.vx = b.vx;
+    if (ev) handleEvents(ev, st, hi);
+  }
+
+  function handleEvents(ev, st, hi) {
+    const h = st.hoops[hi];
+    if (ev & EV.FLAP) { hopFx(); Sound.flap(); }
+    if (ev & EV.RIM) { rimFx(h, st); if (dbg.freezeOnRim) { dbg.freezeOnRim = false; dbg.frozen = true; phase = 'paused'; acc = 0; } }
+    if (ev & EV.SCORE) {
+      const o = st.outcomes[st.outcomes.length - 1];
+      if (onScore(o, h, st)) return;
+    }
+    if (ev & EV.CLEAR) { onClear(); return; }
+    if (ev & (EV.MISS | EV.FLOOR)) onBust(st.result === 'floor' ? 'floor' : st.missKind, h);
+  }
+
+  function onScore(o, h, st) {
+    run.hoops++;
+    run.streak = o === 'S' ? run.streak + 1 : 0;
+    if (o === 'S') run.swishes++; else run.rims++;
+    run.best = Math.max(run.best, run.streak);
+    const pt = PAY.PAYTABLE[run.di][run.level - 1];
+    const m = E.hoopMultiplier(pt, o, run.streak);
+    const cap = E.DIFFS[run.di].maxWin;
+    run.total = run.total * m;
+    let capped = false;
+    if (run.total >= cap) { run.total = cap; capped = true; }
+    scoreFx(o, h, st, m, run.streak);
+    view.pulse = 1;
+    setPot(true); setPips(st);
+    if (capped) { endWin('maxwin'); return true; }
+    return false;
+  }
+
+  function onClear() {
+    phase = 'clearing';
+    if (!REDUCED) view.shake = Math.max(view.shake, 2);
+    confetti(ball.x, ball.y - 30, 56);
+    Sound.checkpoint(); buzz([12, 40, 12]);
+    ball.glide = null;
+    ball.fall = { vx: Math.max(120, run.st.ball.vx), vy: -240, hover: true, t: 0 };
+    if (run.level >= NL) { endWin('final'); return; }
+    const L = run.level;
+    bank.level(L, run.taps.slice()).then((r) => {
+      if (r.status !== 'checkpoint' || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
+      setTimeout(() => showCheckpoint(), REDUCED ? 100 : 650);
+    }).catch(netFail);
+  }
+
+  function onBust(kind, h) {
+    phase = 'over';
+    const lostPot = run.bet * run.total;
+    if (h) hoopVis(h).flash = -1;
+    ball.fall = { vx: run.st.ball.vx * 0.6, vy: Math.min(run.st.ball.vy, 200), hover: false, t: 0 };
+    if (!REDUCED) view.shake = 6;
+    Sound.bust(); buzz([30, 60, 50]);
+    const titles = { rimout: 'Rimmed out', over: 'Over the rim', under: 'Under the rim', floor: 'Hit the floor', timeout: 'Out of time' };
+    const L = run.level, taps = run.taps.slice();
+    bank.level(L, taps).then((r) => {
+      if (r.status !== 'bust') return verifyFail();
+      run.serverSeed = r.serverSeed || '';
+      record(0, 'bust');
+      setTimeout(() => showResult(titles[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtSol(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 800);
+    }).catch(netFail);
+  }
+
+  async function cashOut() {
+    if (phase !== 'checkpoint' || run.busy) return;
+    run.busy = true;
+    try {
+      const r = await bank.cashout();
+      run.serverSeed = r.serverSeed || '';
+      run.busy = false;
+      phase = 'over';
+      winFx(1);
+      record(r.payout, 'cashout');
+      show(ui.cp, false);
+      showResult('Cashed out', '+' + fmtSol(r.payout - run.bet), 'win', `${fmtSol(r.payout)} SOL · ${fmtMult(run.total)}`, r.payout - run.bet);
+    } catch (e) { run.busy = false; netFail(e); }
+  }
+
+  function endWin(kind) {
+    phase = 'over';
+    const L = run.level;
+    bank.level(L, run.taps.slice()).then((r) => {
+      if (r.status !== kind || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
+      run.serverSeed = r.serverSeed || '';
+      winFx(kind === 'maxwin' ? 1.6 : 1.3);
+      record(r.payout, kind);
+      const t = kind === 'maxwin' ? 'Max win' : 'Champion';
+      const s = kind === 'maxwin' ? `${E.DIFFS[run.di].maxWin}× cap · ${fmtSol(r.payout)} SOL` : `All ${NL} levels · ${fmtSol(r.payout)} SOL`;
+      setTimeout(() => showResult(t, '+' + fmtSol(r.payout - run.bet), 'win', s, r.payout - run.bet), 700);
+    }).catch(netFail);
+  }
+
+  function verifyFail() {
+    phase = 'over';
+    toast('That run could not be verified. Your balance was refreshed.');
+    setBalance(); backToLobby();
+  }
+  function netFail(e) { toast(e && e.message ? e.message : 'Connection problem. Try again.'); phase = 'over'; setBalance(); backToLobby(); }
+
+  function record(payout, result) {
+    stats.returned = round9(stats.returned + payout);
+    stats.hoops += run.hoops; stats.swishes += run.swishes;
+    stats.deepest = Math.max(stats.deepest, run.level);
+    if (payout > 0) stats.best = Math.max(stats.best, run.total);
+    stats.history.unshift({ t: Date.now(), di: run.di, bet: run.bet, payout, level: run.level, mult: payout > 0 ? run.total : 0, result, seedHash: run.seedHash, serverSeed: run.serverSeed, clientSeed: run.clientSeed, nonce: run.nonce });
+    stats.history.length = Math.min(stats.history.length, 30);
+    saveAll(); setBalance();
+  }
+
+  function showCheckpoint() {
+    phase = 'checkpoint';
+    const L = run.level, pot = run.bet * run.total;
+    $('cpKicker').textContent = 'Checkpoint ' + L + ' of ' + (NL - 1);
+    $('cpTitle').textContent = 'Level ' + L + ' cleared';
+    countUp($('cpPot'), run.bet * (run.lvlStart || 1), pot, fmtSol, 750);
+    $('cpMult').textContent = fmtMult(run.total);
+    $('cashAmt').textContent = fmtSol(pot) + ' SOL';
+    $('goSub').textContent = 'Level ' + (L + 1);
+    show(ui.cp, true);
+    setTimeout(() => $('goBtn').focus({ preventScroll: true }), 60);
+  }
+
+  async function keepGoing() {
+    if (phase !== 'checkpoint' || run.busy) return;
+    run.busy = true;
+    try {
+      const r = await bank.next();
+      run.levelSeed = r.levelSeed;
+      run.busy = false;
+    } catch (e) { run.busy = false; netFail(e); return; }
+    Sound.click(); show(ui.cp, false);
+    run.level++;
+    beginLevel(false);
+  }
+
+  function showResult(title, amount, cls, sub, rollTo) {
+    $('resTitle').textContent = title;
+    if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtSol(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
+    $('resAmount').className = 'big ' + cls;
+    $('resSub').textContent = sub;
+    $('resStats').innerHTML = [['Level', run.level], ['Rings', run.hoops], ['Best streak', run.best]]
+      .map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join('');
+    $('againAmt').textContent = fmtBet(prefs.bet) + ' SOL';
+    show(ui.res, true);
+    refreshLobby();
+  }
+  function backToLobby() {
+    show(ui.res, false); show(ui.cp, false); hidePrompt();
+    setHudMode(false);
+    phase = 'lobby';
+    run.st = null; run.streak = 0; view.st = null; view.prevHoops = [];
+    attract.wait = 0.3; attract.st = null;
+    show(ui.lobby, true); refreshLobby();
+  }
+  if (window.ResizeObserver) { try { new ResizeObserver(() => { sheetTopC = -1; }).observe(ui.lobby); } catch (e) { /* optional */ } }
+
+  // ---------------------------------------------------------------- effects
+  function hopFx() {
+    ball.flapV = -20;
+    if (REDUCED) return;
+    ball.tiltV -= 6.2;   // lean back on the push...
+    ball.stV += 1.7;     // ...stretch up a touch...
+    ball.rv -= 4.2;      // ...and a little back-spin
+  }
+  function rimFx(h, st) {
+    const p = st.impact;
+    // contact normal from the nearer rim end, so the squash flattens the ball against that end
+    const t = st.tick * DT, hy = E.hoopY(h, t), half = h.w / 2;
+    let nx = 0, ny = -1, best = Infinity;
+    for (let sd = -1; sd <= 1; sd += 2) {
+      const px = view.offset + h.x + sd * half * h.c, py = hy + sd * half * h.s;
+      const dx = ball.x - px, dy = ball.y - py, d = Math.hypot(dx, dy);
+      if (d < best) { best = d; nx = dx / (d || 1); ny = dy / (d || 1); }
+    }
+    if (!REDUCED) { ball.sqX = nx; ball.sqY = ny; ball.sq = clamp(p / 2600, 0.03, 0.13); ball.sqV = 0; ball.st = 0; ball.stV = 0; }
+    ball.rv += (nx > 0 ? 1 : -1) * clamp(p / 70, 1, 7);
+    // knocks closer together than this are one sound and one spray
+    if (view.time - ball.lastRim < 0.07) return;
+    ball.lastRim = view.time;
+    for (let i = 0; i < 6; i++) spawn({ x: ball.x - nx * P.R + rnd(-3, 3), y: ball.y - ny * P.R + rnd(-3, 3), vx: nx * rnd(40, 140) + rnd(-60, 60), vy: ny * rnd(40, 140) - rnd(20, 90), g: 900, life: 0.32, max: 0.32, size: 1.7, color: '#ffb340', kind: 0 });
+    if (!REDUCED) view.shake = Math.max(view.shake, clamp(p / 260, 0.5, 1.3));
+    Sound.rim(p); buzz(8);
+  }
+  function scoreFx(o, h, st, m, streak) {
+    const v = hoopVis(h);
+    v.flash = 1;
+    const hx = view.offset + h.x, hy = E.hoopY(h, st.tick * DT);
+    if (o === 'S') {
+      const sol = streak >= 5;
+      for (let i = 0; i < 16; i++) { const a = rnd(0, Math.PI * 2), s = rnd(60, 230); spawn({ x: hx, y: hy + 6, vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.55 - 30, life: 0.55, max: 0.55, size: rnd(1.4, 2.8), color: sol ? SOL_FLAME[i % 4] : '#ffffff', kind: 0, drag: 2.2 }); }
+      spawn({ x: hx, y: hy, kind: 3, life: 0.5, max: 0.5, size: h.w / 2 + P.RP, color: sol ? '#bf5af2' : '#ffffff' });
+      Sound.swish(streak); buzz(10);
+    } else { Sound.score(); }
+    if (m != null) {
+      const label = o === 'S' ? (streak >= 5 ? 'Supernova' : streak === 4 ? 'Blazing' : streak === 3 ? 'On fire' : streak === 2 ? 'Double swish' : 'Swish') : 'Rim';
+      const col = o === 'S' ? (streak >= 5 ? '#d29bff' : streak >= 3 ? '#ffb340' : '#ffffff') : 'rgba(235,235,245,0.7)';
+      // up and behind the ball's path, so the label never sits on the ball
+      floatText(hx - 14, hy - 64, label, fmtX(m), col, o === 'S' ? 15 + Math.min(streak, 5) * 0.8 : 14);
+      if (o === 'S' && (streak === 3 || streak === 5)) Sound.fire();
+    }
+  }
+  function confetti(x, y, n) {
+    const cols = ['#ff9f0a', '#ffd60a', '#30d158', '#bf5af2', '#0a84ff', '#ff375f', '#ffffff'];
+    for (let i = 0; i < n; i++) spawn({ x: x + rnd(-30, 30), y: y + rnd(-10, 10), vx: rnd(-260, 260), vy: rnd(-520, -160), g: 900, drag: 1.2, life: rnd(1.1, 1.8), max: 1.8, size: rnd(4, 7), color: cols[i % cols.length], kind: 1, rot: rnd(0, 6), vr: rnd(-12, 12) });
+  }
+  function winFx(k) {
+    Sound.cash(); buzz([10, 30, 10, 30, 60]);
+    const n = Math.round(26 * (k || 1));
+    for (let i = 0; i < n; i++) spawn({ x: ball.x + rnd(-20, 20), y: ball.y + rnd(-20, 10), vx: rnd(-220, 220), vy: rnd(-560, -220), g: 1000, life: rnd(1.2, 1.9), max: 1.9, size: rnd(7, 10), color: i % 2 ? '#bf5af2' : '#30d158', kind: 4, rot: rnd(0, 6), vr: rnd(-8, 8) });
+    confetti(ball.x, ball.y - 40, Math.round(36 * (k || 1)));
+  }
+
+  // ---------------------------------------------------------------- attract mode (lobby background)
+  function attractStep(dt) {
+    if (!attract.st) {
+      attract.wait -= dt;
+      if (attract.wait > 0) return;
+      attract.level = 1 + Math.floor(Math.random() * 3);
+      const def = E.generateLevel('demo-' + Math.random().toString(36).slice(2), 1, attract.level);
+      view.prevHoops = keepBehind(view.st);
+      view.offset = ball.x + 40;
+      attract.st = E.createState(def); view.st = attract.st;
+      attract.bot = BOT.createBot('perfect', E.makeRng('a' + Math.random()));
+      attract.tap = true; attract.acc = 0; attract.streak = 0;
+      settleOffset();
+      ball.glide = { fx: ball.x, fy: ball.y, tx: view.offset, ty: def.startY, t: 0, d: 0.5 };
+      return;
+    }
+    if (ball.glide) return;
+    attract.acc += dt;
+    let n = 0;
+    while (attract.acc >= DT && n++ < 10) {
+      attract.acc -= DT;
+      const st = attract.st, b = st.ball;
+      ball.px = view.offset + b.x; ball.py = b.y;
+      const hi = st.next;
+      const ev = E.step(st, attract.tap);
+      ball.x = view.offset + b.x; ball.y = b.y; ball.vy = b.vy; ball.vx = b.vx;
+      if (ev & EV.FLAP) hopFx();
+      if (ev & EV.SCORE) {
+        const o = st.outcomes[st.outcomes.length - 1];
+        attract.streak = o === 'S' ? attract.streak + 1 : 0;
+        const v = hoopVis(st.hoops[hi]); v.flash = 1;
+        if (o === 'S') spawn({ x: view.offset + st.hoops[hi].x, y: E.hoopY(st.hoops[hi], st.tick * DT), kind: 3, life: 0.5, max: 0.5, size: st.hoops[hi].w / 2 + P.RP, color: '#ffffff' });
+      }
+      if (st.done) {
+        attract.st = null; attract.wait = 0.15;
+        ball.fall = { vx: b.vx, vy: -200, hover: true, t: 0 };
+        break;
+      }
+      attract.tap = BOT.decide(attract.bot, st);
+    }
+  }
+
+  // ---------------------------------------------------------------- main loop
+  let last = performance.now();
+  function frame(tNow) {
+    let dt = (tNow - last) / 1000; last = tNow;
+    if (dt > 0.1) dt = 0.1;
+    if (dt < 0) dt = 0;
+    view.time += dt;
+
+    if (phase === 'play') {
+      acc += dt;
+      let n = 0;
+      while (acc >= DT && n++ < 12) { acc -= DT; physicsTick(); if (phase !== 'play') { acc = 0; break; } }
+    } else if (phase === 'lobby') attractStep(dt);
+
+    // cosmetic ball motion outside physics
+    if (ball.glide) {
+      const g = ball.glide; g.t += dt / g.d;
+      const k = g.t >= 1 ? 1 : 1 - Math.pow(1 - g.t, 3);
+      ball.px = ball.x; ball.py = ball.y;
+      ball.x = lerp(g.fx, g.tx, k); ball.y = lerp(g.fy, g.ty, k);
+      ball.vx = 0; ball.vy = 0;
+      if (g.t >= 1) { ball.glide = null; ball.fall = null; }
+    } else if (ball.fall && (phase !== 'play' && (phase !== 'lobby' || !attract.st))) {
+      const f = ball.fall; f.t += dt;
+      ball.px = ball.x; ball.py = ball.y;
+      if (f.hover) {
+        f.vy = lerp(f.vy, Math.sin(view.time * 3) * 30, 1 - Math.exp(-dt * 3));
+        f.vx = lerp(f.vx, 60, 1 - Math.exp(-dt * 1.5));
+        if (Math.floor(view.time * 3) !== Math.floor((view.time - dt) * 3)) ball.flapV = -14;
+      } else f.vy += P.G * dt;
+      ball.x += f.vx * dt; ball.y += f.vy * dt;
+      if (!f.hover && ball.y > W.FLOOR - P.R) { ball.y = W.FLOOR - P.R; f.vy *= -0.35; f.vx *= 0.7; if (Math.abs(f.vy) < 40) f.vy = 0; }
+      ball.vy = f.vy; ball.vx = f.vx;
+    } else if (phase === 'ready' && run.st) {
+      const bob = Math.sin(view.time * 4) * 5;
+      ball.px = ball.x; ball.py = ball.y;
+      ball.x = view.offset + run.st.ball.x; ball.y = run.st.ball.y + bob;
+      if (Math.floor(view.time * 2.2) !== Math.floor((view.time - dt) * 2.2)) ball.flapV = -16;
+      ball.vy = Math.cos(view.time * 4) * 20; ball.vx = 0;
+    }
+    const alpha = phase === 'play' ? clamp(acc / DT, 0, 1) : 1;
+    const ix = lerp(ball.px, ball.x, alpha), iy = lerp(ball.py, ball.y, alpha);
+    updateFx(dt, ix, iy);
+    render(alpha, ix + ball.ox, iy + ball.oy);
+    requestAnimationFrame(frame);
+  }
+
+  function updateFx(dt, ix, iy) {
+    const ko = Math.exp(-dt * 10); ball.ox *= ko; ball.oy *= ko;
+    if (Math.abs(ball.ox) + Math.abs(ball.oy) < 0.05) { ball.ox = 0; ball.oy = 0; }
+    const dxw = ix + ball.ox, dyw = iy + ball.oy; // the ball as drawn
+    pushTrail(dxw, dyw);
+    // wing: damped spring; taps kick it down
+    ball.flapV += (-200 * ball.flap - 16 * ball.flapV) * dt;
+    ball.flap += ball.flapV * dt;
+    // character: the ball leans with its vertical speed (back when rising, nose-down when
+    // falling) on a slightly bouncy spring, so every hop has a little lean-and-settle
+    const sub = Math.max(1, Math.ceil(dt / 0.008)), h = dt / sub;
+    const lean = ball.hidden ? 0 : clamp(ball.vy / P.VMAX, -1, 1) * 0.2;
+    for (let i = 0; i < sub; i++) {
+      ball.tiltV += (170 * (lean - ball.tilt) - 15 * ball.tiltV) * h; ball.tilt += ball.tiltV * h;
+      ball.stV += (-420 * ball.st - 15 * ball.stV) * h; ball.st += ball.stV * h;
+      ball.sqV += (-900 * ball.sq - 26 * ball.sqV) * h; ball.sq += ball.sqV * h;
+    }
+    ball.tilt = clamp(ball.tilt, -0.6, 0.45);
+    ball.rv *= Math.exp(-dt * 4.5);
+    ball.rot += (ball.vx / P.R * 0.3 + ball.rv) * dt;
+    const streak = phase === 'lobby' ? attract.streak : run.streak;
+    const fireT = streak >= 3 ? clamp(0.5 + (streak - 3) * 0.25, 0, 1) : 0;
+    ball.fire = lerp(ball.fire, fireT, 1 - Math.exp(-dt * 6));
+    ball.solFire = streak >= 5;
+    if (ball.fire > 0.05 && !ball.hidden) {
+      const pal = ball.solFire ? SOL_FLAME : FIRE;
+      // a tight comet tail: many small, short-lived embers right behind the ball
+      for (let i = 0; i < (REDUCED ? 1 : 4); i++) {
+        const a = rnd(0, Math.PI * 2), d = rnd(0, P.R * 0.55);
+        spawn({ x: ball.x + Math.cos(a) * d, y: ball.y + Math.sin(a) * d, vx: rnd(-25, 25), vy: rnd(-35, 5), life: rnd(0.14, 0.3) * (0.6 + ball.fire * 0.4), max: 0.3, size: rnd(3, 6) * (0.7 + ball.fire * 0.5), color: pal[(Math.random() * pal.length) | 0], kind: 5, drag: 3 });
+      }
+    }
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      p.life -= dt;
+      if (p.life <= 0) { parts.splice(i, 1); continue; }
+      p.vy += p.g * dt;
+      if (p.drag) { const k = Math.exp(-p.drag * dt); p.vx *= k; p.vy *= k; }
+      p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+    }
+    for (let i = texts.length - 1; i >= 0; i--) { const t = texts[i]; t.life -= dt; t.y -= 30 * dt; if (t.life <= 0) texts.splice(i, 1); }
+    const springs = (h) => {
+      const v = h.vis; if (!v) return;
+      if (v.flash > 0) v.flash = Math.max(0, v.flash - dt * 2.2);
+    };
+    if (view.st) view.st.hoops.forEach(springs);
+    view.prevHoops.forEach((p) => springs(p.h));
+    view.shake *= Math.exp(-dt * 9);
+    view.pulse *= Math.exp(-dt * 3.5);
+    // camera: follows the drawn ball with velocity feed-forward, so the ball holds the same
+    // spot on screen at every speed, and bounces still read as motion
+    const target = dxw - BALL_SX / view.zoom;
+    if (view.camT != null && dt > 0 && Math.abs(target - view.camT) < 60) {
+      view.camV = lerp(view.camV, (target - view.camT) / dt, 1 - Math.exp(-dt * 4));
+    } else if (view.camT == null) view.camX = target;
+    view.camT = target;
+    view.camX += view.camV * dt;
+    view.camX = lerp(view.camX, target, 1 - Math.exp(-dt * (phase === 'play' ? 8 : 5)));
+    // in the lobby, zoom out and lift the world so the demo play fits above the bet sheet
+    let zoomT = 1, centreY = null;
+    if (phase === 'lobby' && !ui.lobby.classList.contains('hide')) {
+      if (sheetTopC < 0) sheetTopC = ui.lobby.offsetTop;
+      const sheetTop = sheetTopC;
+      zoomT = clamp((sheetTop - 84) / (360 * scale), 0.55, 1);
+      centreY = (64 + sheetTop - 10) / 2;
+    }
+    view.zoom = lerp(view.zoom, zoomT, 1 - Math.exp(-dt * 4));
+    const S = scale * view.zoom;
+    const oy = (vh - VIEW_H * S) / 2 - VIEW_TOP * S;
+    const camYT = centreY == null ? 0 : 300 - (centreY - oy) / S;
+    view.camY = lerp(view.camY, camYT, 1 - Math.exp(-dt * 4));
+  }
+
+  // ---------------------------------------------------------------- rendering
+  function render(alpha, bx, by) {
+    const c = cx;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.globalCompositeOperation = 'source-over';
+    // backdrop (cached), one look for every level
+    c.drawImage(backdrop(), 0, 0, vw, vh);
+    // dust
+    for (const d of DUST) {
+      const x = ((d.x - view.camX * d.p) % 1000 + 1000) % 1000;
+      const sx = x / 1000 * (vw + 40) - 20, sy = d.y / 720 * vh - view.camY * scale * d.p;
+      c.fillStyle = 'rgba(255,255,255,' + d.a + ')';
+      c.beginPath(); c.arc(sx, ((sy % vh) + vh) % vh, d.r, 0, Math.PI * 2); c.fill();
+    }
+
+    // the multiplier, huge and quiet, behind everything (the score)
+    if (phase !== 'lobby' && run.st) {
+      const p = view.pulse;
+      const col = run.streak >= 5 ? '191,90,242' : run.streak >= 3 ? '255,159,10' : '255,255,255';
+      const m = multSprite(fmtMult(run.total), col), k = (84 + p * 7) / 91;
+      c.globalAlpha = Math.min(1, 0.085 + p * 0.25);
+      c.drawImage(m.el, vw / 2 - m.w * k / 2, offY + 205 * scale - m.h * k / 2, m.w * k, m.h * k);
+      c.globalAlpha = 1;
+    }
+
+    // shake: smooth, decaying wobble rather than per-frame noise
+    const sh = REDUCED ? 0 : view.shake, tt = view.time;
+    const sx = sh > 0.05 ? sh * (Math.sin(tt * 61) * 0.6 + Math.sin(tt * 97 + 1.7) * 0.4) : 0;
+    const sy = sh > 0.05 ? sh * (Math.sin(tt * 73 + 0.6) * 0.6 + Math.sin(tt * 89 + 2.9) * 0.4) : 0;
+    const S = scale * view.zoom, k = S * dpr;
+    const ox = (vw - VIEW_W * S) / 2, oy = (vh - VIEW_H * S) / 2 - VIEW_TOP * S;
+    c.setTransform(k, 0, 0, k, (ox + sx) * dpr - view.camX * k, (oy + sy) * dpr - view.camY * k);
+    const worldLeft = view.camX - ox / S, worldW = vw / S;
+    // floor: a thin lit edge over a surface that fades into the dark
+    const fg = c.createLinearGradient(0, W.FLOOR, 0, W.FLOOR + 140);
+    fg.addColorStop(0, 'rgba(80,130,255,0.08)'); fg.addColorStop(0.25, 'rgba(0,0,0,0.25)'); fg.addColorStop(1, 'rgba(0,0,0,0.55)');
+    c.fillStyle = fg; c.fillRect(worldLeft - 20, W.FLOOR, worldW + 40, 400);
+    const fl = c.createLinearGradient(worldLeft, 0, worldLeft + worldW, 0);
+    fl.addColorStop(0, 'rgba(255,255,255,0)'); fl.addColorStop(0.5, 'rgba(255,255,255,0.22)'); fl.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = fl; c.fillRect(worldLeft - 20, W.FLOOR, worldW + 40, 1);
+    if (!ball.hidden) floorLight(c, bx, by);
+
+    const st = view.st;
+    const tNow = st ? (phase === 'play' ? (st.tick - 1 + alpha) * DT : st.tick * DT) : 0;
+    const hoops = [];
+    for (const p of view.prevHoops) hoops.push({ h: p.h, off: p.off, t: p.t });
+    if (st) for (const h of st.hoops) hoops.push({ h, off: view.offset, t: Math.max(0, tNow) });
+    const vis = hoops.filter((o) => { const x = o.off + o.h.x; return x > worldLeft - 80 && x < worldLeft + worldW + 80; });
+
+    for (const o of vis) if (o.h.amp && o.h.st === 0) {
+      const x = o.off + o.h.x;
+      c.strokeStyle = 'rgba(255,255,255,0.05)'; c.lineWidth = 1.5; c.setLineDash([1.5, 6]); c.lineCap = 'round';
+      c.beginPath(); c.moveTo(x, o.h.y0 - o.h.amp); c.lineTo(x, o.h.y0 + o.h.amp); c.stroke(); c.setLineDash([]);
+    }
+    for (const o of vis) drawRing(c, o, true);
+    if (!ball.hidden) drawTrail(c);
+    drawParts(c, true);
+    view.drawX = bx; view.drawY = by;
+    if (!ball.hidden) drawBall(c, bx, by);
+    for (const o of vis) drawRing(c, o, false);
+    drawParts(c, false);
+    drawTexts(c);
+
+    // wide screens: fade the sides so everyone sees the same distance ahead
+    if (offX > 2 && view.zoom > 0.98) {
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const l = c.createLinearGradient(offX - 40, 0, offX + 6, 0);
+      l.addColorStop(0, '#06080e'); l.addColorStop(1, 'rgba(6,8,14,0)');
+      c.fillStyle = '#06080e'; c.fillRect(0, 0, Math.max(0, offX - 40), vh);
+      c.fillStyle = l; c.fillRect(offX - 40, 0, 46, vh);
+      const r0 = offX + VIEW_W * scale;
+      const r = c.createLinearGradient(r0 - 6, 0, r0 + 40, 0);
+      r.addColorStop(0, 'rgba(6,8,14,0)'); r.addColorStop(1, '#06080e');
+      c.fillStyle = r; c.fillRect(r0 - 6, 0, 46, vh);
+      c.fillStyle = '#06080e'; c.fillRect(r0 + 40, 0, vw, vh);
+    }
+  }
+
+  // ---------------------------------------------------------------- rings: shaded torus sprites
+  // Each ring is drawn exactly at its collision size (tube centre = rim peg, tube width = peg size).
+  // Sprites are cached per size, colour and pixel density; the glow uses a shadow, which every browser supports.
+  const RING_PAL = {
+    red: { dark: '#7a120c', mid: '#e0302a', light: '#ff7a70', glow: 'rgba(255,69,58,0.38)' },
+    gold: { dark: '#7a5a00', mid: '#f2c200', light: '#fff0a0', glow: 'rgba(255,214,10,0.45)' },
+    grey: { dark: '#232326', mid: '#48484c', light: '#76767c', glow: null }
+  };
+  const RING_RY = 0.34;
+  function lerpHex(a, b, t) {
+    const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16);
+    const ch = (sh) => Math.round(((A >> sh) & 255) + (((B >> sh) & 255) - ((A >> sh) & 255)) * t);
+    return 'rgb(' + ch(16) + ',' + ch(8) + ',' + ch(0) + ')';
+  }
+  function ringHalf(c, rx, ry, lw, pal, front) {
+    const a0 = front ? 0 : Math.PI, a1 = front ? Math.PI : Math.PI * 2;
+    c.lineCap = 'round';
+    const steps = 7; // tube cross-section: dark edge to bright core
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      c.strokeStyle = lerpHex(pal.dark, pal.mid, Math.min(1, t * 1.6));
+      c.lineWidth = lw * (1 - t * 0.62);
+      c.beginPath(); c.ellipse(0, -lw * 0.06 * t, rx, ry, 0, a0, a1); c.stroke();
+    }
+    c.strokeStyle = pal.light; c.globalAlpha = front ? 0.9 : 0.45; c.lineWidth = lw * 0.22;
+    c.beginPath(); c.ellipse(0, -lw * 0.24, rx, ry, 0, front ? 0.1 * Math.PI : 1.1 * Math.PI, front ? 0.9 * Math.PI : 1.9 * Math.PI); c.stroke();
+    if (front) {
+      c.strokeStyle = '#ffffff'; c.globalAlpha = 0.75; c.lineWidth = lw * 0.12;
+      c.beginPath(); c.ellipse(0, -lw * 0.27, rx, ry, 0, 0.58 * Math.PI, 0.74 * Math.PI); c.stroke();
+    }
+    c.globalAlpha = 1;
+  }
+  const ringCache = new Map();
+  function ringSprites(w, palKey) {
+    const k = Math.max(1, Math.round(scale * dpr * 4) / 4);
+    const key = w + '|' + palKey + '|' + k;
+    let sp = ringCache.get(key);
+    if (sp) return sp;
+    const pal = RING_PAL[palKey], lw = P.RP * 2, rx = w / 2, ry = rx * RING_RY, pad = lw + 16;
+    const Wd = 2 * rx + pad * 2, Ht = 2 * ry + pad * 2;
+    const make = (front) => {
+      const el = document.createElement('canvas');
+      el.width = Math.ceil(Wd * k); el.height = Math.ceil(Ht * k);
+      const g = el.getContext('2d');
+      g.setTransform(k, 0, 0, k, (Wd / 2) * k, (Ht / 2) * k);
+      if (!front && pal.glow) {
+        g.save();
+        g.shadowColor = pal.glow; g.shadowBlur = 10 * k; g.shadowOffsetX = 10000 * k;
+        g.strokeStyle = '#000'; g.lineWidth = lw;
+        g.beginPath(); g.ellipse(-10000, 0, rx, ry, 0, 0, Math.PI * 2); g.stroke();
+        g.restore();
+      }
+      ringHalf(g, rx, ry, lw, pal, front);
+      return el;
+    };
+    sp = { back: make(false), front: make(true), w: Wd, h: Ht };
+    if (ringCache.size > 96) ringCache.clear();
+    ringCache.set(key, sp);
+    return sp;
+  }
+  function drawRing(c, o, back) {
+    const h = o.h, v = hoopVis(h);
+    const x = o.off + h.x, y = E.hoopY(h, o.t);
+    const sp = ringSprites(h.w, h.st === 2 ? 'grey' : h.cp ? 'gold' : 'red');
+    c.save();
+    c.translate(x, y); c.rotate(h.tilt);
+    c.globalAlpha = h.st === 1 ? 0.32 : 1;
+    c.drawImage(back ? sp.back : sp.front, -sp.w / 2, -sp.h / 2, sp.w, sp.h);
+    c.globalAlpha = 1;
+    if (!back && v.flash !== 0) {
+      const a = Math.abs(v.flash), rx = h.w / 2 + P.RP + 3, ry = (h.w / 2) * RING_RY + P.RP + 2;
+      c.strokeStyle = v.flash < 0 ? 'rgba(255,69,58,0.9)' : 'rgba(255,255,255,' + (0.7 * a).toFixed(3) + ')';
+      c.lineWidth = 1.2 + 2.5 * a;
+      c.beginPath(); c.ellipse(0, 0, rx + (1 - a) * 12, ry + (1 - a) * 5, 0, 0, Math.PI * 2); c.stroke();
+    }
+    c.restore();
+  }
+
+  // ---------------------------------------------------------------- ball & wings
+  function drawBallBody(c, r, rot) {
+    const g = c.createRadialGradient(-r * 0.38, -r * 0.42, r * 0.05, 0, 0, r * 1.02);
+    g.addColorStop(0, '#ffc27a'); g.addColorStop(0.45, '#ff8a2a'); g.addColorStop(0.85, '#d9620f'); g.addColorStop(1, '#a8460a');
+    c.fillStyle = g; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
+    c.save(); c.beginPath(); c.arc(0, 0, r - 0.3, 0, Math.PI * 2); c.clip(); c.rotate(rot);
+    c.strokeStyle = 'rgba(52,18,2,0.85)'; c.lineWidth = r * 0.085; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(-r, 0); c.quadraticCurveTo(0, r * 0.08, r, 0); c.stroke();
+    c.beginPath(); c.moveTo(0, -r); c.lineTo(0, r); c.stroke();
+    c.beginPath(); c.arc(-r * 1.34, 0, r * 1.02, -0.88, 0.88); c.stroke();
+    c.beginPath(); c.arc(r * 1.34, 0, r * 1.02, Math.PI - 0.88, Math.PI + 0.88); c.stroke();
+    c.restore();
+    c.strokeStyle = 'rgba(160,200,255,0.35)'; c.lineWidth = r * 0.07;
+    c.beginPath(); c.arc(0, 0, r - r * 0.04, Math.PI * 0.62, Math.PI * 1.08); c.stroke();
+    const hl = c.createRadialGradient(-r * 0.4, -r * 0.5, 0, -r * 0.4, -r * 0.5, r * 0.5);
+    hl.addColorStop(0, 'rgba(255,255,255,0.45)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = hl; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
+  }
+  function wingPath(c, s) {
+    c.beginPath();
+    c.moveTo(0.04 * s, -0.12 * s);
+    c.bezierCurveTo(-0.1 * s, -0.66 * s, -0.62 * s, -1.02 * s, -1.02 * s, -0.86 * s);
+    c.quadraticCurveTo(-1.1 * s, -0.66 * s, -0.88 * s, -0.6 * s);
+    c.quadraticCurveTo(-0.98 * s, -0.42 * s, -0.74 * s, -0.38 * s);
+    c.quadraticCurveTo(-0.82 * s, -0.2 * s, -0.56 * s, -0.18 * s);
+    c.quadraticCurveTo(-0.6 * s, -0.02 * s, -0.34 * s, -0.02 * s);
+    c.quadraticCurveTo(-0.14 * s, 0.1 * s, 0.04 * s, 0.06 * s);
+    c.quadraticCurveTo(0.12 * s, -0.03 * s, 0.04 * s, -0.12 * s);
+    c.closePath();
+  }
+  function drawWing(c, r, flap, far) {
+    const s = r * (far ? 1.7 : 1.95);
+    const fold = 1 - clamp(-flap, 0, 1) * 0.22; // foreshortened on the downstroke
+    c.save();
+    c.rotate(flap); c.scale(1, fold);
+    if (!far) { c.save(); c.translate(1.2, 2.2); wingPath(c, s); c.fillStyle = 'rgba(0,0,0,0.28)'; c.fill(); c.restore(); }
+    wingPath(c, s);
+    const g = c.createLinearGradient(-0.2 * s, -0.95 * s, -0.55 * s, 0.05 * s);
+    if (far) { g.addColorStop(0, '#c9cfdb'); g.addColorStop(1, '#8e96a6'); }
+    else { g.addColorStop(0, '#ffffff'); g.addColorStop(0.55, '#f1f3f8'); g.addColorStop(1, '#cfd5e2'); }
+    c.fillStyle = g; c.fill();
+    c.save(); c.clip();
+    c.beginPath();
+    c.moveTo(0.1 * s, -0.2 * s);
+    c.bezierCurveTo(-0.2 * s, -0.36 * s, -0.55 * s, -0.56 * s, -0.86 * s, -0.66 * s);
+    c.lineTo(-1.2 * s, -1.2 * s); c.lineTo(0.3 * s, -1.2 * s); c.closePath();
+    c.fillStyle = far ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.65)'; c.fill();
+    c.strokeStyle = far ? 'rgba(20,24,36,0.25)' : 'rgba(40,50,70,0.22)'; c.lineWidth = 0.8; c.lineCap = 'round';
+    const tips = [[-0.88, -0.6], [-0.74, -0.38], [-0.56, -0.18]];
+    for (const [tx, ty] of tips) { c.beginPath(); c.moveTo(-0.12 * s, -0.14 * s); c.quadraticCurveTo((tx * 0.5 - 0.06) * s, (ty * 0.5 - 0.16) * s, tx * s, ty * s); c.stroke(); }
+    c.restore();
+    wingPath(c, s);
+    c.strokeStyle = far ? 'rgba(10,12,20,0.5)' : 'rgba(30,36,54,0.45)'; c.lineWidth = 0.9; c.lineJoin = 'round'; c.stroke();
+    c.restore();
+  }
+  function drawBall(c, x, y) {
+    const r = RV;
+    const glide = clamp(ball.vy / 900, -0.4, 0.6) * 0.45;
+    const a = clamp(ball.flap, -0.95, 0.6) + glide;
+    // impact squash flattens the ball against the rim, anchored at the contact point so the
+    // contact stays exact; otherwise a small takeoff stretch after each flap
+    const q = ball.sq > 0.002 ? ball.sq : 0, nx = ball.sqX, ny = ball.sqY;
+    c.save(); c.translate(x - nx * r * q, y - ny * r * q);
+    const halo = c.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 1.9);
+    halo.addColorStop(0, 'rgba(255,140,40,0.13)'); halo.addColorStop(1, 'rgba(255,140,40,0)');
+    c.fillStyle = halo; c.beginPath(); c.arc(0, 0, r * 1.9, 0, Math.PI * 2); c.fill();
+    c.save(); c.rotate(ball.tilt); c.translate(r * 0.22, -r * 0.62); drawWing(c, r, a * 0.9 + 0.08, true); c.restore();
+    c.save();
+    if (q) { const ang = Math.atan2(ny, nx); c.rotate(ang); c.scale(1 - q, 1 + q * 0.5); c.rotate(-ang); }
+    else if (ball.st) { const st = clamp(ball.st, -0.06, 0.09); c.scale(1 - st * 0.55, 1 + st); }
+    drawBallBody(c, r, ball.rot + ball.tilt);
+    c.restore();
+    c.save(); c.rotate(ball.tilt); c.translate(-r * 0.12, -r * 0.5); drawWing(c, r, a, false); c.restore();
+    c.restore();
+  }
+  // the ball's warm light on the floor: tighter and brighter as it gets close
+  function floorLight(c, x, y) {
+    const d = W.FLOOR - y;
+    if (d < 0 || d > 420) return;
+    const k = 1 - d / 420, rx = RV * (2.6 - k * 1.2);
+    c.save(); c.translate(x, W.FLOOR + 1); c.scale(1, 0.16);
+    const g = c.createRadialGradient(0, 0, 0, 0, 0, rx);
+    g.addColorStop(0, 'rgba(255,150,60,' + (0.3 * k * k).toFixed(3) + ')'); g.addColorStop(1, 'rgba(255,150,60,0)');
+    c.globalCompositeOperation = 'lighter';
+    c.fillStyle = g; c.beginPath(); c.arc(0, 0, rx, 0, Math.PI * 2); c.fill();
+    c.restore();
+  }
+
+  function drawParts(c, behind) {
+    for (const p of parts) {
+      const flame = p.kind === 5;
+      if (flame !== behind) continue;
+      const t = p.life / p.max;
+      const add = p.kind === 0 || p.kind === 3 || p.kind === 5;
+      c.globalCompositeOperation = add ? 'lighter' : 'source-over';
+      if (p.kind === 0) { c.globalAlpha = t; c.fillStyle = p.color; c.beginPath(); c.arc(p.x, p.y, p.size * (0.5 + t * 0.5), 0, Math.PI * 2); c.fill(); }
+      else if (p.kind === 1) { c.globalAlpha = Math.min(1, t * 2); c.save(); c.translate(p.x, p.y); c.rotate(p.rot); c.fillStyle = p.color; c.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); c.restore(); }
+      else if (p.kind === 3) { c.globalAlpha = t * 0.6; c.strokeStyle = p.color; c.lineWidth = 2 * t + 0.5; c.beginPath(); const rr = p.size + (1 - t) * 28; c.ellipse(p.x, p.y, rr, rr * RING_RY, 0, 0, Math.PI * 2); c.stroke(); }
+      else if (p.kind === 4) {
+        c.globalAlpha = Math.min(1, t * 2); c.save(); c.translate(p.x, p.y); c.scale(Math.cos(p.rot), 1);
+        c.fillStyle = p.color; c.beginPath(); c.arc(0, 0, p.size, 0, Math.PI * 2); c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.35)'; c.beginPath(); c.arc(-p.size * 0.25, -p.size * 0.3, p.size * 0.35, 0, Math.PI * 2); c.fill();
+        c.restore();
+      } else if (p.kind === 5) { c.globalAlpha = Math.min(1, t * 1.6) * 0.75; c.fillStyle = p.color; c.beginPath(); c.arc(p.x, p.y, p.size * (0.35 + t * 0.65), 0, Math.PI * 2); c.fill(); }
+    }
+    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+  }
+  function drawTexts(c) {
+    c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+    for (const t of texts) {
+      const k = t.life / t.max, a = k > 0.8 ? (1 - k) * 5 : Math.min(1, k * 2.5);
+      const s = 1 + (k > 0.85 ? (k - 0.85) * 1.6 : 0);
+      c.globalAlpha = clamp(a, 0, 1);
+      c.font = '700 ' + (t.size * s).toFixed(1) + 'px ' + FONT_ROUND;
+      const half = c.measureText(t.text).width / 2 + 8;
+      t.x = clamp(t.x, view.camX + half, view.camX + VIEW_W - half);
+      c.fillStyle = t.color; c.fillText(t.text, t.x, t.y);
+      if (t.sub) {
+        c.font = '600 12px ' + FONT_ROUND;
+        c.fillStyle = 'rgba(48,209,88,0.95)'; c.fillText(t.sub, t.x, t.y + 15);
+      }
+    }
+    c.globalAlpha = 1;
+  }
+
+  // ---------------------------------------------------------------- input
+  function flapInput() {
+    Sound.unlock();
+    if (phase === 'ready') { beginPlay(); return; }
+    if (phase === 'play') { pendingTap = true; return; }
+    if (phase === 'paused') resume();
+  }
+  cv.addEventListener('touchstart', (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+  window.addEventListener('pointerdown', (e) => {
+    if (e.target.closest && e.target.closest('button, input, .sheet, .card, .panel, a, .scrim')) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    flapInput();
+  }, { passive: false });
+  window.addEventListener('keydown', (e) => {
+    const tag = document.activeElement && document.activeElement.tagName;
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+      if (tag === 'INPUT' || (tag === 'BUTTON' && phase !== 'play' && phase !== 'ready' && phase !== 'paused')) return;
+      const panelOpen = !ui.panel.classList.contains('hide');
+      if (e.code === 'Space' && !panelOpen && !e.repeat) {
+        if (phase === 'lobby') { e.preventDefault(); startRun(); return; }
+        if (phase === 'over' && !ui.res.classList.contains('hide')) { e.preventDefault(); show(ui.res, false); startRun(); return; }
+      }
+      e.preventDefault();
+      if (!e.repeat) flapInput();
+    } else if (e.code === 'Escape') {
+      if (!ui.panel.classList.contains('hide')) closePanel();
+      else if (phase === 'play') pause();
+    }
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && phase === 'play') pause(); });
+  function pause() { phase = 'paused'; acc = 0; showPrompt('Paused', 'Tap to resume'); }
+  function resume() { hidePrompt(); phase = 'play'; acc = 0; last = performance.now(); }
+  ['gesturestart', 'dblclick'].forEach((n) => document.addEventListener(n, (e) => e.preventDefault()));
+
+  $('cashBtn').addEventListener('click', cashOut);
+  $('goBtn').addEventListener('click', keepGoing);
+  $('againBtn').addEventListener('click', () => { show(ui.res, false); startRun(); });
+  $('lobbyBtn').addEventListener('click', () => { Sound.click(); backToLobby(); });
+  $('pauseBtn').addEventListener('click', () => { if (phase === 'play') pause(); else if (phase === 'paused') resume(); });
+
+  // ---------------------------------------------------------------- panels
+  function openPanel(kind) {
+    Sound.click();
+    const body = $('panelBody'), title = $('panelTitle');
+    const map = { how: ['How to play', howHtml], odds: ['Odds', oddsHtml], stats: ['Stats', statsHtml], fair: ['Fairness', fairHtml], menu: ['Settings', menuHtml], wallet: ['Wallet', walletHtml] };
+    const [t, fn] = map[kind] || map.how;
+    title.textContent = t; body.innerHTML = fn();
+    body.scrollTop = 0;
+    ui.scrim.classList.add('show'); show(ui.panel, true);
+    wirePanel(kind);
+    setTimeout(() => $('panelClose').focus({ preventScroll: true }), 30);
+  }
+  function closePanel() { ui.scrim.classList.remove('show'); show(ui.panel, false); }
+  $('panelClose').addEventListener('click', closePanel);
+  ui.scrim.addEventListener('click', closePanel);
+  document.querySelectorAll('[data-panel]').forEach((b) => b.addEventListener('click', () => openPanel(b.dataset.panel)));
+  $('menuBtn').addEventListener('click', () => openPanel('menu'));
+  $('balBtn').addEventListener('click', () => openPanel('wallet'));
+  function syncMute() {
+    $('muteBtn').setAttribute('aria-label', settings.sound ? 'Mute sound' : 'Turn sound on');
+    $('muteIcon').innerHTML = settings.sound
+      ? '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 9.5a4 4 0 0 1 0 5"/><path d="M18.5 7a7.5 7.5 0 0 1 0 10"/>'
+      : '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m16 9 5 6M21 9l-5 6"/>';
+  }
+  $('muteBtn').addEventListener('click', () => { settings.sound = !settings.sound; saveAll(); syncMute(); Sound.unlock(); Sound.click(); });
+  syncMute();
+
+  function howHtml() {
+    return `<p><b>Tap</b> to flap. Drop the ball down through every ring. Fly past one, go under it or hit the floor and the run ends.</p>
+      <h3>Swish</h3><p>Go through without touching the ring for a swish. Swishes pay more than rim hits, and swishes in a row pay more each time.</p>
+      <h3>Checkpoints</h3><p>Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.</p>`;
+  }
+  let oddsTier = null;
+  function oddsHtml() {
+    const di = oddsTier == null ? prefs.di : oddsTier;
+    const D = E.DIFFS[di], rows = [];
+    for (let L = 1; L <= NL; L++) {
+      const pt = PAY.PAYTABLE[di][L - 1];
+      rows.push(`<tr><td>${L}</td><td class="r">${fmtX(pt.rim)}</td><td class="r">${fmtX(pt.swish[0])}</td><td class="r">${fmtX(pt.swish[pt.swish.length - 1])}</td><td class="r">${Math.round(avgClear(di, L) * 100)}%</td></tr>`);
+    }
+    return `<div class="seg" id="oddsSeg">${E.DIFFS.map((d, i) => `<button data-t="${i}" aria-pressed="${i === di}">${d.name}</button>`).join('')}</div>
+      <div class="tbl"><table><thead><tr><th>Level</th><th class="r">Rim</th><th class="r">Swish</th><th class="r">5+ streak</th><th class="r">Avg clears</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+      <p>Each ring multiplies your pot. ${D.name} pays up to <b>${D.maxWin}×</b> your bet. An average player who cashes out at the first checkpoint gets back about 90% of their bet over time. Skilled players do better.</p>`;
+  }
+  function statsHtml() {
+    const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–';
+    const net = stats.returned - stats.wagered;
+    const hist = stats.history.slice(0, 12).map((h) => {
+      const p = h.payout - h.bet;
+      return `<li><span>${E.DIFFS[h.di].name} · Level ${h.level}</span><span class="${p >= 0 ? 'pos' : 'neg'}">${p >= 0 ? '+' : '−'}${fmtSol(Math.abs(p))} SOL</span></li>`;
+    }).join('');
+    return `<div class="tiles">
+        <div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : '−'}${fmtSol(Math.abs(net))}</b><span>Net SOL</span></div>
+      </div>
+      <h3>Recent runs</h3>${hist ? `<ul class="list group">${hist}</ul>` : '<p>Your runs will show up here.</p>'}`;
+  }
+  function fairHtml() {
+    const h = stats.history[0];
+    const last = h ? `<h3>Last run</h3><span class="mono">hash ${h.seedHash}</span><span class="mono">seed ${h.serverSeed || 'revealed when the run ends'}</span><span class="mono">client ${h.clientSeed} · nonce ${h.nonce}</span>` : '';
+    return `<p>Every ring position comes from a seed that is locked in before you tap. You see its SHA-256 hash first, and the seed itself when the run ends.</p>
+      <p>Each level is built from <b>HMAC-SHA256(seed, client seed:nonce:level)</b>, and every payout is checked by replaying your taps through the same physics.</p>${last}`;
+  }
+  function menuHtml() {
+    return `<div class="group">
+        <div class="row"><span class="k">Sound</span><button class="switch" role="switch" id="swSound" aria-checked="${settings.sound}" aria-label="Sound"></button></div>
+        <div class="row"><span class="k">Vibration</span><button class="switch" role="switch" id="swHaptics" aria-checked="${settings.haptics}" aria-label="Vibration"></button></div>
+      </div>
+      ${bank.real ? '' : `<h3>Demo balance</h3><button class="btn btn-plain" id="resetBal">Reset to ${CFG.demoStart} SOL</button>`}`;
+  }
+  function walletHtml() {
+    if (!CFG.serverUrl) {
+      return `<div class="tiles"><div><b>${fmtBal(wallet.balance)}</b><span>Demo SOL</span></div><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${stats.best ? fmtMult(stats.best) : '–'}</b><span>Best</span></div></div>
+        <p>You're playing with demo SOL. Real SOL play runs through the SOL DUNK server with Phantom or Solflare.</p>
+        <button class="btn btn-plain" id="resetBal">Reset demo balance</button>`;
+    }
+    if (!bank.real || !ServerBank.token) {
+      return `<p>Connect a Solana wallet to play with real SOL on <b>${CFG.network}</b>.</p><button class="btn btn-primary" id="wConnect">Connect wallet</button>
+        <p class="err" id="wErr"></p><p>On a phone, open this page in the Phantom or Solflare browser.</p>`;
+    }
+    return `<div class="tiles"><div><b>${fmtBal(ServerBank.bal)}</b><span>Balance SOL</span></div><div><b>${ServerBank.address.slice(0, 4)}…${ServerBank.address.slice(-4)}</b><span>Wallet</span></div><div><b>${CFG.network}</b><span>Network</span></div></div>
+      <div class="group"><div class="row"><label class="k" for="wAmt">Amount</label><label class="bet-field"><input id="wAmt" class="bet-input" inputmode="decimal" value="0.1"><span class="unit">SOL</span></label></div></div>
+      <div class="actions" style="margin-top:12px"><button class="btn btn-plain" id="wWithdraw">Withdraw</button><button class="btn btn-green" id="wDeposit">Deposit</button></div>
+      <p class="err" id="wErr"></p>`;
+  }
+  function wirePanel(kind) {
+    const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
+    if (kind === 'odds') document.querySelectorAll('#oddsSeg button').forEach((b) => b.addEventListener('click', () => { oddsTier = +b.dataset.t; $('panelBody').innerHTML = oddsHtml(); wirePanel('odds'); }));
+    on('swSound', (e) => { settings.sound = !settings.sound; e.currentTarget.setAttribute('aria-checked', settings.sound); saveAll(); syncMute(); Sound.unlock(); Sound.click(); });
+    on('swHaptics', (e) => { settings.haptics = !settings.haptics; e.currentTarget.setAttribute('aria-checked', settings.haptics); saveAll(); buzz(10); });
+    on('resetBal', () => {
+      if (phase !== 'lobby' && phase !== 'over') { toast('Finish this run first.'); return; }
+      wallet.balance = CFG.demoStart; saveAll(); refreshLobby(); closePanel(); toast('Demo balance reset to ' + CFG.demoStart + ' SOL');
+    });
+    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; setBalance(); refreshLobby(); openPanel('wallet'); } catch (e) { $('wErr').textContent = e.message; } });
+    on('wDeposit', async () => { try { await ServerBank.deposit(parseFloat($('wAmt').value)); setBalance(); openPanel('wallet'); toast('Deposit credited'); } catch (e) { $('wErr').textContent = e.message; } });
+    on('wWithdraw', async () => { try { await ServerBank.withdraw(parseFloat($('wAmt').value)); setBalance(); openPanel('wallet'); toast('Withdrawal sent'); } catch (e) { $('wErr').textContent = e.message; } });
+  }
+
+  // ---------------------------------------------------------------- boot (keeps balance across a republish)
+  function boot(snap) {
+    if (snap && typeof snap.balance === 'number') {
+      wallet.balance = snap.balance; Object.assign(stats, snap.stats || {}); Object.assign(prefs, snap.prefs || {}); Object.assign(settings, snap.settings || {});
+    }
+    if (!(wallet.balance >= 0)) wallet.balance = CFG.demoStart;
+    syncMute(); buildLobby(); refreshLobby(); setHudMode(false);
+    attract.wait = 0;
+    requestAnimationFrame((t) => { last = t; frame(t); });
+  }
+  const hot = window.claude && window.claude.hot;
+  if (hot && hot.snapshot) {
+    hot.snapshot(() => {
+      // a run in progress can't survive a reload, so the snapshot refunds its bet
+      const inRun = !bank.real && (phase === 'ready' || phase === 'play' || phase === 'clearing' || phase === 'checkpoint' || phase === 'paused');
+      return { balance: round9(wallet.balance + (inRun ? run.bet : 0)), stats, prefs, settings };
+    });
+  }
+  if (hot && hot.ready) hot.ready(boot); else boot((hot && hot.data) || {});
+  window.__solDunk = {
+    run, stats, wallet, view, E, PAY, ball, geom: () => ({ scale, offX, offY }),
+    phase: () => phase,
+    dbg,
+    unfreeze: () => { dbg.frozen = false; resume(); },
+    tap: () => flapInput(),
+    autoplay: (skill) => { autoBot = skill ? BOT.createBot(skill, E.makeRng('auto' + Math.random())) : null; }
+  };
+})();
+</script>
+</body>
+</html>

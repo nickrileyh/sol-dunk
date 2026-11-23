@@ -1,0 +1,10 @@
+node_modules/
+server/node_modules/
+server/data/
+sim/out/*.log
+shots/
+tools/__pycache__/
+*.zip
+.DS_Store
+.env
+.env.*

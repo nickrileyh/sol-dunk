@@ -1,0 +1,19 @@
+{
+  "name": "sol-dunk-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SOL DUNK game server: wallet sign-in, SOL deposits/withdrawals, provably-fair seeds and server-side replay of every run.",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "MOCK_CHAIN=1 MIN_REALTIME=0 node server.mjs",
+    "test": "node test/run-flow.mjs"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@solana/web3.js": "1.95.8",
+    "bs58": "6.0.0",
+    "express": "4.21.2",
+    "tweetnacl": "1.0.3"
+  }
+}
