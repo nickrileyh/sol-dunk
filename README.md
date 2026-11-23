@@ -29,8 +29,8 @@ Open the server URL in the Phantom or Solflare in-app browser (or desktop with t
 
 ## How a run is kept honest
 
-- **Deterministic engine** (`src/engine.cjs`, v7): fixed 120 Hz physics, integer tap ticks, seeded PRNG, no implementation-dependent math. The same taps always give the same outcome in every browser and on the server.
-- **Rim contact** (v7): a firm knock bounces; gentle contact just rolls. Friction scales with how hard the hit was, and the forward push is steady while the ball sits on a rim, so the ball rolls in or drops off instead of balancing on the edge. Rim effects fire once per knock.
+- **Deterministic engine** (`src/engine.cjs`, v8): fixed 120 Hz physics, integer tap ticks, seeded PRNG, no implementation-dependent math. The same taps always give the same outcome in every browser and on the server.
+- **Rim contact** (v7–v8): a firm knock bounces; gentle contact just rolls. Friction scales with how hard the hit was. After a knock the forward push fades back in over 0.45 s, so a back-rim hit clanks and drops (often in) instead of the ball ploughing on. The push is steady while the ball sits on a rim, so it can't balance on the edge. Rim effects fire once per knock.
 - **Provably fair layouts**: before a run the server commits to `sha256(serverSeed)`. Each level's rings come from `HMAC-SHA256(serverSeed, clientSeed:nonce:level)`. The seed is revealed when the run ends, so anyone can check `GET /api/run/:id`.
 - **Server replay**: the client sends its tap ticks at the end of each level. The server replays them, applies the paytable and the max-win cap, and only then pays. A level submitted faster than real time voids the run.
 
@@ -44,7 +44,7 @@ npm run calibrate    # solves the tables and writes src/paytable.cjs
 npm run build
 ```
 
-The bot (`src/bot.cjs`) plans each drop with a trajectory solve, then adds human-style error: tap jitter, aim error, misreading moving rings, and occasional lapses. "Average" passes about 97% of Pro level-1 rings and swishes about 75% of them.
+The bot (`src/bot.cjs`) plans each drop with a trajectory solve, then adds human-style error: tap jitter, aim error, misreading moving rings, and occasional lapses. "Average" passes about 98% of Pro level-1 rings and swishes about 74% of them.
 
 **Calibration rule (house mode):** an average player who cashes out at the first checkpoint gets back 90% (10% house edge). Every later level keeps at least a 10% edge against the average player and is priced so a good player can gain at most 5% on it.
 
@@ -52,10 +52,10 @@ Return to player when cashing out after checkpoint 1 / 2 / 3, from the simulatio
 
 | Tier | Average | Good |
 |---|---|---|
-| Rookie (max 50×) | 90 / 81 / 71% | 98 / 99 / 104% |
-| Pro (max 100×) | 90 / 78 / 63% | 103 / 108 / 113% |
-| All-Star (max 250×) | 90 / 71 / 50% | 110 / 116 / 122% |
-| Legend (max 1000×) | 90 / 63 / 39% | 120 / 128 / 134% |
+| Rookie (max 50×) | 90 / 81 / 72% | 98 / 100 / 105% |
+| Pro (max 100×) | 90 / 80 / 67% | 99 / 104 / 109% |
+| All-Star (max 250×) | 90 / 72 / 52% | 106 / 111 / 117% |
+| Legend (max 1000×) | 90 / 64 / 42% | 117 / 123 / 129% |
 
 Full tables for all six skill levels, including pro and perfect bots, are in `sim/out/calibration_final.txt`.
 

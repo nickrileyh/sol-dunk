@@ -18,7 +18,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 7;
+  const VERSION = 8;
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -35,7 +35,8 @@
     REST: 0.36,     // restitution off the rim (soft: rim hits often roll in)
     TFRIC: 0.2,     // tangential damping on a firm rim knock (scaled down for gentle contact)
     KNOCK: 30,      // normal speed above which a contact is a knock (bounce + rim event); below it the ball rests/rolls
-    VX_K: 5.0       // how fast forward speed recovers after a rim knock (1/s)
+    VX_K: 5.0,      // how fast forward speed recovers to level speed (1/s)
+    RECOVER: 54     // ticks after a rim knock over which that push fades back in (0.45 s), so the bounce plays out
   };
 
   const HOOPS_PER_LEVEL = 6;
@@ -53,8 +54,8 @@
       speed: 138, spacing: 230, maxWin: 50,
       hoopW:   [93, 92, 91, 90, 89, 88, 87, 86],
       dy:      [115, 122, 129, 136, 143, 150, 157, 164],
-      moveP:   [0, 0, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],
-      moveAmp: [0, 0, 26, 30, 34, 38, 42, 46],
+      moveP:   [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7, 0.8],   // a few rings bob gently from level 1
+      moveAmp: [22, 24, 28, 31, 34, 38, 42, 46],
       tiltP:   [0, 0, 0, 0, 0.2, 0.3, 0.4, 0.5],
       tiltMax: [0, 0, 0, 0, 8, 9, 10, 11]
     },
@@ -222,7 +223,7 @@
     return {
       level, hoops: hs, speed: level.speed,
       ball: { x: 0, y: level.startY, vx: level.speed, vy: 0 },
-      tick: 0, next: 0, prevLy: NaN, contact: false,
+      tick: 0, next: 0, prevLy: NaN, contact: false, knockTick: -100000,
       done: false, result: null, missKind: null,
       outcomes: [], flaps: 0, rimHits: 0, impact: 0, ev: 0
     };
@@ -262,6 +263,7 @@
           b.vx = vn2 * nx + vt2 * tx;
           b.vy = vn2 * ny + vt2 * ty + hvy;
           if (firm || !h.touched) { st.impact = imp; st.rimHits++; ev |= EV.RIM; }
+          if (firm) st.knockTick = st.tick;
           h.touched = true;
         }
       }
@@ -296,11 +298,14 @@
     let ev = 0;
     if (tap) { b.vy = -P.FLAP; st.flaps++; ev |= EV.FLAP; }
     b.vy += P.G * DT; if (b.vy > P.VMAX) b.vy = P.VMAX;
-    // Forward flight eases back to level speed. While the ball rests on a rim the push is steady
-    // instead, so it can't find a balancing point on the edge: it rolls in or drops off.
+    // Forward flight eases back to level speed. Right after a rim knock that push fades back in
+    // from zero, so a bounce keeps its own direction instead of the ball ploughing on through the rim.
+    // While the ball rests on a rim the push is steady, so it can't balance on the edge.
+    const since = st.tick - st.knockTick;
+    const kx = since >= P.RECOVER ? P.VX_K : P.VX_K * (since / P.RECOVER);
     const onRim = st.contact; st.contact = false;
-    if (onRim) { if (b.vx < st.speed) { b.vx += st.speed * (P.VX_K * DT); if (b.vx > st.speed) b.vx = st.speed; } }
-    else b.vx += (st.speed - b.vx) * (P.VX_K * DT);
+    if (onRim) { if (b.vx < st.speed) { b.vx += st.speed * (kx * DT); if (b.vx > st.speed) b.vx = st.speed; } }
+    else b.vx += (st.speed - b.vx) * (kx * DT);
     b.x += b.vx * DT; b.y += b.vy * DT;
     st.tick++;
     const t = st.tick * DT;
