@@ -31,4 +31,6 @@ for (const [k, v] of Object.entries(parts)) {
 fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true });
 const out = path.join(__dirname, 'dist', cfg.serverUrl ? 'index.server.html' : 'index.html');
 fs.writeFileSync(out, html);
+// The demo build is also the repo's root index.html, so GitHub Pages (main branch, root folder) serves the game.
+if (!cfg.serverUrl) fs.writeFileSync(path.join(__dirname, 'index.html'), html);
 console.log('wrote', out, (html.length / 1024).toFixed(1) + ' KB', cfg.serverUrl ? '(server: ' + cfg.serverUrl + ')' : '(demo)');
