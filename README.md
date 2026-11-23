@@ -81,7 +81,8 @@ build.cjs          inlines everything into dist/*.html
 sim/               Monte Carlo runner, calibrator, quick stats
 server/            Express API, Solana deposits/withdrawals, replay verification, tests
 tools/             browser checks (Playwright + Chrome): flows.py plays every run outcome,
-                   contact.py freezes rim contacts, audit.py screenshots every screen (to ./shots)
+                   contact.py freezes rim contacts, audit.py screenshots every screen (to ./shots);
+                   sync_check.cjs (npm run check) checks every copy is the same build
 ```
 
 ## Working on it
@@ -90,3 +91,4 @@ This repository is the source of truth for SOL DUNK. Start any new session from 
 
 - Any change to `src/engine.cjs` (physics) needs `npm run sim` then `node sim/calibrate.cjs patterns.json --guard1 9 --guard 1.05 --write`, or the paytable no longer matches the game.
 - After a change, run `npm run build`, `npm test` and `python3 tools/flows.py` before publishing.
+- `npm run check` confirms that `dist/` and the root `index.html` are the build of `src/` and that everything is pushed. Pass it a saved copy of the live demo (`npm run check -- live.html`) to check that too. CLAUDE.md lists the steps that keep the repo, GitHub Pages and the demo in sync.

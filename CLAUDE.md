@@ -8,6 +8,29 @@ Several chats work on this game. Start every session from a fresh clone of `nick
 
 The playable demo is a claude.ai artifact, slug `fb718710-5b6b-4ad8-bf8e-4d9cee1b68b6`; publish `dist/index.html` there. Before publishing, check that its live version is the one you started from. If another session published since, split that build with `python3 tools/split_build.py <file> <dir>`, merge its changes into `src/`, and push them here. Never publish over someone else's work.
 
+## Keeping every copy in sync
+
+The game lives in four places, and they should always hold the same build:
+
+1. `src/` on `main`, the source of truth.
+2. `dist/index.html`, `dist/index.server.html` and the root `index.html`. `npm run build` writes all three. GitHub Pages serves the root `index.html` at https://nickrileyh.github.io/sol-dunk/ and updates a minute or two after each push.
+3. The claude.ai demo artifact, published from `dist/index.html`.
+4. The "Live version" line in the claude.ai project doc `claude/sol-dunk-design.md`, which gives the artifact version and the repo commit it was built from.
+
+Finish every change in this order:
+
+1. `git fetch` and rebase onto `origin/main`, since another chat may have pushed.
+2. Call `get_artifact` on the demo. If its version isn't the one you started from, `read_artifact` it and run `npm run check -- <the file it saved to>`. If the check says the repo doesn't have that build, split it with `tools/split_build.py`, merge it into `src/` and push that first.
+3. `npm run build`, then the checks under Rules.
+4. Commit `src/` and the three builds together, and push.
+5. Publish `dist/index.html` to the artifact.
+6. Update the doc's "Live version" line with the new artifact version and commit.
+7. `read_artifact` again and run `npm run check -- <that file>`. It should end with "everything is in sync".
+
+`npm run check` on its own checks that the three builds match `src/` and that nothing is uncommitted or unpushed. Given a saved copy of the demo, it also says whether the demo is this commit's build, an older commit's (publish) or a build the repo doesn't have (merge it).
+
+Never publish a build you haven't pushed, and don't push a game change without publishing it, so the demo and GitHub Pages always match.
+
 ## Layout
 
 - `src/engine.cjs`: deterministic 120 Hz physics, level generation, replay and payout helpers. The client, simulator and server share it.
@@ -21,7 +44,7 @@ The playable demo is a claude.ai artifact, slug `fb718710-5b6b-4ad8-bf8e-4d9cee1
 
 - **Physics changes need new payouts.** Any change to `src/engine.cjs` (physics, level settings) means bumping `VERSION`, then running `node sim/run.cjs` (about 11 minutes; `node sim/run.cjs 1 <tier> merge` re-runs one tier). After that, run `node sim/calibrate.cjs patterns.json --guard1 9 --guard 1.05 --write`. Wait for "wrote sim/out/patterns.json" before calibrating.
 - **House edge:** an average player gets back about 90% when cashing out at checkpoint 1, with at least a 10% edge per level after that. Check the calibration output.
-- **Before publishing:** `npm run build && SERVER_URL=/ node build.cjs`, `npm test` (server), `python3 tools/flows.py`, `python3 tools/features.py` and `python3 tools/contact.py`.
+- **Before publishing:** `npm run build && SERVER_URL=/ node build.cjs`, `npm test` (server), `python3 tools/flows.py`, `python3 tools/features.py`, `python3 tools/contact.py` and `npm run check`.
 
 ## What the owner has asked for (keep these)
 

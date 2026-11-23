@@ -9,6 +9,7 @@
     "sim:quick": "node sim/run.cjs 0.1",
     "calibrate": "node sim/calibrate.cjs --guard1 9 --guard 1.05 --write",
     "stats": "node sim/quick.cjs 400",
-    "test": "cd server && npm test"
+    "test": "cd server && npm test",
+    "check": "node tools/sync_check.cjs"
   }
 }
