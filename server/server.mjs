@@ -28,6 +28,7 @@ const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const E = require('../src/engine.cjs');
 const PAY = require('../src/paytable.cjs');
+const POTS = require('../src/pots.cjs');
 
 const env = process.env;
 const num = (v, d) => (v === undefined || v === '' ? d : Number(v));
@@ -46,6 +47,8 @@ const CFG = {
   sharpRtp: num(env.SHARP_RTP, 1.15),
   sharpMinRuns: num(env.SHARP_MIN_RUNS, 150),
   withdrawReview: num(env.WITHDRAW_REVIEW_LAMPORTS, 20_000_000_000),
+  potEntry: num(env.POT_ENTRY_LAMPORTS, Math.round(POTS.ENTRY * 1e9)), // challenge pot entry
+  potGoal: env.MOCK_CHAIN === '1' ? env.POT_GOAL || '' : '',            // tests only: force a challenge
   checkpointTimeoutMs: 10 * 60 * 1000,
   playingTimeoutMs: 3 * 60 * 1000
 };
@@ -57,6 +60,7 @@ const db = fs.existsSync(CFG.dbFile)
   ? JSON.parse(fs.readFileSync(CFG.dbFile, 'utf8'))
   : { users: {}, runs: {}, deposits: {}, withdrawals: [], nonces: {}, secret: crypto.randomBytes(32).toString('hex') };
 const TOKEN_SECRET = CFG.tokenSecret || db.secret;
+db.pots = db.pots || {}; db.potClock = db.potClock || 0; db.houseRake = db.houseRake || 0;
 let saveTimer = null;
 function save() {
   if (saveTimer) return;
@@ -148,6 +152,7 @@ function auth(req) {
   if (!address) throw new HttpError(401, 'Sign in with your wallet first');
   return user(address);
 }
+function maybeAuth(req) { try { return auth(req); } catch { return null; } }
 
 app.get('/api/config', wrap(async () => ({
   network: CFG.network, house: house.publicKey.toBase58(), mock: CFG.mock,
@@ -251,6 +256,87 @@ if (CFG.mock) {
   }));
 }
 
+// ------------------------------------------------------------------ challenge pots (rules in src/pots.cjs)
+// One pot per UTC day. Players pay a fixed entry, then play ordinary runs; everyone who meets the day's challenge in
+// a run (started after entering, on the challenge's tier or harder) splits the pot when the day ends. The house
+// keeps POTS.RAKE of every entry whoever wins; with no winners the pot rolls into the next day's.
+// The pot clock is real time; in mock mode /api/dev/pot/advance moves it forward a day for tests.
+const potNow = () => Date.now() + db.potClock;
+function potFor(day) {
+  return db.pots[day] || (db.pots[day] = { day, goal: CFG.potGoal && POTS.GOAL_BY[CFG.potGoal] ? CFG.potGoal : POTS.goalFor(day).id, fee: CFG.potEntry, entries: {}, carryIn: 0, paidIn: 0, settled: false, createdAt: Date.now() });
+}
+// close every pot whose day is over (oldest first, so a rollover can roll on through quiet days)
+function settlePots() {
+  let changed = false;
+  for (;;) {
+    const due = Object.values(db.pots).filter((p) => !p.settled && POTS.closesAt(p.day) <= potNow()).sort((a, b) => (a.day < b.day ? -1 : 1));
+    if (!due.length) break;
+    for (const p of due) {
+      const winners = Object.keys(p.entries).filter((a) => p.entries[a].done);
+      const r = POTS.split(p.paidIn, p.carryIn, winners.length, true);
+      for (const a of winners) { const u = user(a); u.balance += r.share; u.potWon = (u.potWon || 0) + r.share; p.entries[a].won = r.share; }
+      Object.assign(p, { settled: true, settledAt: Date.now(), winners: winners.length, share: r.share, rake: r.rake, carryOut: r.carry });
+      db.houseRake += r.rake;
+      if (r.carry) potFor(POTS.dayKey(POTS.closesAt(p.day))).carryIn += r.carry;
+      changed = true;
+    }
+  }
+  if (changed) save();
+}
+function potView(p, u) {
+  const g = POTS.GOAL_BY[p.goal], es = Object.values(p.entries);
+  const out = {
+    key: p.day, goal: { id: g.id, kind: g.kind, n: g.n, tier: g.tier, text: g.text, sub: POTS.tierText(g.tier) },
+    feeLamports: p.fee, rake: POTS.RAKE, entrants: es.length, completed: es.filter((e) => e.done).length,
+    poolLamports: Math.floor(POTS.poolOf(p.paidIn, p.carryIn)), carryInLamports: p.carryIn,
+    closesAt: POTS.closesAt(p.day) - db.potClock, simulated: false
+  };
+  if (u) { const e = p.entries[u.address]; out.me = e ? { entered: true, done: !!e.done, best: e.best || 0 } : { entered: false }; }
+  return out;
+}
+function lastPot(u) {
+  const p = Object.values(db.pots).filter((x) => x.settled).sort((a, b) => (a.day < b.day ? 1 : -1))[0];
+  if (!p) return null;
+  const e = u && p.entries[u.address];
+  return { key: p.day, goal: POTS.GOAL_BY[p.goal].text, entrants: Object.keys(p.entries).length, winners: p.winners, shareLamports: p.share, rolledLamports: p.winners ? 0 : p.carryOut, me: e ? { done: !!e.done, wonLamports: e.won || 0 } : null };
+}
+// a verified level may complete the player's challenge (only in a run started after they entered, on the tier or harder)
+function potCheck(u, run) {
+  const p = db.pots[POTS.dayKey(potNow())], e = p && p.entries[u.address];
+  if (!e || !(run.potAt >= e.at)) return null;
+  const pr = POTS.progress(p.goal, run.levels.map((l) => ({ outcomes: l.outcomes, clear: l.result === 'clear' })), run.di);
+  if (!pr.counts) return { counts: false, done: !!e.done };
+  if (pr.value > (e.best || 0)) e.best = pr.value;
+  const just = !e.done && pr.done;
+  if (just) { e.done = true; e.doneAt = potNow(); e.runId = run.id; }
+  save();
+  return { counts: true, done: !!e.done, just, value: pr.value, target: pr.target };
+}
+app.get('/api/pot', wrap(async (req) => {
+  settlePots();
+  const u = maybeAuth(req);
+  return { ...potView(potFor(POTS.dayKey(potNow())), u), last: lastPot(u) };
+}));
+app.post('/api/pot/enter', wrap(async (req) => {
+  const u = auth(req);
+  return withLock(u.address, async () => {
+    settlePots();
+    const p = potFor(POTS.dayKey(potNow()));
+    if (p.entries[u.address]) throw bad('You’re already in today’s pot');
+    if (POTS.closesAt(p.day) - potNow() < 60_000) throw bad('This pot is about to close. The next one opens at midnight UTC.');
+    if (u.balance < p.fee) throw bad('Not enough balance for the entry');
+    u.balance -= p.fee; p.paidIn += p.fee;
+    p.entries[u.address] = { at: potNow(), done: false, best: 0 };
+    save();
+    return { ...potView(p, u), last: lastPot(u), ...publicMe(u) };
+  });
+}));
+setInterval(settlePots, 60_000).unref();
+if (CFG.mock) {
+  // tests: move the pot clock on a day, closing today's pot
+  app.post('/api/dev/pot/advance', wrap(async () => { db.potClock += POTS.DAY_MS; settlePots(); save(); return { ok: true, houseRake: db.houseRake }; }));
+}
+
 // --- runs
 function openRun(u) { return Object.values(db.runs).find((r) => r.address === u.address && (r.status === 'playing' || r.status === 'checkpoint')); }
 function getRun(u, runId) {
@@ -288,14 +374,15 @@ app.post('/api/run/start', wrap(async (req) => {
     if (bet > u.balance) throw bad('Not enough balance for that bet');
     // the house must be able to cover the biggest possible win plus every player balance
     const need = bet * E.DIFFS[di].maxWin;
-    const owed = Object.values(db.users).reduce((a, x) => a + x.balance, 0) + Object.values(db.runs).filter((r) => r.status === 'checkpoint' || r.status === 'playing').reduce((a, r) => a + Math.floor(r.bet * r.total), 0);
+    const owed = Object.values(db.users).reduce((a, x) => a + x.balance, 0) + Object.values(db.runs).filter((r) => r.status === 'checkpoint' || r.status === 'playing').reduce((a, r) => a + Math.floor(r.bet * r.total), 0)
+      + Object.values(db.pots).filter((p) => !p.settled).reduce((a, p) => a + p.carryIn + p.paidIn, 0); // pots in play belong to players
     if ((await houseLamports()) - owed < need) throw bad('The house can’t cover a bet that size right now. Try a smaller bet.');
     u.balance -= bet; u.wagered += bet;
     const run = {
       id: crypto.randomUUID(), address: u.address, di, bet,
       serverSeed: crypto.randomBytes(32).toString('hex'), clientSeed, nonce: u.nonce++,
       level: 1, total: 1, streak: 0, status: 'playing', levels: [],
-      createdAt: Date.now(), levelStartedAt: Date.now(), updatedAt: Date.now()
+      createdAt: Date.now(), potAt: potNow(), levelStartedAt: Date.now(), updatedAt: Date.now()
     };
     db.runs[run.id] = run; save();
     return { runId: run.id, serverSeedHash: sha256Hex(run.serverSeed), nonce: run.nonce, level: 1, levelSeed: levelSeed(run, 1), ...publicMe(u) };
@@ -329,11 +416,12 @@ app.post('/api/run/level', wrap(async (req) => {
     else if (r.result !== 'clear') status = 'bust';
     else if (run.level >= E.LEVELS) status = 'final';
     else status = 'checkpoint';
+    const pot = potCheck(u, run);
     let payout = 0;
     if (status === 'checkpoint') { run.status = 'checkpoint'; save(); }
     else payout = settle(u, run, status);
     return {
-      status, total: run.total, outcomes: r.outcomes.slice(0, counted), streak: run.streak,
+      status, total: run.total, outcomes: r.outcomes.slice(0, counted), streak: run.streak, pot,
       potLamports: Math.floor(run.bet * run.total), payoutLamports: payout,
       serverSeed: status === 'checkpoint' ? undefined : run.serverSeed, ...publicMe(u)
     };

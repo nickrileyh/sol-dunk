@@ -1,7 +1,7 @@
 /* SOL DUNK — browser client. Rendering, input, audio, betting flow. */
 (() => {
   'use strict';
-  const E = window.DunkEngine, PAY = window.DunkPaytable, BOT = window.DunkBot;
+  const E = window.DunkEngine, PAY = window.DunkPaytable, BOT = window.DunkBot, POTS = window.DunkPots;
   const CFG = Object.assign({ serverUrl: null, network: 'devnet', demoStart: 10, minBet: 0.001, maxBet: 100, solIconUrl: null }, window.SOL_DUNK_CONFIG || {});
   const W = E.WORLD, P = E.PHYS, DT = E.DT, NL = E.LEVELS, NH = E.HOOPS_PER_LEVEL, EV = E.EV;
   const $ = (id) => document.getElementById(id);
@@ -345,6 +345,85 @@
   })();
   function buzz(ms) { if (settings.haptics && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } }
 
+  // ---------------------------------------------------------------- challenge pot, demo (rules in src/pots.cjs)
+  // The demo runs the same pot with demo SOL. There are no other players in the demo, so the other entrants are
+  // simulated, and labelled so: a field drawn from the pot's key, each a casual, average or good player who plays a
+  // few runs with the simulator's chance of making the challenge. The real pot (ServerBank) has only real players.
+  const DemoPot = {
+    s: null, last: null, fee: POTS.ENTRY,
+    load() {
+      if (this.s) return this.s;
+      const s = store.get('pot', null), day = POTS.dayKey(Date.now());
+      this.s = s && s.key ? s : { key: day, open: POTS.dayStart(day), carryIn: 0, me: null };
+      this.last = store.get('potLast', null);
+      return this.s;
+    },
+    save() { store.set('pot', this.s); store.set('potLast', this.last); },
+    field(key, open) {
+      const close = POTS.closesAt(key), g = POTS.goalFor(key), r = POTS.rng('field|' + key), out = [];
+      const n = 24 + Math.floor(r() * 48);
+      for (let i = 0; i < n; i++) {
+        const join = open + r() * (close - open) * 0.9, u = r(), skill = u < 0.35 ? 0 : u < 0.8 ? 1 : 2;
+        const runs = 1 + Math.floor(-Math.log(1 - r() * 0.999) * 5);
+        let k = -1;
+        for (let j = 0; j < runs; j++) if (r() < g.p[skill]) { k = j; break; }
+        out.push({ join, done: k < 0 ? null : join + ((k + 1) / (runs + 1)) * (close - join) });
+      }
+      return out;
+    },
+    // close the pot once its day is over (or now, when the demo's "close now" asks), pay out and open the next one
+    roll(force) {
+      const s = this.load(), now = Date.now(), close = POTS.closesAt(s.key);
+      if (!force && now < close) return false;
+      const sim = this.field(s.key, s.open), mine = s.me ? 1 : 0, myDone = !!(s.me && s.me.done);
+      const winners = sim.filter((x) => x.done !== null).length + (myDone ? 1 : 0);
+      const r = POTS.split((sim.length + mine) * this.fee, s.carryIn, winners, false);
+      const won = myDone ? round9(r.share) : 0;
+      if (won) wallet.balance = round9(wallet.balance + won);
+      this.last = { key: s.key, goal: POTS.goalFor(s.key).text, entrants: sim.length + mine, winners, share: round9(r.share), rolled: winners ? 0 : round9(r.carry), me: s.me ? { done: myDone, won } : null };
+      const today = POTS.dayKey(now), sameDay = String(s.key).slice(0, 10) === today;
+      const key = force && sameDay ? today + '#' + ((+String(s.key).split('#')[1] || 0) + 1) : today;
+      this.s = { key, open: force && sameDay ? now : POTS.dayStart(today), carryIn: winners ? 0 : round9(r.carry), me: null };
+      this.save(); saveAll();
+      return true;
+    },
+    view() {
+      const s = this.load(), now = Date.now(), g = POTS.goalFor(s.key);
+      const joined = this.field(s.key, s.open).filter((x) => x.join <= now), mine = s.me ? 1 : 0;
+      return {
+        key: s.key, goal: { id: g.id, kind: g.kind, n: g.n, tier: g.tier, text: g.text, sub: POTS.tierText(g.tier) },
+        fee: this.fee, rake: POTS.RAKE, entrants: joined.length + mine,
+        completed: joined.filter((x) => x.done !== null && x.done <= now).length + (s.me && s.me.done ? 1 : 0),
+        pool: round9(POTS.poolOf((joined.length + mine) * this.fee, s.carryIn)), carryIn: s.carryIn, closesAt: POTS.closesAt(s.key), simulated: true,
+        me: s.me ? { entered: true, done: !!s.me.done, best: s.me.best || 0 } : { entered: false }, last: this.last
+      };
+    },
+    enter() {
+      this.roll();
+      const s = this.load();
+      if (s.me) throw new Error('You’re already in this pot');
+      if (POTS.closesAt(s.key) - Date.now() < 60000) throw new Error('This pot is about to close. The next one opens at midnight UTC.');
+      if (wallet.balance + 1e-12 < this.fee) throw new Error('Not enough demo SOL for the entry.');
+      wallet.balance = round9(wallet.balance - this.fee);
+      s.me = { at: Date.now(), done: false, best: 0 };
+      this.save(); saveAll();
+      return this.view();
+    },
+    // a level the demo bank has just verified: did it complete the challenge? (runs started after entering only)
+    check(cur) {
+      this.roll();
+      const s = this.load();
+      if (!s.me || !(cur.potAt >= s.me.at)) return null;
+      const pr = POTS.progress(POTS.goalFor(s.key), cur.levels, cur.di);
+      if (!pr.counts) return { counts: false, done: !!s.me.done };
+      if (pr.value > (s.me.best || 0)) s.me.best = pr.value;
+      const just = !s.me.done && pr.done;
+      if (just) { s.me.done = true; s.me.doneAt = Date.now(); }
+      this.save();
+      return { counts: true, done: !!s.me.done, just, value: pr.value, target: pr.target };
+    }
+  };
+
   // ---------------------------------------------------------------- bank: demo (local) and server (real SOL)
   const LocalBank = {
     real: false,
@@ -356,7 +435,7 @@
       wallet.balance = round9(wallet.balance - bet);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
       saveAll();
-      this.cur = { di, bet, serverSeed, clientSeed, nonce, level: 1, total: 1, streak: 0 };
+      this.cur = { di, bet, serverSeed, clientSeed, nonce, level: 1, total: 1, streak: 0, levels: [], potAt: Date.now() };
       return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, levelSeed: deriveLevelSeed(serverSeed, clientSeed, nonce, 1) };
     },
     // Re-verifies the level by replaying the taps, exactly as the server does.
@@ -366,14 +445,21 @@
       const r = E.replay(def, taps);
       const a = E.applyLevel(PAY.PAYTABLE[c.di][L - 1], r.outcomes, c.total, E.DIFFS[c.di].maxWin, c.streak);
       c.total = a.total; c.streak = a.streak; c.level = L;
+      c.levels.push({ outcomes: r.outcomes.join(''), clear: r.result === 'clear' });
+      const pot = DemoPot.check(c);
       const status = a.capped ? 'maxwin' : r.result === 'clear' ? (L >= NL ? 'final' : 'checkpoint') : 'bust';
       let payout = 0;
       if (status === 'maxwin' || status === 'final') payout = this._pay();
-      return { status, total: c.total, payout, serverSeed: status === 'checkpoint' ? null : c.serverSeed };
+      return { status, total: c.total, payout, serverSeed: status === 'checkpoint' ? null : c.serverSeed, pot };
     },
     async next() { const c = this.cur; c.level++; return { levelSeed: deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, c.level) }; },
     async cashout() { const payout = this._pay(); return { payout, serverSeed: this.cur.serverSeed }; },
-    _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); saveAll(); return payout; }
+    _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); saveAll(); return payout; },
+    pot: {
+      async state() { DemoPot.roll(); return DemoPot.view(); },
+      async enter() { return DemoPot.enter(); },
+      async closeNow() { DemoPot.roll(true); return DemoPot.view(); } // demo only
+    }
   };
 
   // Real SOL: talks to server/server.mjs. Only active when SOL_DUNK_CONFIG.serverUrl is set.
@@ -419,10 +505,22 @@
     },
     async level(L, taps) {
       const j = await this.api('/api/run/level', { runId: this.runId, level: L, taps });
-      return { status: j.status, total: j.total, payout: (j.payoutLamports || 0) / 1e9, serverSeed: j.serverSeed || null };
+      return { status: j.status, total: j.total, payout: (j.payoutLamports || 0) / 1e9, serverSeed: j.serverSeed || null, pot: j.pot || null };
     },
     async next() { return this.api('/api/run/continue', { runId: this.runId }); },
-    async cashout() { const j = await this.api('/api/run/cashout', { runId: this.runId }); return { payout: j.payoutLamports / 1e9, serverSeed: j.serverSeed }; }
+    async cashout() { const j = await this.api('/api/run/cashout', { runId: this.runId }); return { payout: j.payoutLamports / 1e9, serverSeed: j.serverSeed }; },
+    pot: {
+      view(j) {
+        const L = j.last;
+        return {
+          key: j.key, goal: j.goal, fee: j.feeLamports / 1e9, rake: j.rake, entrants: j.entrants, completed: j.completed,
+          pool: j.poolLamports / 1e9, carryIn: j.carryInLamports / 1e9, closesAt: j.closesAt, simulated: false, me: j.me || null,
+          last: L ? { key: L.key, goal: L.goal, entrants: L.entrants, winners: L.winners, share: L.shareLamports / 1e9, rolled: L.rolledLamports / 1e9, me: L.me ? { done: L.me.done, won: L.me.wonLamports / 1e9 } : null } : null
+        };
+      },
+      async state() { return this.view(await ServerBank.api('/api/pot')); },
+      async enter() { return this.view(await ServerBank.api('/api/pot/enter', {})); }
+    }
   };
   const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
   function b58encode(bytes) {
@@ -623,6 +721,7 @@
     potCap: $('potCap'), mult: $('hudMult'), delta: $('potDelta')
   };
   const ICON = {
+    trophy: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 2.5h10V4h3.5v2.6a4.6 4.6 0 0 1-4.3 4.6A5.6 5.6 0 0 1 13.2 14v3h3.3v4.5h-9V17h3.3v-3a5.6 5.6 0 0 1-3-2.8 4.6 4.6 0 0 1-4.3-4.6V4H7V2.5Zm10 3.4v3.4a2.6 2.6 0 0 0 1.5-2.4v-1H17ZM7 5.9H5.5v1a2.6 2.6 0 0 0 1.5 2.4V5.9Z"/></svg>',
     flame: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 23c-4.4 0-8-3.1-8-7.5 0-3.3 2-5.6 3.7-7.4.6-.6 1.6-.2 1.6.7 0 1.4.9 2.6 2.1 2.6 1.1 0 1.8-.9 1.8-2.1 0-2.3-1.2-4.2-1.2-6.6 0-.9 1-1.5 1.7-1C17 3.9 20 8.4 20 14.5 20 19.6 16.4 23 12 23Z"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     medal: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 1.5h4l2.2 5-2.1 2.6H9.4L6.5 1.5Zm11 0h-4l-1.3 3 2.1 4.6 3.2-7.6Z" opacity=".55"/><circle cx="12" cy="15.5" r="7"/><path d="M12 11.6l1.15 2.35 2.6.38-1.88 1.83.44 2.59L12 17.53l-2.31 1.22.44-2.59-1.88-1.83 2.6-.38z" fill="#000" opacity=".3"/></svg>',
@@ -735,6 +834,8 @@
   function dailyNow(c, r) { const v = r[c.k] || 0; return Math.min(c.n, DAILY_BY[c.k].sum ? c.p + v : Math.max(c.p, v)); }
   function liveGoals() {
     if (!run.told || phase === 'lobby') return;
+    const pp = potProgress();
+    if (pp && pp.done && !run.told.pot) { run.told.pot = 1; potNotice(); }
     const r = runFacts(0);
     for (const c of dailySet()) {
       if (c.done || run.told['d:' + c.k] || dailyNow(c, r) < c.n) continue;
@@ -745,8 +846,10 @@
       run.told[a.id] = 1; notice('n-ach', ICON.medal, a.name, a.desc + ' · +' + a.xp + ' XP');
     }
   }
-  // the next daily goal, shown under each level's banner
+  // the next goal, shown under each level's banner: the pot challenge if you're in it, else the next daily
   function goalLine() {
+    const pl = potLine();
+    if (pl) return pl;
     const r = runFacts(0);
     for (const c of dailySet()) { if (!c.done && !run.told['d:' + c.k]) { const p = dailyNow(c, r); if (p < c.n) return dailyText(c) + ' · ' + p + '/' + c.n; } }
     return '';
@@ -850,6 +953,8 @@
     $('playBtn').addEventListener('click', () => startRun());
     $('profBtn').addEventListener('click', () => openPanel('profile'));
     $('dailyBtn').addEventListener('click', () => openPanel('profile'));
+    $('potBtn').querySelector('.p-ic').innerHTML = ICON.trophy;
+    $('potBtn').addEventListener('click', () => openPanel('pot'));
   }
   function setBet(v) {
     const max = Math.min(CFG.maxBet, Math.max(CFG.minBet, bank.balance()));
@@ -875,6 +980,79 @@
     setBalance();
   }
 
+  // ---------------------------------------------------------------- challenge pot: lobby row, sheet, run progress
+  let potState = null, potBusy = false;
+  async function refreshPot() {
+    if (potBusy) return;
+    potBusy = true;
+    try { potState = await bank.pot.state(); } catch (e) { potState = potState || null; }
+    potBusy = false;
+    renderPotRow();
+    if (!ui.panel.classList.contains('hide') && $('panelBody').dataset.kind === 'pot') { $('panelBody').innerHTML = potHtml(); wirePanel('pot'); }
+    // a pot you were in has closed since you last looked: say how it went
+    const L = potState && potState.last;
+    if (L && L.me && prefs.potSeen !== L.key) {
+      prefs.potSeen = L.key; saveAll();
+      if (L.me.won > 0) { toast('Pot closed: you won ' + fmtSol(L.me.won) + ' SOL'); Sound.cash(); setBalance(); }
+      else toast('Pot closed: ' + L.winners + ' of ' + L.entrants + ' made it');
+    }
+  }
+  const leftText = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; };
+  function renderPotRow() {
+    const p = potState, el = $('potBtn');
+    el.classList.toggle('hide', !p);
+    if (!p) return;
+    const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
+    $('potT').textContent = p.goal.text;
+    $('potV').textContent = (p.pool >= 1 ? p.pool.toFixed(2) : fmtBet(p.pool)) + ' SOL';
+    $('potS').textContent = done ? 'Done' : inn ? 'You’re in' : 'Enter ' + fmtBet(p.fee);
+    el.classList.toggle('in', inn && !done); el.classList.toggle('done', done);
+    el.setAttribute('aria-label', `Pot challenge: ${p.goal.text} ${p.goal.sub}. ${fmtBal(p.pool)} SOL in the pot, ${p.entrants} in. ` + (done ? 'You made it.' : inn ? 'You’re in.' : 'Entry ' + fmtBet(p.fee) + ' SOL.'));
+  }
+  // where the run stands on the pot challenge (null if you're not in it, it's done, or this tier doesn't count)
+  function potLevels() {
+    return (run.log || []).map((lv, i, a) => ({ outcomes: lv.filter((o) => o !== 'X').map((o) => (o === 'R' ? 'R' : 'S')).join(''), clear: i < a.length - 1 }));
+  }
+  function potProgress() {
+    const p = potState;
+    if (!p || !p.me || !p.me.entered || p.me.done || !run.log) return null;
+    return POTS.progress(p.goal.id, potLevels(), run.di);
+  }
+  function potLine() {
+    const p = potState;
+    if (!p || !p.me || !p.me.entered || p.me.done) return '';
+    if (run.di < p.goal.tier) return 'The pot challenge counts ' + p.goal.sub;
+    const pr = potProgress();
+    return pr ? 'Pot · ' + p.goal.text + ' · ' + pr.value + '/' + pr.target : '';
+  }
+  function potNotice() { notice('n-pot', ICON.trophy, 'Pot challenge done', 'You’re in for a share of the pot' + (potState ? ' · ' + fmtBal(potState.pool) + ' SOL' : '')); }
+  // a level the bank verified: the official word on the pot
+  function potResult(note) {
+    if (!note || !potState || !potState.me) return;
+    if (note.value > (potState.me.best || 0)) potState.me.best = note.value;
+    if (note.done) potState.me.done = true;
+    if (note.just) { run.potJust = true; if (!run.told.pot) { run.told.pot = 1; potNotice(); } }
+  }
+  function potHtml() {
+    const p = potState;
+    if (!p) return '<p>The pot isn’t available right now. Try again in a moment.</p>';
+    const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done), left = p.closesAt - Date.now();
+    const each = p.completed ? p.pool / p.completed : 0;
+    let me;
+    if (done) me = `<div class="pot-me done">${ICON.check}<div><b>You made it</b><span>You’ll split the pot with everyone else who does. If it closed now: ${fmtSol(each)} SOL each.</span></div></div>`;
+    else if (inn) me = `<div class="pot-me">${ICON.target}<div><b>You’re in</b><span>Make it in any run ${p.goal.sub} before the pot closes.${p.me.best ? ' Best so far: ' + p.me.best + ' / ' + p.goal.n + '.' : ''}</span></div></div>`;
+    else me = `<button class="btn btn-go" id="potEnter">Enter for ${fmtBet(p.fee)} SOL</button><div class="err" id="potErr" role="alert"></div>`;
+    const L = p.last;
+    const last = L ? `<div class="pot-last"><span class="k">Last pot</span><span>${L.goal} · ${L.winners ? L.winners + ' of ' + L.entrants + ' made it · ' + fmtSol(L.share) + ' SOL each' : 'nobody made it · ' + fmtSol(L.rolled) + ' SOL rolled over'}${L.me ? (L.me.won > 0 ? ' · <b class="won">you won ' + fmtSol(L.me.won) + ' SOL</b>' : ' · you didn’t make it') : ''}</span></div>` : '';
+    return `<div class="pot-goal"><span class="pot-ic">${ICON.trophy}</span><div><b>${p.goal.text}</b><span>In one run ${p.goal.sub}</span></div></div>
+      <div class="big pot-big"><span class="num">${fmtBal(p.pool)}</span><span class="unit">SOL</span></div>
+      <div class="tiles"><div><b>${p.entrants}</b><span>Entered</span></div><div><b>${p.completed}</b><span>Made it</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Closing'}</b><span>Left</span></div></div>
+      ${me}
+      <p class="pot-rules">Everyone who completes the challenge before the pot closes (midnight UTC) splits it equally. The house keeps ${Math.round(p.rake * 100)}% of each entry; if nobody makes it, the pot rolls over to the next one. Only runs you start after entering count, and your runs are bets as usual.${p.carryIn > 0 ? ' This pot includes ' + fmtSol(p.carryIn) + ' SOL rolled over.' : ''}</p>
+      ${last}
+      ${p.simulated ? `<div class="pot-demo"><p>Demo: the other entrants are simulated, from how often players at different skill levels make the challenge.</p><button class="btn btn-plain" id="potClose">Close this pot now</button></div>` : ''}`;
+  }
+
   // ---------------------------------------------------------------- run flow
   async function startRun() {
     if (run.busy || (phase !== 'lobby' && phase !== 'over')) return;
@@ -884,7 +1062,7 @@
     try {
       const r = await bank.start(prefs.di, bet);
       Object.assign(run, { di: prefs.di, bet, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.levelSeed }, RUN_FRESH);
-      run.log = []; run.told = {}; run.share = ''; // every ring of the run, and the goals already announced
+      run.log = []; run.told = {}; run.share = ''; run.potJust = false; // every ring of the run, and the goals already announced
       $('lobbyErr').textContent = '';
     } catch (e) {
       $('lobbyErr').textContent = e.message; run.busy = false;
@@ -915,7 +1093,7 @@
     profile.lv[run.di][run.level - 1][0]++;
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
     if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
-    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', run.level === 1 && newPlayer() ? 'Drop down through each ring' : '');
+    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', run.level === 1 ? (newPlayer() ? 'Drop down through each ring' : potLine()) : '');
   }
 
   function settleOffset() { ball.x += ball.ox; ball.y += ball.oy; ball.ox = 0; ball.oy = 0; }
@@ -1012,6 +1190,7 @@
     const L = run.level;
     bank.level(L, run.taps.slice()).then((r) => {
       if (r.status !== 'checkpoint' || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
+      potResult(r.pot);
       setTimeout(() => showCheckpoint(), REDUCED ? 100 : CALL.busy ? 1150 : 650);
     }).catch(netFail);
   }
@@ -1031,6 +1210,7 @@
     const L = run.level, taps = run.taps.slice();
     bank.level(L, taps).then((r) => {
       if (r.status !== 'bust') return verifyFail();
+      potResult(r.pot);
       run.serverSeed = r.serverSeed || '';
       record(0, 'bust');
       setTimeout(() => showResult(titles[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtSol(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 800);
@@ -1059,6 +1239,7 @@
     const L = run.level;
     bank.level(L, run.taps.slice()).then((r) => {
       if (r.status !== kind || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
+      potResult(r.pot);
       run.serverSeed = r.serverSeed || '';
       winFx(kind === 'maxwin' ? 1.6 : 1.3);
       record(r.payout, kind);
@@ -1164,7 +1345,7 @@
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
     $('againAmt').textContent = fmtBet(prefs.bet) + ' SOL';
     showProgress(pr);
-    show(ui.res, true); armCard(ui.res, 700);
+    show(ui.res, true); armCard(ui.res, 700); refreshPot();
     setTimeout(() => ui.res.focus({ preventScroll: true }), 60);
     refreshLobby();
   }
@@ -1209,6 +1390,7 @@
       Sound.levelUp(); buzz([10, 40, 10]);
     }, 1100));
     const g = [];
+    if (run.potJust && potState) g.push(['pot', ICON.trophy, 'Pot challenge done · in for a share']);
     pr.unlocks.forEach((u) => g.push(['unlock', '', 'New ' + itemName(u), u]));
     pr.achs.forEach((x) => g.push(['ach', ICON.medal, x.name + ' · +' + x.xp + ' XP']));
     pr.dailies.forEach((c) => g.push(['daily', ICON.check, dailyText(c) + ' · +' + c.xp + ' XP']));
@@ -1228,7 +1410,7 @@
     phase = 'lobby';
     run.st = null; run.streak = 0; view.st = null; view.prevHoops = []; ball.lastVis = 0;
     attract.wait = 0.3; attract.st = null;
-    show(ui.lobby, true); refreshLobby();
+    show(ui.lobby, true); refreshLobby(); refreshPot();
   }
   if (window.ResizeObserver) { try { new ResizeObserver(() => { sheetTopC = -1; }).observe(ui.lobby); } catch (e) { /* optional */ } }
 
@@ -2213,9 +2395,9 @@
   function openPanel(kind) {
     Sound.click();
     const body = $('panelBody'), title = $('panelTitle');
-    const map = { how: ['How to play', howHtml], odds: ['Odds', oddsHtml], stats: ['Stats', statsHtml], fair: ['Fairness', fairHtml], menu: ['Settings', menuHtml], wallet: ['Wallet', walletHtml], profile: ['Profile', profileHtml] };
+    const map = { pot: ['Pot challenge', potHtml], how: ['How to play', howHtml], odds: ['Odds', oddsHtml], stats: ['Stats', statsHtml], fair: ['Fairness', fairHtml], menu: ['Settings', menuHtml], wallet: ['Wallet', walletHtml], profile: ['Profile', profileHtml] };
     const [t, fn] = map[kind] || map.how;
-    title.textContent = t; body.innerHTML = fn();
+    title.textContent = t; body.innerHTML = fn(); body.dataset.kind = kind;
     body.scrollTop = 0;
     ui.scrim.classList.add('show'); show(ui.panel, true); document.body.classList.add('panel-open');
     wirePanel(kind);
@@ -2356,6 +2538,14 @@
   function wirePanel(kind) {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
     if (kind === 'profile') wireProfile();
+    if (kind === 'pot') {
+      on('potEnter', async (e) => {
+        e.currentTarget.disabled = true;
+        try { potState = await bank.pot.enter(); setBalance(); renderPotRow(); $('panelBody').innerHTML = potHtml(); wirePanel('pot'); Sound.click(); buzz(8); toast('You’re in. Make it in any run ' + potState.goal.sub + '.'); }
+        catch (err) { const el = $('potErr'); if (el) el.textContent = err.message; e.currentTarget.disabled = false; }
+      });
+      on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
+    }
     if (kind === 'odds') document.querySelectorAll('#oddsSeg button').forEach((b) => b.addEventListener('click', () => { oddsTier = +b.dataset.t; $('panelBody').innerHTML = oddsHtml(); wirePanel('odds'); }));
     on('fairVerify', () => {
       const h = stats.history[0];
@@ -2374,7 +2564,7 @@
       if (phase !== 'lobby' && phase !== 'over') { toast('Finish this run first.'); return; }
       wallet.balance = CFG.demoStart; saveAll(); refreshLobby(); closePanel(); toast('Demo balance reset to ' + CFG.demoStart + ' SOL');
     });
-    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; setBalance(); refreshLobby(); openPanel('wallet'); } catch (e) { $('wErr').textContent = e.message; } });
+    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; setBalance(); refreshLobby(); refreshPot(); openPanel('wallet'); } catch (e) { $('wErr').textContent = e.message; } });
     on('wDeposit', async () => { try { await ServerBank.deposit(parseFloat($('wAmt').value)); setBalance(); openPanel('wallet'); toast('Deposit credited'); } catch (e) { $('wErr').textContent = e.message; } });
     on('wWithdraw', async () => { try { await ServerBank.withdraw(parseFloat($('wAmt').value)); setBalance(); openPanel('wallet'); toast('Withdrawal sent'); } catch (e) { $('wErr').textContent = e.message; } });
   }
@@ -2386,7 +2576,8 @@
       if (snap.profile) fixProfile(Object.assign(profile, snap.profile));
     }
     if (!(wallet.balance >= 0)) wallet.balance = CFG.demoStart;
-    syncMute(); applyFlameTheme(); buildLobby(); refreshLobby(); setHudMode(false);
+    syncMute(); applyFlameTheme(); buildLobby(); refreshLobby(); setHudMode(false); refreshPot();
+    setInterval(() => { if (phase === 'lobby' && !document.hidden) refreshPot(); }, 30000); // entrants, pot and time left move on
     attract.wait = 0;
     if (document.fonts && document.fonts.load) document.fonts.load('800 20px "Big Shoulders Display"').catch(() => {}); // canvas text uses it too
     requestAnimationFrame((t) => { last = t; frame(t); });
@@ -2411,6 +2602,8 @@
     hold: (on) => { dbg.hold = !!on; },   // stop the clock with the last frame on screen
     step: (n) => { dbg.steps = n | 0; },  // while held: play n frames of 1/60 s
     stepsLeft: () => dbg.steps | 0,
+    pot: () => potState, // the challenge pot as the client sees it
+    bal: () => bank.balance(),
     sfx: (name, args, secs) => Sound.render(name, args, secs), // a sound's samples, rendered offline
     ballScreen: () => ({ x: view.bsx, y: view.bsy }),
     equip: (t, id) => { if (COS[t] && COS[t][id]) { profile.eq[t] = id; if (t === 'flame') applyFlameTheme(); } } // test hook: try a skin without unlocking it

@@ -359,6 +359,44 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 #callout.gold .c1 { background-image: linear-gradient(180deg, #fffbe0 5%, #ffd60a 50%, #ff9f0a 95%); filter: drop-shadow(0 0 16px rgba(255, 200, 20, 0.5)); }
 #callout.green .c1 { background-image: linear-gradient(180deg, #e6ffe9 5%, #30d158 60%, #1fa347 95%); filter: drop-shadow(0 0 14px rgba(48, 209, 88, 0.45)); }
 
+/* ---------- lobby: challenge pot row ---------- */
+#potBtn {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px;
+  width: 100%; height: 44px; padding: 0 7px 0 12px; margin: 0 0 10px; border-radius: 16px; background: var(--surface); text-align: left;
+}
+#potBtn.hide { display: none; }
+#potBtn .p-ic { display: flex; color: var(--gold); }
+#potBtn .p-ic svg { width: 17px; height: 17px; }
+#potBtn .p-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 600; color: var(--label); white-space: nowrap; }
+#potBtn .p-v { font-size: 13px; font-weight: 700; color: var(--label); white-space: nowrap; }
+#potBtn .p-s { padding: 6px 10px; border-radius: 11px; background: var(--surface-2); font-size: 12px; font-weight: 700; color: var(--label); white-space: nowrap; }
+#potBtn.in .p-s { color: var(--gold); }
+#potBtn.done .p-s { background: rgba(47, 211, 107, 0.14); color: var(--green); }
+
+/* ---------- the pot sheet ---------- */
+.pot-goal { display: flex; align-items: center; gap: 12px; margin: 2px 0 6px; }
+.pot-ic { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 21px; background: rgba(245, 197, 66, 0.14); color: var(--gold); }
+.pot-ic svg { width: 22px; height: 22px; }
+.pot-goal b { display: block; font-size: 17px; font-weight: 700; color: var(--label); }
+.pot-goal span { font-size: 13px; color: var(--label-2); }
+.pot-big { margin: 14px 0 0; text-align: center; font-size: 64px; }
+.pot-big + .tiles { margin: 14px 0 14px; }
+.tiles b.sm { font-size: 22px; line-height: 1.4; }
+.pot-me { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--surface); }
+.pot-me svg { flex: none; width: 18px; height: 18px; margin-top: 1px; color: var(--gold); }
+.pot-me.done svg { color: var(--green); }
+.pot-me b { display: block; font-size: 15px; font-weight: 700; color: var(--label); }
+.pot-me span { font-size: 13px; line-height: 1.4; color: var(--label-2); }
+#potEnter { width: 100%; }
+.pot-rules { margin: 14px 2px 0; font-size: 12.5px; line-height: 1.45; color: var(--label-3); }
+.pot-last { display: flex; flex-direction: column; gap: 3px; margin-top: 14px; padding-top: 12px; box-shadow: inset 0 0.5px 0 var(--line); font-size: 13px; line-height: 1.4; color: var(--label-2); }
+.pot-last .k { font-size: 12px; font-weight: 700; color: var(--label-3); }
+.pot-last .won { color: var(--green); font-weight: 700; }
+.pot-demo { margin-top: 14px; padding: 12px 14px; border-radius: 16px; background: var(--surface); }
+.pot-demo p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.4; color: var(--label-2); }
+.pot-demo .btn { width: 100%; height: 44px; font-size: 15px; }
+.gain.pot svg { color: var(--gold); }
+
 /* ---------- lobby: daily challenge strip ---------- */
 #dailyBtn {
   position: relative; display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px;
@@ -518,6 +556,9 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   .stack .btn { height: 50px; }
   .next { margin: 16px 2px 12px; padding: 12px 2px 0; }
 }
+@media (max-height: 560px) {
+  #potBtn { display: none; }
+}
 @media (max-height: 600px) {
   #dailyBtn { display: none; }
   .tiles { padding: 9px 0 8px; }
@@ -597,6 +638,9 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   <button class="daily" id="dailyBtn" aria-label="Daily challenges">
     <span class="d-ic" id="dailyIc"></span><span class="d-t" id="dailyT">Daily challenges</span><span class="d-p num" id="dailyP"></span>
     <span class="d-bar" aria-hidden="true"><i id="dailyFill"></i></span>
+  </button>
+  <button class="potrow hide" id="potBtn" aria-label="Pot challenge">
+    <span class="p-ic" aria-hidden="true"></span><span class="p-t" id="potT"></span><span class="p-v num" id="potV"></span><span class="p-s" id="potS"></span>
   </button>
   <button class="btn btn-primary" id="playBtn">Play <span class="num" id="playAmt">0.1 SOL</span></button>
   <div class="err" id="lobbyErr" role="alert"></div>
@@ -1229,10 +1273,123 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   return { SKILLS, createBot, decide, gauss, AIM_BIAS };
 });
 </script>
+<script>/* SOL DUNK challenge pots: shared by the browser, the server and the simulator.
+ *
+ * Each pot runs for one UTC day. Players pay a fixed entry into the pot, then play ordinary runs. Everyone who
+ * meets the pot's challenge in a run (started after they entered, on the named tier or harder) before the pot
+ * closes splits it equally. The house keeps RAKE of every entry, whoever wins, so the pot pays the house from
+ * every player however skilled; the players' own runs are bets as usual. If nobody makes it, the pot rolls over
+ * into the next one.
+ *
+ * Challenges are judged only from a run's verified ring outcomes ('S' swish, 'R' rim) per level, so the server
+ * can decide them from the taps it replays, and the browser shows the same progress live.
+ */
+(function (root, factory) {
+  const P = factory();
+  if (typeof module === 'object' && module.exports) module.exports = P;
+  else root.DunkPots = P;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const RAKE = 0.1;               // the house's share of every entry
+  const ENTRY = 0.05;             // entry in SOL (the server can set its own)
+  const DAY_MS = 86400000;
+  const HOOPS = 6;
+
+  // ring points, the same as the score in the game: a rim hit 1, a swish 1 + streak (up to 6), a perfect level +10
+  const ringPoints = (o, streak) => (o === 'S' ? 1 + Math.min(streak, 5) : 1);
+
+  // The challenges. tier = the easiest tier where it counts (0 Rookie, 1 Pro, 2 All-Star, 3 Legend).
+  // p = the chance one run makes it at that tier for a [casual, average, good] player, from the simulator
+  // (they keep going until they bust); the demo uses it to simulate other entrants.
+  const GOALS = [
+    { id: 'streak10', kind: 'best', n: 10, tier: 1, text: 'Swish 10 in a row', p: [0.018, 0.083, 0.376] },
+    { id: 'perfect1', kind: 'perfect', n: 1, tier: 2, text: 'Swish every ring in a level', p: [0.034, 0.103, 0.345] },
+    { id: 'clear4', kind: 'clears', n: 4, tier: 2, text: 'Clear level 4', p: [0.053, 0.154, 0.416] },
+    { id: 'score100', kind: 'score', n: 100, tier: 1, text: 'Score 100 in one run', p: [0.009, 0.095, 0.529] },
+    { id: 'swish25', kind: 'swishes', n: 25, tier: 1, text: 'Swish 25 rings in one run', p: [0.003, 0.046, 0.39] },
+    { id: 'streak8a', kind: 'best', n: 8, tier: 2, text: 'Swish 8 in a row', p: [0.013, 0.052, 0.243] },
+    { id: 'perfect2', kind: 'perfect', n: 2, tier: 1, text: 'Swish every ring in two levels', p: [0.003, 0.036, 0.26] }
+  ];
+  const GOAL_BY = Object.fromEntries(GOALS.map((g) => [g.id, g]));
+  const TIER_NAMES = ['Rookie', 'Pro', 'All-Star', 'Legend'];
+  const tierText = (t) => (t >= 3 ? 'on Legend' : t > 0 ? 'on ' + TIER_NAMES[t] + ' or harder' : 'on any tier');
+
+  // a small seeded generator (the same mulberry32 the engine uses), so every pot's challenge is fixed by its day
+  function rng(seedStr) {
+    let h = 1779033703 ^ seedStr.length;
+    for (let i = 0; i < seedStr.length; i++) { h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
+    let a = h >>> 0;
+    return function () {
+      a = (a + 0x6d2b79f5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // windows: one pot per UTC day ("2026-11-24"); the demo can add rounds to a day ("2026-11-24#2")
+  const dayKey = (ts) => new Date(ts).toISOString().slice(0, 10);
+  const dayStart = (day) => Date.parse(day + 'T00:00:00Z');
+  const closesAt = (key) => dayStart(String(key).slice(0, 10)) + DAY_MS;
+  // Each run of GOALS.length days uses every challenge once, in a shuffled order, so no challenge comes up two
+  // days running (a demo round moves one step along the same order).
+  const EPOCH = Date.UTC(2026, 0, 5);
+  function order(cycle) {
+    const a = GOALS.slice(), r = rng('potcycle|' + cycle);
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  function goalFor(key) {
+    const L = GOALS.length, n = Math.floor((dayStart(String(key).slice(0, 10)) - EPOCH) / DAY_MS) + (+String(key).split('#')[1] || 0);
+    const cycle = Math.floor(n / L), pos = ((n % L) + L) % L, a = order(cycle);
+    if (a[0] === order(cycle - 1)[L - 1]) { const t = a[0]; a[0] = a[1]; a[1] = t; } // no repeat across cycles either
+    return a[pos];
+  }
+
+  // levels: [{ outcomes: 'SSRSSS', clear: true }, ...] in order, as verified so far
+  function facts(levels) {
+    let streak = 0, best = 0, swishes = 0, score = 0, perfect = 0, clears = 0;
+    for (const lv of levels) {
+      const o = String(lv.outcomes || '');
+      for (const c of o) {
+        if (c === 'S') { streak++; swishes++; } else streak = 0;
+        score += ringPoints(c, streak);
+        if (streak > best) best = streak;
+      }
+      if (lv.clear) { clears++; if (o.length === HOOPS && !o.includes('R')) { perfect++; score += 10; } }
+    }
+    return { best, swishes, score, perfect, clears };
+  }
+  // where a run stands on a challenge: { value, target, done }. A run below the challenge's tier never counts.
+  function progress(goal, levels, tier) {
+    const g = typeof goal === 'string' ? GOAL_BY[goal] : goal;
+    if (!g) return { value: 0, target: 1, done: false, counts: false };
+    const counts = tier >= g.tier;
+    const value = facts(levels)[g.kind] || 0;
+    return { value: Math.min(value, g.n), target: g.n, done: counts && value >= g.n, counts };
+  }
+
+  // Close a pot. entries: total paid in (lamports or SOL); carryIn: rolled in from earlier pots; winners: how many
+  // made it. Returns what each winner gets, the house's rake, and what rolls over (all of it if nobody made it,
+  // otherwise just the indivisible remainder). integer = true works in whole lamports.
+  function split(entries, carryIn, winners, integer) {
+    const rake = integer ? Math.ceil(entries * RAKE) : entries * RAKE;
+    const pool = carryIn + entries - rake;
+    if (!winners) return { share: 0, rake, carry: pool, pool };
+    const share = integer ? Math.floor(pool / winners) : pool / winners;
+    return { share, rake, carry: integer ? pool - share * winners : 0, pool };
+  }
+  // the pot as it stands: what's in it for the winners
+  const poolOf = (entries, carryIn) => carryIn + entries * (1 - RAKE);
+
+  return { RAKE, ENTRY, DAY_MS, GOALS, GOAL_BY, TIER_NAMES, tierText, rng, dayKey, dayStart, closesAt, goalFor, facts, progress, split, poolOf };
+});
+</script>
 <script>/* SOL DUNK — browser client. Rendering, input, audio, betting flow. */
 (() => {
   'use strict';
-  const E = window.DunkEngine, PAY = window.DunkPaytable, BOT = window.DunkBot;
+  const E = window.DunkEngine, PAY = window.DunkPaytable, BOT = window.DunkBot, POTS = window.DunkPots;
   const CFG = Object.assign({ serverUrl: null, network: 'devnet', demoStart: 10, minBet: 0.001, maxBet: 100, solIconUrl: null }, window.SOL_DUNK_CONFIG || {});
   const W = E.WORLD, P = E.PHYS, DT = E.DT, NL = E.LEVELS, NH = E.HOOPS_PER_LEVEL, EV = E.EV;
   const $ = (id) => document.getElementById(id);
@@ -1576,6 +1733,85 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   })();
   function buzz(ms) { if (settings.haptics && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } }
 
+  // ---------------------------------------------------------------- challenge pot, demo (rules in src/pots.cjs)
+  // The demo runs the same pot with demo SOL. There are no other players in the demo, so the other entrants are
+  // simulated, and labelled so: a field drawn from the pot's key, each a casual, average or good player who plays a
+  // few runs with the simulator's chance of making the challenge. The real pot (ServerBank) has only real players.
+  const DemoPot = {
+    s: null, last: null, fee: POTS.ENTRY,
+    load() {
+      if (this.s) return this.s;
+      const s = store.get('pot', null), day = POTS.dayKey(Date.now());
+      this.s = s && s.key ? s : { key: day, open: POTS.dayStart(day), carryIn: 0, me: null };
+      this.last = store.get('potLast', null);
+      return this.s;
+    },
+    save() { store.set('pot', this.s); store.set('potLast', this.last); },
+    field(key, open) {
+      const close = POTS.closesAt(key), g = POTS.goalFor(key), r = POTS.rng('field|' + key), out = [];
+      const n = 24 + Math.floor(r() * 48);
+      for (let i = 0; i < n; i++) {
+        const join = open + r() * (close - open) * 0.9, u = r(), skill = u < 0.35 ? 0 : u < 0.8 ? 1 : 2;
+        const runs = 1 + Math.floor(-Math.log(1 - r() * 0.999) * 5);
+        let k = -1;
+        for (let j = 0; j < runs; j++) if (r() < g.p[skill]) { k = j; break; }
+        out.push({ join, done: k < 0 ? null : join + ((k + 1) / (runs + 1)) * (close - join) });
+      }
+      return out;
+    },
+    // close the pot once its day is over (or now, when the demo's "close now" asks), pay out and open the next one
+    roll(force) {
+      const s = this.load(), now = Date.now(), close = POTS.closesAt(s.key);
+      if (!force && now < close) return false;
+      const sim = this.field(s.key, s.open), mine = s.me ? 1 : 0, myDone = !!(s.me && s.me.done);
+      const winners = sim.filter((x) => x.done !== null).length + (myDone ? 1 : 0);
+      const r = POTS.split((sim.length + mine) * this.fee, s.carryIn, winners, false);
+      const won = myDone ? round9(r.share) : 0;
+      if (won) wallet.balance = round9(wallet.balance + won);
+      this.last = { key: s.key, goal: POTS.goalFor(s.key).text, entrants: sim.length + mine, winners, share: round9(r.share), rolled: winners ? 0 : round9(r.carry), me: s.me ? { done: myDone, won } : null };
+      const today = POTS.dayKey(now), sameDay = String(s.key).slice(0, 10) === today;
+      const key = force && sameDay ? today + '#' + ((+String(s.key).split('#')[1] || 0) + 1) : today;
+      this.s = { key, open: force && sameDay ? now : POTS.dayStart(today), carryIn: winners ? 0 : round9(r.carry), me: null };
+      this.save(); saveAll();
+      return true;
+    },
+    view() {
+      const s = this.load(), now = Date.now(), g = POTS.goalFor(s.key);
+      const joined = this.field(s.key, s.open).filter((x) => x.join <= now), mine = s.me ? 1 : 0;
+      return {
+        key: s.key, goal: { id: g.id, kind: g.kind, n: g.n, tier: g.tier, text: g.text, sub: POTS.tierText(g.tier) },
+        fee: this.fee, rake: POTS.RAKE, entrants: joined.length + mine,
+        completed: joined.filter((x) => x.done !== null && x.done <= now).length + (s.me && s.me.done ? 1 : 0),
+        pool: round9(POTS.poolOf((joined.length + mine) * this.fee, s.carryIn)), carryIn: s.carryIn, closesAt: POTS.closesAt(s.key), simulated: true,
+        me: s.me ? { entered: true, done: !!s.me.done, best: s.me.best || 0 } : { entered: false }, last: this.last
+      };
+    },
+    enter() {
+      this.roll();
+      const s = this.load();
+      if (s.me) throw new Error('You’re already in this pot');
+      if (POTS.closesAt(s.key) - Date.now() < 60000) throw new Error('This pot is about to close. The next one opens at midnight UTC.');
+      if (wallet.balance + 1e-12 < this.fee) throw new Error('Not enough demo SOL for the entry.');
+      wallet.balance = round9(wallet.balance - this.fee);
+      s.me = { at: Date.now(), done: false, best: 0 };
+      this.save(); saveAll();
+      return this.view();
+    },
+    // a level the demo bank has just verified: did it complete the challenge? (runs started after entering only)
+    check(cur) {
+      this.roll();
+      const s = this.load();
+      if (!s.me || !(cur.potAt >= s.me.at)) return null;
+      const pr = POTS.progress(POTS.goalFor(s.key), cur.levels, cur.di);
+      if (!pr.counts) return { counts: false, done: !!s.me.done };
+      if (pr.value > (s.me.best || 0)) s.me.best = pr.value;
+      const just = !s.me.done && pr.done;
+      if (just) { s.me.done = true; s.me.doneAt = Date.now(); }
+      this.save();
+      return { counts: true, done: !!s.me.done, just, value: pr.value, target: pr.target };
+    }
+  };
+
   // ---------------------------------------------------------------- bank: demo (local) and server (real SOL)
   const LocalBank = {
     real: false,
@@ -1587,7 +1823,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       wallet.balance = round9(wallet.balance - bet);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
       saveAll();
-      this.cur = { di, bet, serverSeed, clientSeed, nonce, level: 1, total: 1, streak: 0 };
+      this.cur = { di, bet, serverSeed, clientSeed, nonce, level: 1, total: 1, streak: 0, levels: [], potAt: Date.now() };
       return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, levelSeed: deriveLevelSeed(serverSeed, clientSeed, nonce, 1) };
     },
     // Re-verifies the level by replaying the taps, exactly as the server does.
@@ -1597,14 +1833,21 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       const r = E.replay(def, taps);
       const a = E.applyLevel(PAY.PAYTABLE[c.di][L - 1], r.outcomes, c.total, E.DIFFS[c.di].maxWin, c.streak);
       c.total = a.total; c.streak = a.streak; c.level = L;
+      c.levels.push({ outcomes: r.outcomes.join(''), clear: r.result === 'clear' });
+      const pot = DemoPot.check(c);
       const status = a.capped ? 'maxwin' : r.result === 'clear' ? (L >= NL ? 'final' : 'checkpoint') : 'bust';
       let payout = 0;
       if (status === 'maxwin' || status === 'final') payout = this._pay();
-      return { status, total: c.total, payout, serverSeed: status === 'checkpoint' ? null : c.serverSeed };
+      return { status, total: c.total, payout, serverSeed: status === 'checkpoint' ? null : c.serverSeed, pot };
     },
     async next() { const c = this.cur; c.level++; return { levelSeed: deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, c.level) }; },
     async cashout() { const payout = this._pay(); return { payout, serverSeed: this.cur.serverSeed }; },
-    _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); saveAll(); return payout; }
+    _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); saveAll(); return payout; },
+    pot: {
+      async state() { DemoPot.roll(); return DemoPot.view(); },
+      async enter() { return DemoPot.enter(); },
+      async closeNow() { DemoPot.roll(true); return DemoPot.view(); } // demo only
+    }
   };
 
   // Real SOL: talks to server/server.mjs. Only active when SOL_DUNK_CONFIG.serverUrl is set.
@@ -1650,10 +1893,22 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     },
     async level(L, taps) {
       const j = await this.api('/api/run/level', { runId: this.runId, level: L, taps });
-      return { status: j.status, total: j.total, payout: (j.payoutLamports || 0) / 1e9, serverSeed: j.serverSeed || null };
+      return { status: j.status, total: j.total, payout: (j.payoutLamports || 0) / 1e9, serverSeed: j.serverSeed || null, pot: j.pot || null };
     },
     async next() { return this.api('/api/run/continue', { runId: this.runId }); },
-    async cashout() { const j = await this.api('/api/run/cashout', { runId: this.runId }); return { payout: j.payoutLamports / 1e9, serverSeed: j.serverSeed }; }
+    async cashout() { const j = await this.api('/api/run/cashout', { runId: this.runId }); return { payout: j.payoutLamports / 1e9, serverSeed: j.serverSeed }; },
+    pot: {
+      view(j) {
+        const L = j.last;
+        return {
+          key: j.key, goal: j.goal, fee: j.feeLamports / 1e9, rake: j.rake, entrants: j.entrants, completed: j.completed,
+          pool: j.poolLamports / 1e9, carryIn: j.carryInLamports / 1e9, closesAt: j.closesAt, simulated: false, me: j.me || null,
+          last: L ? { key: L.key, goal: L.goal, entrants: L.entrants, winners: L.winners, share: L.shareLamports / 1e9, rolled: L.rolledLamports / 1e9, me: L.me ? { done: L.me.done, won: L.me.wonLamports / 1e9 } : null } : null
+        };
+      },
+      async state() { return this.view(await ServerBank.api('/api/pot')); },
+      async enter() { return this.view(await ServerBank.api('/api/pot/enter', {})); }
+    }
   };
   const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
   function b58encode(bytes) {
@@ -1854,6 +2109,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     potCap: $('potCap'), mult: $('hudMult'), delta: $('potDelta')
   };
   const ICON = {
+    trophy: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 2.5h10V4h3.5v2.6a4.6 4.6 0 0 1-4.3 4.6A5.6 5.6 0 0 1 13.2 14v3h3.3v4.5h-9V17h3.3v-3a5.6 5.6 0 0 1-3-2.8 4.6 4.6 0 0 1-4.3-4.6V4H7V2.5Zm10 3.4v3.4a2.6 2.6 0 0 0 1.5-2.4v-1H17ZM7 5.9H5.5v1a2.6 2.6 0 0 0 1.5 2.4V5.9Z"/></svg>',
     flame: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 23c-4.4 0-8-3.1-8-7.5 0-3.3 2-5.6 3.7-7.4.6-.6 1.6-.2 1.6.7 0 1.4.9 2.6 2.1 2.6 1.1 0 1.8-.9 1.8-2.1 0-2.3-1.2-4.2-1.2-6.6 0-.9 1-1.5 1.7-1C17 3.9 20 8.4 20 14.5 20 19.6 16.4 23 12 23Z"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     medal: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 1.5h4l2.2 5-2.1 2.6H9.4L6.5 1.5Zm11 0h-4l-1.3 3 2.1 4.6 3.2-7.6Z" opacity=".55"/><circle cx="12" cy="15.5" r="7"/><path d="M12 11.6l1.15 2.35 2.6.38-1.88 1.83.44 2.59L12 17.53l-2.31 1.22.44-2.59-1.88-1.83 2.6-.38z" fill="#000" opacity=".3"/></svg>',
@@ -1966,6 +2222,8 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   function dailyNow(c, r) { const v = r[c.k] || 0; return Math.min(c.n, DAILY_BY[c.k].sum ? c.p + v : Math.max(c.p, v)); }
   function liveGoals() {
     if (!run.told || phase === 'lobby') return;
+    const pp = potProgress();
+    if (pp && pp.done && !run.told.pot) { run.told.pot = 1; potNotice(); }
     const r = runFacts(0);
     for (const c of dailySet()) {
       if (c.done || run.told['d:' + c.k] || dailyNow(c, r) < c.n) continue;
@@ -1976,8 +2234,10 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       run.told[a.id] = 1; notice('n-ach', ICON.medal, a.name, a.desc + ' · +' + a.xp + ' XP');
     }
   }
-  // the next daily goal, shown under each level's banner
+  // the next goal, shown under each level's banner: the pot challenge if you're in it, else the next daily
   function goalLine() {
+    const pl = potLine();
+    if (pl) return pl;
     const r = runFacts(0);
     for (const c of dailySet()) { if (!c.done && !run.told['d:' + c.k]) { const p = dailyNow(c, r); if (p < c.n) return dailyText(c) + ' · ' + p + '/' + c.n; } }
     return '';
@@ -2081,6 +2341,8 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     $('playBtn').addEventListener('click', () => startRun());
     $('profBtn').addEventListener('click', () => openPanel('profile'));
     $('dailyBtn').addEventListener('click', () => openPanel('profile'));
+    $('potBtn').querySelector('.p-ic').innerHTML = ICON.trophy;
+    $('potBtn').addEventListener('click', () => openPanel('pot'));
   }
   function setBet(v) {
     const max = Math.min(CFG.maxBet, Math.max(CFG.minBet, bank.balance()));
@@ -2106,6 +2368,79 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     setBalance();
   }
 
+  // ---------------------------------------------------------------- challenge pot: lobby row, sheet, run progress
+  let potState = null, potBusy = false;
+  async function refreshPot() {
+    if (potBusy) return;
+    potBusy = true;
+    try { potState = await bank.pot.state(); } catch (e) { potState = potState || null; }
+    potBusy = false;
+    renderPotRow();
+    if (!ui.panel.classList.contains('hide') && $('panelBody').dataset.kind === 'pot') { $('panelBody').innerHTML = potHtml(); wirePanel('pot'); }
+    // a pot you were in has closed since you last looked: say how it went
+    const L = potState && potState.last;
+    if (L && L.me && prefs.potSeen !== L.key) {
+      prefs.potSeen = L.key; saveAll();
+      if (L.me.won > 0) { toast('Pot closed: you won ' + fmtSol(L.me.won) + ' SOL'); Sound.cash(); setBalance(); }
+      else toast('Pot closed: ' + L.winners + ' of ' + L.entrants + ' made it');
+    }
+  }
+  const leftText = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; };
+  function renderPotRow() {
+    const p = potState, el = $('potBtn');
+    el.classList.toggle('hide', !p);
+    if (!p) return;
+    const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
+    $('potT').textContent = p.goal.text;
+    $('potV').textContent = (p.pool >= 1 ? p.pool.toFixed(2) : fmtBet(p.pool)) + ' SOL';
+    $('potS').textContent = done ? 'Done' : inn ? 'You’re in' : 'Enter ' + fmtBet(p.fee);
+    el.classList.toggle('in', inn && !done); el.classList.toggle('done', done);
+    el.setAttribute('aria-label', `Pot challenge: ${p.goal.text} ${p.goal.sub}. ${fmtBal(p.pool)} SOL in the pot, ${p.entrants} in. ` + (done ? 'You made it.' : inn ? 'You’re in.' : 'Entry ' + fmtBet(p.fee) + ' SOL.'));
+  }
+  // where the run stands on the pot challenge (null if you're not in it, it's done, or this tier doesn't count)
+  function potLevels() {
+    return (run.log || []).map((lv, i, a) => ({ outcomes: lv.filter((o) => o !== 'X').map((o) => (o === 'R' ? 'R' : 'S')).join(''), clear: i < a.length - 1 }));
+  }
+  function potProgress() {
+    const p = potState;
+    if (!p || !p.me || !p.me.entered || p.me.done || !run.log) return null;
+    return POTS.progress(p.goal.id, potLevels(), run.di);
+  }
+  function potLine() {
+    const p = potState;
+    if (!p || !p.me || !p.me.entered || p.me.done) return '';
+    if (run.di < p.goal.tier) return 'The pot challenge counts ' + p.goal.sub;
+    const pr = potProgress();
+    return pr ? 'Pot · ' + p.goal.text + ' · ' + pr.value + '/' + pr.target : '';
+  }
+  function potNotice() { notice('n-pot', ICON.trophy, 'Pot challenge done', 'You’re in for a share of the pot' + (potState ? ' · ' + fmtBal(potState.pool) + ' SOL' : '')); }
+  // a level the bank verified: the official word on the pot
+  function potResult(note) {
+    if (!note || !potState || !potState.me) return;
+    if (note.value > (potState.me.best || 0)) potState.me.best = note.value;
+    if (note.done) potState.me.done = true;
+    if (note.just) { run.potJust = true; if (!run.told.pot) { run.told.pot = 1; potNotice(); } }
+  }
+  function potHtml() {
+    const p = potState;
+    if (!p) return '<p>The pot isn’t available right now. Try again in a moment.</p>';
+    const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done), left = p.closesAt - Date.now();
+    const each = p.completed ? p.pool / p.completed : 0;
+    let me;
+    if (done) me = `<div class="pot-me done">${ICON.check}<div><b>You made it</b><span>You’ll split the pot with everyone else who does. If it closed now: ${fmtSol(each)} SOL each.</span></div></div>`;
+    else if (inn) me = `<div class="pot-me">${ICON.target}<div><b>You’re in</b><span>Make it in any run ${p.goal.sub} before the pot closes.${p.me.best ? ' Best so far: ' + p.me.best + ' / ' + p.goal.n + '.' : ''}</span></div></div>`;
+    else me = `<button class="btn btn-go" id="potEnter">Enter for ${fmtBet(p.fee)} SOL</button><div class="err" id="potErr" role="alert"></div>`;
+    const L = p.last;
+    const last = L ? `<div class="pot-last"><span class="k">Last pot</span><span>${L.goal} · ${L.winners ? L.winners + ' of ' + L.entrants + ' made it · ' + fmtSol(L.share) + ' SOL each' : 'nobody made it · ' + fmtSol(L.rolled) + ' SOL rolled over'}${L.me ? (L.me.won > 0 ? ' · <b class="won">you won ' + fmtSol(L.me.won) + ' SOL</b>' : ' · you didn’t make it') : ''}</span></div>` : '';
+    return `<div class="pot-goal"><span class="pot-ic">${ICON.trophy}</span><div><b>${p.goal.text}</b><span>In one run ${p.goal.sub}</span></div></div>
+      <div class="big pot-big"><span class="num">${fmtBal(p.pool)}</span><span class="unit">SOL</span></div>
+      <div class="tiles"><div><b>${p.entrants}</b><span>Entered</span></div><div><b>${p.completed}</b><span>Made it</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Closing'}</b><span>Left</span></div></div>
+      ${me}
+      <p class="pot-rules">Everyone who completes the challenge before the pot closes (midnight UTC) splits it equally. The house keeps ${Math.round(p.rake * 100)}% of each entry; if nobody makes it, the pot rolls over to the next one. Only runs you start after entering count, and your runs are bets as usual.${p.carryIn > 0 ? ' This pot includes ' + fmtSol(p.carryIn) + ' SOL rolled over.' : ''}</p>
+      ${last}
+      ${p.simulated ? `<div class="pot-demo"><p>Demo: the other entrants are simulated, from how often players at different skill levels make the challenge.</p><button class="btn btn-plain" id="potClose">Close this pot now</button></div>` : ''}`;
+  }
+
   // ---------------------------------------------------------------- run flow
   async function startRun() {
     if (run.busy || (phase !== 'lobby' && phase !== 'over')) return;
@@ -2115,7 +2450,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     try {
       const r = await bank.start(prefs.di, bet);
       Object.assign(run, { di: prefs.di, bet, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.levelSeed }, RUN_FRESH);
-      run.log = []; run.told = {}; run.share = ''; // every ring of the run, and the goals already announced
+      run.log = []; run.told = {}; run.share = ''; run.potJust = false; // every ring of the run, and the goals already announced
       $('lobbyErr').textContent = '';
     } catch (e) {
       $('lobbyErr').textContent = e.message; run.busy = false;
@@ -2146,7 +2481,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     profile.lv[run.di][run.level - 1][0]++;
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
     if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
-    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', run.level === 1 && newPlayer() ? 'Drop down through each ring' : '');
+    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', run.level === 1 ? (newPlayer() ? 'Drop down through each ring' : potLine()) : '');
   }
 
   function settleOffset() { ball.x += ball.ox; ball.y += ball.oy; ball.ox = 0; ball.oy = 0; }
@@ -2243,6 +2578,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     const L = run.level;
     bank.level(L, run.taps.slice()).then((r) => {
       if (r.status !== 'checkpoint' || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
+      potResult(r.pot);
       setTimeout(() => showCheckpoint(), REDUCED ? 100 : CALL.busy ? 1150 : 650);
     }).catch(netFail);
   }
@@ -2262,6 +2598,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     const L = run.level, taps = run.taps.slice();
     bank.level(L, taps).then((r) => {
       if (r.status !== 'bust') return verifyFail();
+      potResult(r.pot);
       run.serverSeed = r.serverSeed || '';
       record(0, 'bust');
       setTimeout(() => showResult(titles[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtSol(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 800);
@@ -2290,6 +2627,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     const L = run.level;
     bank.level(L, run.taps.slice()).then((r) => {
       if (r.status !== kind || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
+      potResult(r.pot);
       run.serverSeed = r.serverSeed || '';
       winFx(kind === 'maxwin' ? 1.6 : 1.3);
       record(r.payout, kind);
@@ -2395,7 +2733,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
     $('againAmt').textContent = fmtBet(prefs.bet) + ' SOL';
     showProgress(pr);
-    show(ui.res, true); armCard(ui.res, 700);
+    show(ui.res, true); armCard(ui.res, 700); refreshPot();
     setTimeout(() => ui.res.focus({ preventScroll: true }), 60);
     refreshLobby();
   }
@@ -2440,6 +2778,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       Sound.levelUp(); buzz([10, 40, 10]);
     }, 1100));
     const g = [];
+    if (run.potJust && potState) g.push(['pot', ICON.trophy, 'Pot challenge done · in for a share']);
     pr.unlocks.forEach((u) => g.push(['unlock', '', 'New ' + itemName(u), u]));
     pr.achs.forEach((x) => g.push(['ach', ICON.medal, x.name + ' · +' + x.xp + ' XP']));
     pr.dailies.forEach((c) => g.push(['daily', ICON.check, dailyText(c) + ' · +' + c.xp + ' XP']));
@@ -2459,7 +2798,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     phase = 'lobby';
     run.st = null; run.streak = 0; view.st = null; view.prevHoops = []; ball.lastVis = 0;
     attract.wait = 0.3; attract.st = null;
-    show(ui.lobby, true); refreshLobby();
+    show(ui.lobby, true); refreshLobby(); refreshPot();
   }
   if (window.ResizeObserver) { try { new ResizeObserver(() => { sheetTopC = -1; }).observe(ui.lobby); } catch (e) { /* optional */ } }
 
@@ -3444,9 +3783,9 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   function openPanel(kind) {
     Sound.click();
     const body = $('panelBody'), title = $('panelTitle');
-    const map = { how: ['How to play', howHtml], odds: ['Odds', oddsHtml], stats: ['Stats', statsHtml], fair: ['Fairness', fairHtml], menu: ['Settings', menuHtml], wallet: ['Wallet', walletHtml], profile: ['Profile', profileHtml] };
+    const map = { pot: ['Pot challenge', potHtml], how: ['How to play', howHtml], odds: ['Odds', oddsHtml], stats: ['Stats', statsHtml], fair: ['Fairness', fairHtml], menu: ['Settings', menuHtml], wallet: ['Wallet', walletHtml], profile: ['Profile', profileHtml] };
     const [t, fn] = map[kind] || map.how;
-    title.textContent = t; body.innerHTML = fn();
+    title.textContent = t; body.innerHTML = fn(); body.dataset.kind = kind;
     body.scrollTop = 0;
     ui.scrim.classList.add('show'); show(ui.panel, true); document.body.classList.add('panel-open');
     wirePanel(kind);
@@ -3587,6 +3926,14 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   function wirePanel(kind) {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
     if (kind === 'profile') wireProfile();
+    if (kind === 'pot') {
+      on('potEnter', async (e) => {
+        e.currentTarget.disabled = true;
+        try { potState = await bank.pot.enter(); setBalance(); renderPotRow(); $('panelBody').innerHTML = potHtml(); wirePanel('pot'); Sound.click(); buzz(8); toast('You’re in. Make it in any run ' + potState.goal.sub + '.'); }
+        catch (err) { const el = $('potErr'); if (el) el.textContent = err.message; e.currentTarget.disabled = false; }
+      });
+      on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
+    }
     if (kind === 'odds') document.querySelectorAll('#oddsSeg button').forEach((b) => b.addEventListener('click', () => { oddsTier = +b.dataset.t; $('panelBody').innerHTML = oddsHtml(); wirePanel('odds'); }));
     on('fairVerify', () => {
       const h = stats.history[0];
@@ -3605,7 +3952,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       if (phase !== 'lobby' && phase !== 'over') { toast('Finish this run first.'); return; }
       wallet.balance = CFG.demoStart; saveAll(); refreshLobby(); closePanel(); toast('Demo balance reset to ' + CFG.demoStart + ' SOL');
     });
-    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; setBalance(); refreshLobby(); openPanel('wallet'); } catch (e) { $('wErr').textContent = e.message; } });
+    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; setBalance(); refreshLobby(); refreshPot(); openPanel('wallet'); } catch (e) { $('wErr').textContent = e.message; } });
     on('wDeposit', async () => { try { await ServerBank.deposit(parseFloat($('wAmt').value)); setBalance(); openPanel('wallet'); toast('Deposit credited'); } catch (e) { $('wErr').textContent = e.message; } });
     on('wWithdraw', async () => { try { await ServerBank.withdraw(parseFloat($('wAmt').value)); setBalance(); openPanel('wallet'); toast('Withdrawal sent'); } catch (e) { $('wErr').textContent = e.message; } });
   }
@@ -3617,7 +3964,8 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       if (snap.profile) fixProfile(Object.assign(profile, snap.profile));
     }
     if (!(wallet.balance >= 0)) wallet.balance = CFG.demoStart;
-    syncMute(); applyFlameTheme(); buildLobby(); refreshLobby(); setHudMode(false);
+    syncMute(); applyFlameTheme(); buildLobby(); refreshLobby(); setHudMode(false); refreshPot();
+    setInterval(() => { if (phase === 'lobby' && !document.hidden) refreshPot(); }, 30000); // entrants, pot and time left move on
     attract.wait = 0;
     if (document.fonts && document.fonts.load) document.fonts.load('800 20px "Big Shoulders Display"').catch(() => {}); // canvas text uses it too
     requestAnimationFrame((t) => { last = t; frame(t); });
@@ -3642,6 +3990,8 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     hold: (on) => { dbg.hold = !!on; },   // stop the clock with the last frame on screen
     step: (n) => { dbg.steps = n | 0; },  // while held: play n frames of 1/60 s
     stepsLeft: () => dbg.steps | 0,
+    pot: () => potState, // the challenge pot as the client sees it
+    bal: () => bank.balance(),
     sfx: (name, args, secs) => Sound.render(name, args, secs), // a sound's samples, rendered offline
     ballScreen: () => ({ x: view.bsx, y: view.bsy }),
     equip: (t, id) => { if (COS[t] && COS[t][id]) { profile.eq[t] = id; if (t === 'flame') applyFlameTheme(); } } // test hook: try a skin without unlocking it
