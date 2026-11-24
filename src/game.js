@@ -16,6 +16,8 @@
   // ---------------------------------------------------------------- format
   function fmtSol(x) { const a = Math.abs(x); return x.toFixed(a >= 100 ? 2 : a >= 10 ? 3 : 4); }
   function fmtBal(x) { return x >= 1 ? x.toFixed(2) : x.toFixed(4); }
+  // a display amount: fmtSol's precision without the trailing zeros, but at least two decimals (0.13, 0.10, 0.1186)
+  function fmtAmt(x) { const [i, f = ''] = fmtSol(x).split('.'), t = f.replace(/0+$/, ''); return i + '.' + (t.length >= 2 ? t : (t + '00').slice(0, 2)); }
   function fmtBet(x) { return (Math.round(x * 1e4) / 1e4).toString(); }
   function fmtMult(m) { return (m < 10 ? m.toFixed(2) : m < 100 ? m.toFixed(1) : Math.round(m).toString()) + '×'; }
   function fmtX(m) { return '×' + m.toFixed(3); }
@@ -1114,7 +1116,7 @@
     const key = text + '|' + col + '|' + px.toFixed(1);
     if (mult.key === key) return mult;
     const el = mult.el || document.createElement('canvas');
-    const font = '800 ' + px.toFixed(1) + 'px ' + FONT_DISPLAY;
+    const font = '700 ' + px.toFixed(1) + 'px ' + FONT_DISPLAY;
     let g = el.getContext('2d');
     g.font = font;
     const w = Math.ceil(g.measureText(text).width + px * 0.25), h = Math.ceil(px * 1.35);
@@ -1295,7 +1297,7 @@
     requestAnimationFrame(tick);
   }
   let potShown = 0, potUpTimer = 0;
-  function fmtDelta(d) { return d >= 0.0001 ? fmtSol(d) : d >= 0.000001 ? d.toFixed(6) : d.toExponential(1); }
+  function fmtDelta(d) { return d >= 0.0001 ? fmtSol(d) : d >= 0.000001 ? d.toFixed(6) : '0'; }
   function setPot(animate) {
     ui.potCap.classList.toggle('prize', run.mode === 'special');
     if (run.mode === 'special') { // the special pays only for clearing every ring: count the rings, show the prize
@@ -1501,7 +1503,6 @@
     const b = prefs.bet, up = LADDER.find((x) => x > b + 1e-9), down = LADDER.filter((x) => x < b - 1e-9).pop();
     setBet(dir > 0 ? (up != null ? up : b) : (down != null ? down : CFG.minBet));
   }
-  function avgClear(di, L) { return PAY.AVG_CLEAR[di][L - 1]; }
   // the most a run can really pay on each tier: every ring a swish through all 8 levels, or the tier's cap if that's lower
   const TOP = PAY.PAYTABLE.map((rows, di) => {
     let m = 1, st = 0;
@@ -1601,13 +1602,13 @@
     let me;
     if (done) me = `<div class="pot-me done">${ICON.check}<div><b>You made it</b><span>You’ll split the pot with everyone else who does. If it closed now: ${fmtSol(each)} SOL each.</span></div></div>`;
     else if (inn) me = `<div class="pot-me">${ICON.target}<div><b>You’re in</b><span>Make it in any run ${p.goal.sub} before the pot closes.${p.me.best ? ' Best so far: ' + p.me.best + ' / ' + p.goal.n + '.' : ''}</span></div></div>`;
-    else me = `<button class="btn btn-go" id="potEnter">Enter for ${fmtBet(p.fee)} SOL</button><div class="err" id="potErr" role="alert"></div>`;
+    else me = `<button class="btn btn-primary" id="potEnter">Enter for ${fmtBet(p.fee)} SOL</button><div class="err" id="potErr" role="alert"></div>`;
     const L = p.last;
     const last = L ? `<div class="pot-last"><span class="k">Last pot</span><span>${L.goal} · ${L.winners ? L.winners + ' of ' + L.entrants + ' made it · ' + fmtSol(L.share) + ' SOL each' : 'nobody made it · ' + fmtSol(L.rolled) + ' SOL rolled over'}${L.me ? (L.me.won > 0 ? ' · <b class="won">you won ' + fmtSol(L.me.won) + ' SOL</b>' : ' · you didn’t make it') : ''}</span></div>` : '';
     return `<div class="pot-goal"><span class="pot-ic">${ICON.trophy}</span><div><b>${p.goal.text}</b><span>In one run ${p.goal.sub}</span></div></div>
-      <div class="big pot-big"><span class="num">${fmtBal(p.pool)}</span><span class="unit">SOL</span></div>
-      <div class="tiles"><div><b>${p.entrants}</b><span>Entered</span></div><div><b>${p.completed}</b><span>Made it</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Closing'}</b><span>Left</span></div></div>
+      <div class="sp-prize"><span class="k">In the pot</span><div class="big"><span class="num">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></div></div>
       ${me}
+      <div class="tiles"><div><b>${p.entrants}</b><span>Entered</span></div><div><b>${p.completed}</b><span>Made it</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Closing'}</b><span>Left</span></div></div>
       <p class="pot-rules">Everyone who completes the challenge before the pot closes (midnight UTC) splits it equally. The house keeps ${Math.round(p.rake * 100)}% of each entry; if nobody makes it, the pot rolls over to the next one. Only runs you start after entering count, and your runs are bets as usual.${p.carryIn > 0 ? ' This pot includes ' + fmtSol(p.carryIn) + ' SOL rolled over.' : ''}</p>
       ${last}
       ${p.simulated ? `<div class="pot-demo"><p>Demo: the other entrants are simulated, from how often players at different skill levels make the challenge.</p><button class="btn btn-plain" id="potClose">Close this pot now</button></div>` : ''}`;
@@ -1631,13 +1632,13 @@
     if (!s) return '<div class="empty">The special level isn’t available right now. Try again in a moment.</div>';
     const left = s.closesAt - Date.now(), o = s.odds || [], back = (p) => Math.round((p || 0) * s.x * 100);
     const play = s.me.blocked ? '<div class="empty">The special level isn’t available on this account.</div>'
-      : `<button class="btn btn-go" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
+      : `<button class="btn btn-primary" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
     return `<div class="sp-card">
         <div class="sp-head"><div class="sp-name">${s.recipe.name}</div><div class="sp-blurb">${s.recipe.blurb} · ${s.recipe.rings} rings</div></div>
         <canvas class="sp-course" id="spCourse" aria-hidden="true"></canvas>
         <div class="sp-cap">A sample course. Every attempt gets a new one from its own seed.</div>
       </div>
-      <div class="sp-prize"><span class="k">Clear every ring to win</span><div class="big"><span class="num">${fmtSol(s.prize)}</span><span class="unit">SOL</span></div><span class="x">${s.x.toFixed(2)}× your ${fmtBet(s.fee)} SOL entry</span></div>
+      <div class="sp-prize"><span class="k">Clear every ring to win</span><div class="big"><span class="num">${fmtAmt(s.prize)}</span><span class="unit">SOL</span></div><span class="x">${s.x.toFixed(2)}× your ${fmtBet(s.fee)} SOL entry</span></div>
       ${play}
       <div class="tiles"><div><b>${s.me.tries}</b><span>Tries today</span></div><div><b>${s.me.wins}</b><span>Wins today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>Next special</span></div></div>
       <div class="sec-h"><h3>How often it’s beaten</h3></div>
@@ -1670,7 +1671,7 @@
     if (!s) return '';
     const act = s.me.blocked ? '<span class="pill off">Not available</span>' : `<button class="pill" id="chSpPlay">Play ${fmtBet(s.fee)}</button>`;
     return `<div class="cc"><button class="cc-open" data-page="special" aria-label="Today’s special: ${s.recipe.name}. Details"><span class="cc-k">Today’s special</span><span class="cc-n">${s.recipe.name}</span><span class="cc-s">${s.recipe.blurb} · ${s.recipe.rings} rings</span><span class="chev">${ICON.chev}</span></button>
-      <div class="cc-act"><span class="cc-v">Win <b class="num">${fmtSol(s.prize)}</b> SOL</span>${act}</div></div>`;
+      <div class="cc-act"><span class="cc-v">Win <b class="num">${fmtAmt(s.prize)}</b> SOL</span>${act}</div></div>`;
   }
   function potCard() {
     const p = potState;
@@ -1678,7 +1679,7 @@
     const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
     const act = done ? '<span class="pill ok">Made it</span>' : inn ? '<span class="pill in">You’re in</span>' : `<button class="pill" id="chPotEnter">Enter ${fmtBet(p.fee)}</button>`;
     return `<div class="cc"><button class="cc-open" data-page="pot" aria-label="Daily pot: ${p.goal.text}. Details"><span class="cc-k">Daily pot</span><span class="cc-n">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span><span class="chev">${ICON.chev}</span></button>
-      <div class="cc-act"><span class="cc-v"><b class="num gold">${fmtBal(p.pool)}</b> SOL pot · ${p.entrants} in</span>${act}</div></div>`;
+      <div class="cc-act"><span class="cc-v"><b class="num gold">${fmtAmt(p.pool)}</b> SOL pot · ${p.entrants} in</span>${act}</div></div>`;
   }
   function renderChallenges(keep) {
     const body = $('cBody'), y = body.scrollTop;
@@ -1830,9 +1831,9 @@
     if (o === 'S') {
       setStreakHud('pump');
       const s = run.streak;
-      if (s === 3) { callout('ON FIRE', 'Swish streak ×3', 'fire'); flash(heatRgb(0), 0.1); buzz([10, 25, 14]); Sound.cheer(0.25); }
-      else if (s === 5) { callout('SUPERNOVA', 'Max streak bonus', 'nova'); flash(heatRgb(1), 0.13); buzz([12, 25, 12, 25, 18]); Sound.cheer(0.55); }
-      else if (s >= 10 && s % 5 === 0) { callout(s === 10 ? 'UNSTOPPABLE' : s + ' IN A ROW', s + ' swishes in a row', 'nova'); flash(heatRgb(1), 0.14); Sound.cheer(0.85); }
+      if (s === 3) { callout('On fire', 'Swish streak ×3', 'fire'); flash(heatRgb(0), 0.1); buzz([10, 25, 14]); Sound.cheer(0.25); }
+      else if (s === 5) { callout('Supernova', 'Max streak bonus', 'nova'); flash(heatRgb(1), 0.13); buzz([12, 25, 12, 25, 18]); Sound.cheer(0.55); }
+      else if (s >= 10 && s % 5 === 0) { callout(s === 10 ? 'Unstoppable' : s + ' in a row', s + ' swishes in a row', 'nova'); flash(heatRgb(1), 0.14); Sound.cheer(0.85); }
     } else if (was > 1) setStreakHud('broke'); // a 2+ streak was burning: douse() plays the hiss
     addPoints(pts);
     if (capped) { endWin('maxwin'); return true; }
@@ -1844,7 +1845,7 @@
     const b = profile.best[run.di];
     if (!run.newBest && b > 0 && run.score > b) {
       run.newBest = true;
-      callout('NEW BEST', 'Beat your best of ' + b, 'gold'); Sound.best(); Sound.cheer(0.4); buzz([8, 30, 8]);
+      callout('New best', 'Beat your best of ' + b, 'gold'); Sound.best(); Sound.cheer(0.4); buzz([8, 30, 8]);
     }
   }
 
@@ -1858,7 +1859,7 @@
     Sound.checkpoint(); buzz([12, 40, 12]);
     if (run.lvlSw === NH) {
       run.perfect++;
-      callout('PERFECT LEVEL', `${NH} of ${NH} swishes · +${PERFECT_BONUS}`, 'gold');
+      callout('Perfect level', `${NH} of ${NH} swishes · +${PERFECT_BONUS}`, 'gold');
       flash('255,214,10', 0.14); Sound.perfect(); Sound.applause(0.45); confetti(ball.x, ball.y - 30, 40);
       addPoints(PERFECT_BONUS); view.pulse = 1;
     }
@@ -1893,7 +1894,7 @@
       potResult(r.pot);
       run.serverSeed = r.serverSeed || '';
       record(0, 'bust', r.missions);
-      setTimeout(() => showResult(BUST_TITLES[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtSol(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 650);
+      setTimeout(() => showResult(BUST_TITLES[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtAmt(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 650);
     }).catch(netFail);
   }
 
@@ -1909,7 +1910,9 @@
       winFx(1);
       record(r.payout, 'cashout', r.missions);
       show(ui.cp, false);
-      showResult('Cashed out', '+' + fmtSol(r.payout - run.bet), 'win', `${fmtSol(r.payout)} SOL · ${fmtMult(run.total)} after level ${run.level}`, r.payout - run.bet);
+      const profit = r.payout - run.bet; // cashing out at 1.00× gives the bet back: no green +0
+      if (profit < 0.00005) showResult('Cashed out', '0', 'even', `Your bet back · ${fmtMult(run.total)} after level ${run.level}`);
+      else showResult('Cashed out', '+' + fmtSol(profit), 'win', `${fmtAmt(r.payout)} SOL · ${fmtMult(run.total)} after level ${run.level}`, profit);
     } catch (e) { run.busy = false; netFail(e); }
   }
 
@@ -1924,7 +1927,7 @@
       winFx(kind === 'maxwin' ? 1.6 : 1.3);
       record(r.payout, kind, r.missions);
       const t = kind === 'maxwin' ? 'Max win' : 'Champion';
-      const s = kind === 'maxwin' ? `${E.DIFFS[run.di].maxWin}× cap · ${fmtSol(r.payout)} SOL` : `All ${NL} levels · ${fmtSol(r.payout)} SOL`;
+      const s = kind === 'maxwin' ? `${E.DIFFS[run.di].maxWin}× cap · ${fmtAmt(r.payout)} SOL` : `All ${NL} levels · ${fmtAmt(r.payout)} SOL`;
       setTimeout(() => showResult(t, '+' + fmtSol(r.payout - run.bet), 'win', s, r.payout - run.bet), 700);
     }).catch(netFail);
   }
@@ -1952,7 +1955,7 @@
       if (r.special) specState = r.special;
       run.serverSeed = r.serverSeed || '';
       recordSpecial(r.payout, won);
-      if (won) { winFx(1.4); setTimeout(() => showResult('Special cleared', '+' + fmtSol(r.payout - run.bet), 'win', `${R.name} · all ${n} rings · ${fmtSol(r.payout)} SOL`, r.payout - run.bet), 700); }
+      if (won) { winFx(1.4); setTimeout(() => showResult('Special cleared', '+' + fmtSol(r.payout - run.bet), 'win', `${R.name} · all ${n} rings · ${fmtAmt(r.payout)} SOL`, r.payout - run.bet), 700); }
       else setTimeout(() => showResult(BUST_TITLES[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `${R.name} · out at ring ${at} of ${n}`), REDUCED ? 200 : 650);
     }).catch(netFail);
   }
@@ -2022,9 +2025,11 @@
     phase = 'checkpoint';
     const L = run.level, pot = run.bet * run.total;
     $('cpKicker').textContent = 'Checkpoint ' + L + ' of ' + (NL - 1);
-    $('cpTitle').innerHTML = 'Level ' + L + ' cleared' + (run.lvlSw === NH ? '<span class="cp-badge">PERFECT</span>' : '');
+    $('cpTitle').innerHTML = 'Level ' + L + ' cleared' + (run.lvlSw === NH ? '<span class="cp-badge">Perfect</span>' : '');
     countUp($('cpPot'), run.bet * (run.lvlStart || 1), pot, fmtSol, 750);
-    $('cpMult').textContent = fmtMult(run.total) + ' · +' + fmtDelta(pot - run.bet) + ' SOL profit';
+    const profit = pot - run.bet;
+    $('cpMult').textContent = fmtMult(run.total) + (profit >= 0.00005 ? ' · +' + fmtDelta(profit) + ' SOL profit' : ' · your bet back');
+    $('cpMult').classList.toggle('flat', profit < 0.00005);
     // what the next level can pay (every ring swished, streak carried) and whether the streak carries over
     const nx = L + 1, di = run.di, pt = PAY.PAYTABLE[di][nx - 1];
     let up = run.total, s = run.streak;
@@ -2063,7 +2068,7 @@
     $('resAmount').className = 'big ' + cls;
     $('resSub').textContent = sub;
     const sp = run.mode === 'special';
-    run.share = shareText(sp ? (cls === 'win' ? 'Cleared it' : title + ' at ring ' + Math.min(run.st ? run.st.hoops.length : 0, run.hoops + 1)) : cls === 'win' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
+    run.share = shareText(sp ? (cls === 'win' ? 'Cleared it' : title + ' at ring ' + Math.min(run.st ? run.st.hoops.length : 0, run.hoops + 1)) : cls !== 'loss' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
     $('resStats').innerHTML = [[run.score, nb ? 'New best' : 'Score', nb], [run.hoops, 'Rings'], [run.best, 'Best streak']]
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
     $('againT').textContent = sp ? 'Try again' : 'Play again';
@@ -2483,9 +2488,9 @@
       c.drawImage(m.el, vw / 2 - m.w * k / 2, cy - m.h * k / 2, m.w * k, m.h * k);
       if (best > 0) {
         c.globalAlpha = (run.newBest ? 0.55 : 0.26) * fa;
-        c.font = '800 ' + (15 * scale).toFixed(1) + 'px ' + FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.font = '600 ' + (15 * scale).toFixed(1) + 'px ' + FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
         c.fillStyle = run.newBest ? '#f5c542' : '#ffffff';
-        c.fillText(run.newBest ? 'NEW BEST' : 'BEST ' + best, vw / 2, cy + 48 * scale);
+        c.fillText(run.newBest ? 'New best' : 'Best ' + best, vw / 2, cy + 48 * scale);
       }
       c.globalAlpha = 1;
     }
@@ -2731,9 +2736,9 @@
     c.translate(x, y);
     const lf = !back && next && h.cp ? clamp((x - (view.drawX || 0) - 70) / 80, 0, 1) : 0;
     if (lf > 0) { // the gold ring ahead says what it is, and gets out of the way as the ball arrives
-      c.font = '800 11px ' + FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.font = '700 12px ' + FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillStyle = 'rgba(245,197,66,' + ((0.62 + 0.18 * Math.sin(view.time * 5)) * lf).toFixed(3) + ')';
-      c.fillText('CHECKPOINT', 0, -(h.w / 2) * RING_RY - P.RP - 13);
+      c.fillText('Checkpoint', 0, -(h.w / 2) * RING_RY - P.RP - 13);
     }
     c.rotate(h.tilt);
     c.globalAlpha = h.st === 1 ? 0.32 : o.later || 1;
@@ -3198,12 +3203,12 @@
     for (const t of texts) {
       const k = t.life / t.max, a = k > 0.8 ? (1 - k) * 5 : Math.min(1, k * 2.5);
       const s = 1 + (k > 0.85 ? (k - 0.85) * 1.6 : 0);
-      c.font = '800 ' + (t.size * s).toFixed(1) + 'px ' + FONT_DISPLAY;
+      c.font = '700 ' + (t.size * s).toFixed(1) + 'px ' + FONT_DISPLAY;
       const half = c.measureText(t.text).width / 2 + 8;
       if (t.cx == null) t.x = clamp(t.x, wl + half, wr - half);
       else t.x += (view.camX - t.cx) * 0.75;
       t.cx = view.camX;
-      t.x = Math.min(t.x, wr - half);
+      t.x = clamp(t.x, wl + half, wr - half);
       if (view.wt != null) t.y = Math.max(t.y, view.wt + t.size * 0.9 + 4); // never behind the HUD
       const bx = view.drawX, by = view.drawY, r = RV + 4;
       const onBall = bx != null && !ball.hidden && Math.abs(bx - t.x) < half + r && by > t.y - t.size - r && by < t.y + 18 + r;
@@ -3402,19 +3407,26 @@
     fl.addColorStop(0, 'rgba(255,255,255,0)'); fl.addColorStop(0.5, A.edge); fl.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = fl; g.fillRect(0, fy, s, Math.max(1, s / 90));
   }
-  // Odds & fairness: what each ring pays on a tier, how often an average player clears each level, and how a run
-  // can be checked. Opened from the Play sheet it shows the tier you have picked.
+  // Odds & fairness: what each ring pays on a tier, the total a run has after each level, and how a run can be
+  // checked. Opened from the Play sheet it shows the tier you have picked.
   let oddsTier = null;
+  // a total's range: "1.02–1.09×", or one value when both ends round the same; a whole cap reads "250×", not "250.0×"
+  const fmtTot = (m) => (Number.isInteger(m) && m >= 10 ? m + '×' : fmtMult(m));
+  const multRange = (lo, hi) => { const a = fmtTot(lo), b = fmtTot(hi); return a === b ? a : a.slice(0, -1) + '–' + b; };
   function oddsHtml() {
     const di = oddsTier == null ? prefs.di : oddsTier;
     const D = E.DIFFS[di], rows = [];
+    let lo = 1, hi = 1, s = 0; // the total after each level: every ring a rim hit, or every ring a swish (the streak carries over)
     for (let L = 1; L <= NL; L++) {
       const pt = PAY.PAYTABLE[di][L - 1];
-      rows.push(`<tr><td>${L}</td><td class="r">${fmtX(pt.rim)}</td><td class="r">${fmtX(pt.swish[0])}</td><td class="r">${fmtX(pt.swish[pt.swish.length - 1])}</td><td class="r">${Math.round(avgClear(di, L) * 100)}%</td></tr>`);
+      for (let i = 0; i < NH; i++) { lo *= E.hoopMultiplier(pt, 'R', 0); s++; hi *= E.hoopMultiplier(pt, 'S', s); }
+      lo = Math.min(lo, D.maxWin); hi = Math.min(hi, D.maxWin);
+      rows.push(`<tr><td>${L}</td><td class="r">${pt.rim.toFixed(3)}</td><td class="r">${pt.swish[0].toFixed(3)}</td><td class="r">${pt.swish[pt.swish.length - 1].toFixed(3)}</td><td class="r tot">${multRange(lo, Math.min(hi, TOP[di]))}</td></tr>`);
     }
     return `<div class="seg odds-seg" id="oddsSeg" role="group" aria-label="Tier">${E.DIFFS.map((d, i) => `<button data-t="${i}" aria-pressed="${i === di}">${d.name}</button>`).join('')}</div>
-      <div class="tbl"><table><thead><tr><th>Level</th><th class="r">Rim</th><th class="r">Swish</th><th class="r">5+ streak</th><th class="r">Avg clears</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
-      <div class="prose"><p>Each ring multiplies your pot. ${D.name} pays up to <b>${TOP[di]}×</b> your bet. An average player who cashes out at the first checkpoint gets back about ${Math.round(PAY.AVG_RTP[di][0] * 100)}% of their bet over time, and less the deeper they go. Skilled players do better.</p></div>
+      <div class="tbl"><table><thead><tr><th>Level</th><th class="r">Rim</th><th class="r">Swish</th><th class="r">5+ streak</th><th class="r">Total</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
+      <div class="prose"><p>Rim, Swish and 5+ streak are what one ring multiplies your pot by on that level. <b>Total</b> is your multiplier once you clear the level: the low end if every ring so far was a rim hit, the high end if every one was a swish (your streak carries over between levels).</p>
+      <p>${D.name} pays up to <b>${TOP[di]}×</b> your bet. An average player who cashes out at the first checkpoint gets back about ${Math.round(PAY.AVG_RTP[di][0] * 100)}% of their bet over time, and less the deeper they go. Skilled players do better.</p></div>
       <div class="sec-h"><h3>Fairness</h3></div>
       <div class="prose">${fairHtml()}</div>`;
   }
@@ -3457,7 +3469,7 @@
   };
   function statsHtml() {
     const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–', net = stats.returned - stats.wagered;
-    return `<div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : '−'}${fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
+    return `<div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${Math.abs(net) < 0.00005 ? '' : net > 0 ? 'pos' : 'neg'}">${Math.abs(net) < 0.00005 ? '0' : (net > 0 ? '+' : '−') + fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
       <div class="sec-h"><h3>Best scores</h3></div>
       <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
       <div class="sec-h"><h3>Recent runs</h3>${stats.history.length ? '<span>Newest first</span>' : ''}</div>
@@ -3693,7 +3705,7 @@
       const fresh = profile.fresh.includes(t + ':' + u.id), nm = COS[t][u.id].name;
       return `<button class="item${t === 'court' ? ' court' : ''}${has ? '' : ' locked'}${eq ? ' eq' : ''}${sel ? ' sel' : ''}" data-id="${u.id}" aria-pressed="${eq}" aria-label="${nm}, ${RARITY[u.r]}${has ? (eq ? ', equipped' : '') : ', locked: ' + unlockReq(u)}">` +
         `<canvas width="112" height="112"></canvas><span class="nm">${has ? nm : unlockReq(u)}</span>` +
-        (u.r ? `<span class="rb r${u.r}"></span>` : '') + (has ? (fresh ? '<span class="new"></span>' : '') : `<span class="lock">${ICON.lock}</span>`) + '</button>';
+        (has ? (fresh ? '<span class="new"></span>' : '') : `<span class="lock">${ICON.lock}</span>`) + '</button>';
     }).join('');
     grid.querySelectorAll('.item').forEach((b) => {
       drawThumb(b.querySelector('canvas'), t, b.dataset.id);
