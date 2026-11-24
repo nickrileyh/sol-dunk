@@ -1200,8 +1200,9 @@
     score: 0, cleared: 0, perfect: 0, mov: 0, tilt: 0, fires: 0, novas: 0, lvlSw: 0, newBest: false, prog: null, lost: false };
   const RUN_FRESH = { score: 0, cleared: 0, perfect: 0, mov: 0, tilt: 0, fires: 0, novas: 0, lvlSw: 0, newBest: false, prog: null, lost: false };
   const attract = { st: null, bot: null, wait: 0, level: 1, streak: 0, acc: 0, tap: false };
-  // navigation: which tab is open, and what the locker's live preview should show (fx: force a flame streak)
-  const nav = { tab: 'play', cat: 'ball', fx: null, cover: false, try: null };
+  // navigation: which tab is open, the page pushed over it (if any), and what the locker's live preview should show
+  // (fx: force a flame streak)
+  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null };
   // rings from the level just played that are already behind the ball (never the unplayed ones ahead)
   function keepBehind(st) {
     if (!st) return [];
@@ -1234,6 +1235,9 @@
     shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 5.8v5.5c0 4.4 2.9 8.1 7 9.7 4.1-1.6 7-5.3 7-9.7V5.8z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/></svg>',
     gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 13.5a7.7 7.7 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.6 7.6 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.7 7.7 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 2.6-1.5l2.4 1 2-3.4z"/></svg>',
     clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+    wallet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="6.5" width="17" height="13" rx="2.6"/><path d="M6.5 6.5 15 4a1.6 1.6 0 0 1 2 1.2l.3 1.3"/><path d="M20.5 10.6h-3.6a2.4 2.4 0 0 0 0 4.8h3.6"/></svg>',
+    sound: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 9.5a4 4 0 0 1 0 5"/><path d="M18.5 7a7.5 7.5 0 0 1 0 10"/></svg>',
+    buzz: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3.5" width="8" height="17" rx="2.2"/><path d="M4.6 9v6M19.4 9v6M2 10.8v2.4M22 10.8v2.4"/></svg>',
     gift: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 11h7v10H5a1 1 0 0 1-1-1zm9 0h7v9a1 1 0 0 1-1 1h-6zM3 7.5A1.5 1.5 0 0 1 4.5 6h15A1.5 1.5 0 0 1 21 7.5v1A1.5 1.5 0 0 1 19.5 10H13V6h-2v4H4.5A1.5 1.5 0 0 1 3 8.5zM8.6 2.6c1.4-.4 2.6.8 3.4 2.9.8-2.1 2-3.3 3.4-2.9 1.6.5 1.6 2.6-.3 3.4H8.9C7 5.2 7 3.1 8.6 2.6Z"/></svg>'
   };
   // numbers roll to their new value instead of jumping
@@ -1281,6 +1285,19 @@
       under = view.bsx + r > R.left && view.bsx - r < R.right && view.bsy + r > R.top && view.bsy - r < R.bottom;
     }
     if (under !== STK.under) { STK.under = under; el.classList.toggle('under', under); }
+  }
+  // the title over the arena on the Play tab steps back while the demo ball flies up through it
+  const BRAND = { el: $('brand'), rect: null, k: 0, on: false };
+  function brandDodge() {
+    let on = false;
+    if (phase === 'lobby' && nav.tab === 'play' && !nav.page && view.bsr) {
+      if (!BRAND.rect || ++BRAND.k % 30 === 0) { // the text itself, not the full-width box it sits in
+        const rg = document.createRange(); rg.selectNodeContents(BRAND.el); BRAND.rect = rg.getBoundingClientRect();
+      }
+      const R = BRAND.rect, r = view.bsr * 1.35; // the wings reach a little past the ball
+      on = R.height > 0 && view.bsx + r > R.left && view.bsx - r < R.right && view.bsy + r > R.top && view.bsy - r < R.bottom;
+    }
+    if (on !== BRAND.on) { BRAND.on = on; BRAND.el.classList.toggle('dodge', on); }
   }
   function setStreakHud(mode) {
     const s = run.streak, el = STK.el;
@@ -1595,7 +1612,7 @@
     }
     run.busy = false;
     stats.runs++; stats.wagered = round9(stats.wagered + bet); saveAll();
-    endTry(); show(ui.lobby, false); show(vL, false); show(vM, false); show(vP, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
+    closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vM, false); show(vP, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
     ball.lastVis = 0; // a new run lets the old flame die down quietly
     setHudMode(true); setBalance();
     clearCallouts(); clearNotices(); potShown = run.bet; setStreakHud();
@@ -2158,7 +2175,7 @@
     const ix = lerp(ball.px, ball.x, alpha), iy = lerp(ball.py, ball.y, alpha);
     updateFx(dt, ix, iy);
     render(alpha, ix + ball.ox, iy + ball.oy);
-    streakDodge();
+    streakDodge(); brandDodge();
     requestAnimationFrame(frame);
   }
 
@@ -3044,6 +3061,7 @@
     const tag = document.activeElement && document.activeElement.tagName;
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
       if (tag === 'INPUT' || (tag === 'BUTTON' && phase !== 'play' && phase !== 'ready' && phase !== 'paused')) return;
+      if (nav.page) return; // a page is open: Space scrolls it, and nothing starts or resumes behind it
       const panelOpen = !ui.panel.classList.contains('hide');
       if (e.code === 'Space' && !panelOpen && !e.repeat) {
         if (phase === 'lobby') { e.preventDefault(); if (nav.tab === 'play') startRun(); return; }
@@ -3056,6 +3074,7 @@
       if (e.code === 'KeyC') cashOut(); else keepGoing();
     } else if (e.code === 'Escape') {
       if (!ui.panel.classList.contains('hide')) closePanel();
+      else if (nav.page) closePage();
       else if (phase === 'play') pause();
       else if (phase === 'paused') resume();
       else if (phase === 'lobby' && nav.tab !== 'play') setTab('play');
@@ -3089,12 +3108,16 @@
   $('shareBtn').addEventListener('click', shareRun);
   $('pauseBtn').addEventListener('click', () => { if (phase === 'play') pause(); else if (phase === 'paused') resume(); });
 
-  // ---------------------------------------------------------------- panels
+  // ---------------------------------------------------------------- where everything lives
+  // Tabs (Play, Missions, Locker, Profile) are the places. Pages push in over the current tab with a back button:
+  // How to play, Odds & fairness, Wallet, Trophies and Recent runs. Sheets rise from the bottom only for a task you
+  // finish there: entering the pot and editing the player card. Each thing has one home; the level capsule, the
+  // balance and the next-mission row are shortcuts to theirs.
   function openPanel(kind) {
     Sound.click();
     const body = $('panelBody'), title = $('panelTitle');
-    const map = { pot: ['Pot challenge', potHtml], how: ['How to play', howHtml], odds: ['Odds', oddsHtml], fair: ['Fairness', fairHtml], menu: ['Settings', menuHtml], wallet: ['Wallet', walletHtml], card: ['Player card', cardHtml] };
-    const [t, fn] = map[kind] || map.how;
+    const map = { pot: ['Pot challenge', potHtml], card: ['Player card', cardHtml] };
+    const [t, fn] = map[kind] || map.pot;
     title.textContent = t; body.innerHTML = fn(); body.dataset.kind = kind;
     body.scrollTop = 0;
     ui.scrim.classList.add('show'); show(ui.panel, true); document.body.classList.add('panel-open');
@@ -3104,17 +3127,24 @@
   function closePanel() { ui.scrim.classList.remove('show'); show(ui.panel, false); document.body.classList.remove('panel-open'); }
   $('panelClose').addEventListener('click', closePanel);
   ui.scrim.addEventListener('click', closePanel);
-  document.querySelectorAll('[data-panel]').forEach((b) => b.addEventListener('click', () => openPanel(b.dataset.panel)));
-  $('menuBtn').addEventListener('click', () => openPanel('menu'));
-  $('balBtn').addEventListener('click', () => openPanel('wallet'));
-  function syncMute() {
+  // any [data-page] button opens its page, including ones drawn later (Profile rows, the Odds link, the pause card)
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-page]'); if (b && !b.disabled) openPage(b.dataset.page); });
+  $('balBtn').addEventListener('click', () => openPage('wallet'));
+  // sound and vibration: the mute capsule, the switches on Profile and the ones on the pause card are one setting each
+  function syncSettings() {
     $('muteBtn').setAttribute('aria-label', settings.sound ? 'Mute sound' : 'Turn sound on');
     $('muteIcon').innerHTML = settings.sound
       ? '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 9.5a4 4 0 0 1 0 5"/><path d="M18.5 7a7.5 7.5 0 0 1 0 10"/>'
       : '<path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="m16 9 5 6M21 9l-5 6"/>';
+    document.querySelectorAll('.switch[data-set]').forEach((s) => s.setAttribute('aria-checked', String(!!settings[s.dataset.set])));
   }
-  $('muteBtn').addEventListener('click', () => { settings.sound = !settings.sound; saveAll(); syncMute(); Sound.unlock(); Sound.click(); });
-  syncMute();
+  function toggleSetting(k) {
+    settings[k] = !settings[k]; saveAll(); syncSettings();
+    if (k === 'sound') { Sound.unlock(); Sound.click(); } else buzz(10);
+  }
+  $('muteBtn').addEventListener('click', () => toggleSetting('sound'));
+  document.addEventListener('click', (e) => { const s = e.target.closest && e.target.closest('.switch[data-set]'); if (s) toggleSetting(s.dataset.set); });
+  syncSettings();
 
   // How to play: one quiet row per idea, each with a small original glyph, so it scans at a glance
   const HOW_ICON = {
@@ -3194,6 +3224,8 @@
     fl.addColorStop(0, 'rgba(255,255,255,0)'); fl.addColorStop(0.5, A.edge); fl.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = fl; g.fillRect(0, fy, s, Math.max(1, s / 90));
   }
+  // Odds & fairness: what each ring pays on a tier, how often an average player clears each level, and how a run
+  // can be checked. Opened from the Play sheet it shows the tier you have picked.
   let oddsTier = null;
   function oddsHtml() {
     const di = oddsTier == null ? prefs.di : oddsTier;
@@ -3202,39 +3234,57 @@
       const pt = PAY.PAYTABLE[di][L - 1];
       rows.push(`<tr><td>${L}</td><td class="r">${fmtX(pt.rim)}</td><td class="r">${fmtX(pt.swish[0])}</td><td class="r">${fmtX(pt.swish[pt.swish.length - 1])}</td><td class="r">${Math.round(avgClear(di, L) * 100)}%</td></tr>`);
     }
-    return `<div class="seg" id="oddsSeg">${E.DIFFS.map((d, i) => `<button data-t="${i}" aria-pressed="${i === di}">${d.name}</button>`).join('')}</div>
+    return `<div class="seg odds-seg" id="oddsSeg" role="group" aria-label="Tier">${E.DIFFS.map((d, i) => `<button data-t="${i}" aria-pressed="${i === di}">${d.name}</button>`).join('')}</div>
       <div class="tbl"><table><thead><tr><th>Level</th><th class="r">Rim</th><th class="r">Swish</th><th class="r">5+ streak</th><th class="r">Avg clears</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
-      <p>Each ring multiplies your pot. ${D.name} pays up to <b>${TOP[di]}×</b> your bet. An average player who cashes out at the first checkpoint gets back about ${Math.round(PAY.AVG_RTP[di][0] * 100)}% of their bet over time, and less the deeper they go. Skilled players do better.</p>`;
+      <div class="prose"><p>Each ring multiplies your pot. ${D.name} pays up to <b>${TOP[di]}×</b> your bet. An average player who cashes out at the first checkpoint gets back about ${Math.round(PAY.AVG_RTP[di][0] * 100)}% of their bet over time, and less the deeper they go. Skilled players do better.</p></div>
+      <div class="sec-h"><h3>Fairness</h3></div>
+      <div class="prose">${fairHtml()}</div>`;
   }
   function fairHtml() {
     const h = stats.history[0];
     const canVerify = h && h.serverSeed && h.seedHash;
-    const last = h ? `<h3>Last run</h3><span class="mono">hash ${h.seedHash}</span><span class="mono">seed ${h.serverSeed || 'revealed when the run ends'}</span><span class="mono">client ${h.clientSeed} · nonce ${h.nonce}</span>
+    const last = h ? `<h3>Your last run</h3><span class="mono">hash ${h.seedHash}</span><span class="mono">seed ${h.serverSeed || 'revealed when the run ends'}</span><span class="mono">client ${h.clientSeed} · nonce ${h.nonce}</span>
       ${canVerify ? '<button class="btn btn-plain verify" id="fairVerify">Verify this run</button><div class="verify-out" id="fairOut"></div>' : ''}` : '';
     return `<p>Every ring position comes from a seed that is locked in before you tap. You see its SHA-256 hash first, and the seed itself when the run ends.</p>
       <p>Each level is built from <b>HMAC-SHA256(seed, client seed:nonce:level)</b>, and every payout is checked by replaying your taps through the same physics.</p>${last}`;
   }
-  function menuHtml() {
-    return `<div class="group">
-        <div class="row"><span class="k">Sound</span><button class="switch" role="switch" id="swSound" aria-checked="${settings.sound}" aria-label="Sound"></button></div>
-        <div class="row"><span class="k">Vibration</span><button class="switch" role="switch" id="swHaptics" aria-checked="${settings.haptics}" aria-label="Vibration"></button></div>
-      </div>
-      ${bank.real ? '' : `<h3>Demo balance</h3><button class="btn btn-plain" id="resetBal">Reset to ${CFG.demoStart} SOL</button>`}`;
-  }
   function walletHtml() {
     if (!CFG.serverUrl) {
       return `<div class="tiles"><div><b>${fmtBal(wallet.balance)}</b><span>Demo SOL</span></div><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${stats.best ? fmtMult(stats.best) : '–'}</b><span>Best</span></div></div>
-        <p>You're playing with demo SOL. Real SOL play runs through the SOL DUNK server with Phantom or Solflare.</p>
-        <button class="btn btn-plain" id="resetBal">Reset demo balance</button>`;
+        <div class="prose"><p>You're playing with demo SOL. Real SOL play runs through the SOL DUNK server with Phantom or Solflare.</p></div>
+        <button class="btn btn-plain" id="resetBal">Reset to ${CFG.demoStart} demo SOL</button>`;
     }
     if (!bank.real || !ServerBank.token) {
-      return `<p>Connect a Solana wallet to play with real SOL on <b>${CFG.network}</b>.</p><button class="btn btn-primary" id="wConnect">Connect wallet</button>
-        <p class="err" id="wErr"></p><p>On a phone, open this page in the Phantom or Solflare browser.</p>`;
+      return `<div class="prose"><p>Connect a Solana wallet to play with real SOL on <b>${CFG.network}</b>.</p></div><button class="btn btn-primary" id="wConnect">Connect wallet</button>
+        <p class="err" id="wErr"></p><div class="prose"><p>On a phone, open this page in the Phantom or Solflare browser.</p></div>`;
     }
     return `<div class="tiles"><div><b>${fmtBal(ServerBank.bal)}</b><span>Balance SOL</span></div><div><b>${ServerBank.address.slice(0, 4)}…${ServerBank.address.slice(-4)}</b><span>Wallet</span></div><div><b>${CFG.network}</b><span>Network</span></div></div>
       <div class="group"><div class="row"><label class="k" for="wAmt">Amount</label><label class="bet-field"><input id="wAmt" class="bet-input" inputmode="decimal" value="0.1"><span class="unit">SOL</span></label></div></div>
-      <div class="actions" style="margin-top:12px"><button class="btn btn-plain" id="wWithdraw">Withdraw</button><button class="btn btn-green" id="wDeposit">Deposit</button></div>
+      <div class="actions"><button class="btn btn-plain" id="wWithdraw">Withdraw</button><button class="btn btn-green" id="wDeposit">Deposit</button></div>
       <p class="err" id="wErr"></p>`;
+  }
+  // trophies: the whole case, earned ones lit
+  function trophiesHtml() {
+    const got = ACH.filter((a) => profile.ach[a.id]).length;
+    return `<p class="vsub">${got ? `${got} of ${ACH.length} earned. Each one adds XP, and some open titles for your player card.` : `None yet. Each one adds XP, and some open titles for your player card.`}</p>
+      <div class="trophies">${ACH.map((a) => `<div class="tro${profile.ach[a.id] ? ' got' : ''}"><span class="ti">${ICON.medal}</span><b>${a.name}</b><span>${a.desc}</span></div>`).join('')}</div>`;
+  }
+  // recent runs: what each one ended as, on which tier, and what it paid
+  const agoText = (t) => {
+    const m = Math.round((Date.now() - t) / 60000);
+    if (m < 1) return 'Just now';
+    if (m < 60) return m + ' min ago';
+    if (m < 60 * 24) return Math.round(m / 60) + ' h ago';
+    return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+  function runsHtml() {
+    if (!stats.history.length) return '<div class="empty">Your runs will show up here.</div>';
+    const what = (h) => (h.result === 'bust' ? 'Out on level ' + h.level : h.result === 'maxwin' ? 'Max win · ' + fmtMult(h.mult) : h.result === 'final' ? 'All ' + NL + ' levels · ' + fmtMult(h.mult) : 'Cashed out at ' + fmtMult(h.mult));
+    return `<p class="vsub">${stats.history.length === 1 ? 'Your last run.' : 'Your last ' + stats.history.length + ' runs, newest first.'}</p>
+      <div class="runs">${stats.history.map((h) => {
+        const p = h.payout - h.bet;
+        return `<div class="rr"><span class="rr-t"><b>${what(h)}</b><span>${E.DIFFS[h.di].name} · ${fmtBet(h.bet)} SOL · ${agoText(h.t)}</span></span><span class="rr-v num ${p >= 0 ? 'pos' : 'neg'}">${p >= 0 ? '+' : '−'}${fmtSol(Math.abs(p))}<span class="unit">SOL</span></span></div>`;
+      }).join('')}</div>`;
   }
   function wirePanel(kind) {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
@@ -3247,7 +3297,10 @@
       });
       on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
     }
-    if (kind === 'odds') document.querySelectorAll('#oddsSeg button').forEach((b) => b.addEventListener('click', () => { oddsTier = +b.dataset.t; $('panelBody').innerHTML = oddsHtml(); wirePanel('odds'); }));
+  }
+  function wirePage(kind) {
+    const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
+    if (kind === 'odds') document.querySelectorAll('#oddsSeg button').forEach((b) => b.addEventListener('click', () => { oddsTier = +b.dataset.t; Sound.click(); renderPage(true); }));
     on('fairVerify', () => {
       const h = stats.history[0];
       if (!h || !h.serverSeed) return;
@@ -3259,16 +3312,57 @@
       out.className = 'verify-out good';
       out.innerHTML = `<p><b>Verified.</b> The revealed seed hashes to the value you saw before the run, so the rings were fixed before your first tap.</p><ul class="list group">${rows.join('')}</ul>`;
     });
-    on('swSound', (e) => { settings.sound = !settings.sound; e.currentTarget.setAttribute('aria-checked', settings.sound); saveAll(); syncMute(); Sound.unlock(); Sound.click(); });
-    on('swHaptics', (e) => { settings.haptics = !settings.haptics; e.currentTarget.setAttribute('aria-checked', settings.haptics); saveAll(); buzz(10); });
     on('resetBal', () => {
       if (phase !== 'lobby' && phase !== 'over') { toast('Finish this run first.'); return; }
-      wallet.balance = CFG.demoStart; saveAll(); refreshLobby(); closePanel(); toast('Demo balance reset to ' + CFG.demoStart + ' SOL');
+      wallet.balance = CFG.demoStart; saveAll(); refreshLobby(); renderPage(true); Sound.click(); toast('Demo balance reset to ' + CFG.demoStart + ' SOL');
     });
-    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; setBalance(); refreshLobby(); refreshPot(); openPanel('wallet'); } catch (e) { $('wErr').textContent = e.message; } });
-    on('wDeposit', async () => { try { await ServerBank.deposit(parseFloat($('wAmt').value)); setBalance(); openPanel('wallet'); toast('Deposit credited'); } catch (e) { $('wErr').textContent = e.message; } });
-    on('wWithdraw', async () => { try { await ServerBank.withdraw(parseFloat($('wAmt').value)); setBalance(); openPanel('wallet'); toast('Withdrawal sent'); } catch (e) { $('wErr').textContent = e.message; } });
+    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; setBalance(); refreshLobby(); refreshPot(); renderPage(true); } catch (e) { $('wErr').textContent = e.message; } });
+    on('wDeposit', async () => { try { await ServerBank.deposit(parseFloat($('wAmt').value)); setBalance(); renderPage(true); toast('Deposit credited'); } catch (e) { $('wErr').textContent = e.message; } });
+    on('wWithdraw', async () => { try { await ServerBank.withdraw(parseFloat($('wAmt').value)); setBalance(); renderPage(true); toast('Withdrawal sent'); } catch (e) { $('wErr').textContent = e.message; } });
   }
+
+  // ---------------------------------------------------------------- pages
+  const PAGES = {
+    how: ['How to play', howHtml],
+    odds: ['Odds & fairness', oddsHtml],
+    wallet: ['Wallet', walletHtml],
+    trophies: ['Trophies', trophiesHtml],
+    runs: ['Recent runs', runsHtml]
+  };
+  const TAB_NAME = { play: 'Play', missions: 'Missions', locker: 'Locker', profile: 'Profile' };
+  const vPg = $('vPage');
+  function openPage(kind) {
+    if (!PAGES[kind]) return;
+    if (!ui.panel.classList.contains('hide')) closePanel();
+    Sound.click();
+    if (kind === 'odds' && !nav.page) oddsTier = null; // from the Play sheet or Profile: the tier you have picked
+    const fresh = !nav.page;
+    nav.page = kind;
+    $('pgBackT').textContent = phase === 'lobby' ? TAB_NAME[nav.tab] : 'Back';
+    renderPage();
+    $('pgBody').scrollTop = 0;
+    show(vPg, true); document.body.classList.add('page-open');
+    if (fresh) nav.cover = true;
+    setTimeout(() => $('pgBack').focus({ preventScroll: true }), 30);
+  }
+  function renderPage(keepScroll) {
+    const body = $('pgBody'), y = body.scrollTop, [t, fn] = PAGES[nav.page];
+    body.innerHTML = `<div class="vcol"><h2 class="vtitle" id="pgTitle">${t.replace('&', '&amp;')}</h2>${fn()}</div>`;
+    body.dataset.kind = nav.page;
+    wirePage(nav.page);
+    if (keepScroll) body.scrollTop = y;
+  }
+  function closePage(quiet) {
+    if (!nav.page) return;
+    nav.page = null;
+    show(vPg, false); document.body.classList.remove('page-open');
+    nav.cover = nav.tab === 'missions' || nav.tab === 'profile';
+    if (nav.tab === 'profile' && phase === 'lobby') renderProfileView(); // the wallet row and run counts may have moved
+    sheetTopC = -1;
+    if (!quiet) Sound.click();
+    if (phase === 'paused') setTimeout(() => $('resumeBtn').focus({ preventScroll: true }), 30);
+  }
+  $('pgBack').addEventListener('click', () => closePage());
 
   // ---------------------------------------------------------------- navigation: Play, Missions, Locker, Profile
   // Four tabs along the bottom, in the lobby only. Play is the bet sheet over the live arena; the Locker keeps the
@@ -3279,6 +3373,10 @@
   function setTab(t, quiet) {
     if (!TABS.includes(t)) t = 'play';
     const was = nav.tab;
+    if (nav.page) { // a tab tap leaves the page; on its own tab it goes back to where the page was opened
+      closePage(true);
+      if (was === t && !quiet) { Sound.click(); buzz(6); return; }
+    }
     if (was === 'locker' && t !== 'locker') endTry();
     nav.tab = t; document.body.dataset.tab = t;
     document.querySelectorAll('#tabbar [data-tab]').forEach((b) => {
@@ -3330,7 +3428,7 @@
       return `<div class="chli ${st}"><span class="cs">${st === 'done' ? ICON.check : st === 'now' ? ICON.target : ICON.lock}</span><b>${i + 1}. ${K.name}</b><span class="cr">${COS[r.t][r.id].name}<canvas width="52" height="52" data-t="${r.t}" data-id="${r.id}"></canvas></span></div>`;
     }).join('');
     $('mBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Missions</h2>
-      <p class="vsub">Earn XP to level up and unlock balls, wings, flames, trails, rims and courts. Missions count every run, whatever you bet.</p>
+      <p class="vsub">Earn XP to level up and unlock new gear. Every run counts, whatever you bet.</p>
       <div class="sec-h"><h3>Today</h3><span>${ICON.clock}New in ${untilMidnight()}</span></div>
       <div class="group">${d.map((c) => mRow(dailyText(c), c.p, c.n, c.xp, c.done)).join('')}</div>
       <div class="sec-h"><h3>This week</h3><span>${ICON.clock}New in ${untilMonday()}</span></div>
@@ -3415,33 +3513,30 @@
   const inkFor = (hex) => { const n = parseInt(hex.slice(1), 16), l = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); return l > 170 ? '#0b0f1a' : '#ffffff'; };
   const avStyle = (ci) => { const c = CARD_COLORS[ci] || CARD_COLORS[0]; return `--av:${c};--av-ink:${inkFor(c)}`; };
   const playerName = () => profile.card.name || 'Player';
+  // Profile, top to bottom: who you are (card, level), how you play (stats, with trophies and recent runs a tap
+  // away), settings (wallet, sound, vibration) and help (how to play, odds & fairness).
   function renderProfileView() {
     const v = lvlOf(profile.xp), T = TITLE_BY[profile.card.title] || TITLES[0];
     const nextU = UNLOCKS.filter((u) => u.lvl && u.lvl > v.l).sort((a, b) => a.lvl - b.lvl)[0];
     const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–', net = stats.returned - stats.wagered;
     const got = ACH.filter((a) => profile.ach[a.id]).length;
-    const hist = stats.history.slice(0, 8).map((h) => {
-      const p = h.payout - h.bet;
-      return `<li><span>${E.DIFFS[h.di].name} · Level ${h.level}</span><span class="${p >= 0 ? 'pos' : 'neg'}">${p >= 0 ? '+' : '−'}${fmtSol(Math.abs(p))} SOL</span></li>`;
-    }).join('');
-    const menu = [['how', ICON.book, 'How to play'], ['odds', ICON.chart, 'Odds'], ['fair', ICON.shield, 'Fairness'], ['menu', ICON.gear, 'Settings']];
+    const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi">${ic}</span><span class="mn">${name}</span><span class="mv num">${val || ''}</span><span class="chev">${ICON.chev}</span></button>`;
+    const sw = (k, ic, name) => `<div class="mrow-sw"><span class="mi">${ic}</span><span class="mn" id="sw-${k}">${name}</span><button class="switch" role="switch" data-set="${k}" aria-checked="${!!settings[k]}" aria-labelledby="sw-${k}"></button></div>`;
     $('pBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Profile</h2>
       <button class="pcard" id="pfCard" aria-label="Edit your player card"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
         <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span><br><span class="pedit">${ICON.pencil}Edit card</span></span></button>
       <div class="plevel"><div class="lv-h"><span class="lv-n">Level ${v.l}</span><span class="lv-x">${v.into} / ${v.need} XP</span></div>
         <div class="xp-bar"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></div>
         ${nextU ? `<div class="lv-u">Next unlock: <b>${itemName(nextU)}</b> at level ${nextU.lvl}</div>` : ''}</div>
-      <div class="sec-h"><h3>Stats</h3><span>${stats.runs} runs</span></div>
+      <div class="sec-h"><h3>Stats</h3><span>${stats.runs === 1 ? '1 run' : stats.runs + ' runs'}</span></div>
       <div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : '−'}${fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
       <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
-      <div class="sec-h"><h3>Trophies</h3><span>${got} of ${ACH.length}</span></div>
-      <div class="trophies">${ACH.map((a) => `<div class="tro${profile.ach[a.id] ? ' got' : ''}"><span class="ti">${ICON.medal}</span><b>${a.name}</b><span>${a.desc}</span></div>`).join('')}</div>
-      <div class="sec-h"><h3>Recent runs</h3></div>
-      ${hist ? `<ul class="list">${hist}</ul>` : '<div class="empty">Your runs will show up here.</div>'}
-      <div class="sec-h"><h3>More</h3></div>
-      <div class="menu-list">${menu.map(([k, ic, nm]) => `<button data-open="${k}"><span class="mi">${ic}</span>${nm}<span class="chev">${ICON.chev}</span></button>`).join('')}</div></div>`;
+      <div class="menu-list">${row('trophies', ICON.medal, 'Trophies', got + ' of ' + ACH.length)}${row('runs', ICON.clock, 'Recent runs', stats.history.length || '')}</div>
+      <div class="sec-h"><h3>Settings</h3></div>
+      <div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${sw('sound', ICON.sound, 'Sound')}${sw('haptics', ICON.buzz, 'Vibration')}</div>
+      <div class="sec-h"><h3>Help</h3></div>
+      <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.chart, 'Odds &amp; fairness')}</div></div>`;
     $('pfCard').addEventListener('click', () => openPanel('card'));
-    $('pBody').querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => openPanel(b.dataset.open)));
   }
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   // the player card editor: name, emblem, colour and title
@@ -3470,13 +3565,11 @@
     const el = $('pauseCard');
     if (on) {
       $('pauseSub').textContent = 'Level ' + run.level + ' · ' + fmtSol(run.bet * run.total) + ' SOL pot';
-      $('pSound').setAttribute('aria-checked', String(settings.sound)); $('pHaptics').setAttribute('aria-checked', String(settings.haptics));
+      syncSettings();
     }
     show(el, on);
   }
   $('resumeBtn').addEventListener('click', () => { if (phase === 'paused') resume(); });
-  $('pSound').addEventListener('click', (e) => { settings.sound = !settings.sound; e.currentTarget.setAttribute('aria-checked', settings.sound); saveAll(); syncMute(); Sound.unlock(); Sound.click(); });
-  $('pHaptics').addEventListener('click', (e) => { settings.haptics = !settings.haptics; e.currentTarget.setAttribute('aria-checked', settings.haptics); saveAll(); buzz(10); });
 
   // ---------------------------------------------------------------- boot (keeps balance across a republish)
   function boot(snap) {
@@ -3485,7 +3578,7 @@
       if (snap.profile) fixProfile(Object.assign(profile, snap.profile));
     }
     if (!(wallet.balance >= 0)) wallet.balance = CFG.demoStart;
-    grantUnlocks(); syncMute(); applyFlameTheme(); buildLobby(); setTab('play', true); refreshLobby(); setHudMode(false); refreshPot();
+    grantUnlocks(); syncSettings(); applyFlameTheme(); buildLobby(); setTab('play', true); refreshLobby(); setHudMode(false); refreshPot();
     setInterval(() => { if (phase === 'lobby' && !document.hidden) refreshPot(); }, 30000); // entrants, pot and time left move on
     attract.wait = 0;
     if (document.fonts && document.fonts.load) document.fonts.load('800 20px "Big Shoulders Display"').catch(() => {}); // canvas text uses it too
@@ -3501,7 +3594,7 @@
   }
   if (hot && hot.ready) hot.ready(boot); else boot((hot && hot.data) || {});
   window.__solDunk = {
-    run, stats, wallet, view, E, PAY, ball, profile, nav, geom: () => ({ scale, offX, offY }),
+    run, stats, wallet, view, E, PAY, ball, profile, nav, settings, prefs, geom: () => ({ scale, offX, offY }),
     phase: () => phase,
     dbg,
     unfreeze: () => { dbg.frozen = false; goPlay(); },

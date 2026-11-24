@@ -49,7 +49,7 @@ async def main():
             await page.screenshot(path=OUT + '7_result.png')
         info = await page.evaluate('({phase: __solDunk.phase(), level: __solDunk.run.level, total: __solDunk.run.total, bal: __solDunk.wallet.balance, toast: document.getElementById("toast").textContent})')
         print('end:', info)
-        await page.click('[data-panel="odds"]') if await page.is_visible('#lobby:not(.hide)') else None
+        await page.click('#lobby [data-page="odds"]') if await page.is_visible('#lobby:not(.hide)') else None
         print('\n'.join(logs[-20:]) or 'no console output')
         await b.close()
 asyncio.run(main())

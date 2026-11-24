@@ -41,9 +41,6 @@
     <button class="cap glass icon" id="muteBtn" aria-label="Mute sound">
       <svg id="muteIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
     </button>
-    <button class="cap glass icon lobby-only" id="menuBtn" aria-label="Settings">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.1"/><path d="M19.4 13.5a7.7 7.7 0 0 0 0-3l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2.6-1.5L14 2.5h-4l-.4 2.5A7.6 7.6 0 0 0 7 6.5l-2.4-1-2 3.4 2 1.6a7.7 7.7 0 0 0 0 3l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 2.6 1.5l.4 2.5h4l.4-2.5a7.6 7.6 0 0 0 2.6-1.5l2.4 1 2-3.4z"/></svg>
-    </button>
   </div>
 </div>
 
@@ -55,7 +52,10 @@
 
 <section id="lobby" class="sheet" aria-label="Place a bet">
   <div class="tiers" role="radiogroup" aria-label="Difficulty" id="diffs"></div>
-  <p class="foot" id="diffInfo"></p>
+  <div class="foot-row">
+    <p class="foot" id="diffInfo"></p>
+    <button class="foot-link" data-page="odds" aria-label="Odds for this tier">Odds<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5.5 6.5 6.5L9 18.5"/></svg></button>
+  </div>
   <div class="group">
     <div class="row">
       <label class="k" for="betInput">Bet</label>
@@ -67,20 +67,17 @@
     </div>
     <div class="chips" id="chips" aria-label="Quick bets"></div>
   </div>
-  <button class="daily" id="dailyBtn" aria-label="Missions">
-    <span class="d-ic" id="dailyIc"></span><span class="d-t"><small id="dailyK">Next mission</small><span id="dailyT">Missions</span></span><span class="d-p num" id="dailyP"></span>
-    <span class="d-bar" aria-hidden="true"><i id="dailyFill"></i></span>
-  </button>
-  <button class="potrow hide" id="potBtn" aria-label="Pot challenge">
-    <span class="p-ic" aria-hidden="true"></span><span class="p-t" id="potT"></span><span class="p-v num" id="potV"></span><span class="p-s" id="potS"></span>
-  </button>
+  <div class="group today">
+    <button class="daily" id="dailyBtn" aria-label="Missions">
+      <span class="d-ic" id="dailyIc"></span><span class="d-t"><small id="dailyK">Next mission</small><span id="dailyT">Missions</span></span><span class="d-p num" id="dailyP"></span>
+      <span class="d-bar" aria-hidden="true"><i id="dailyFill"></i></span>
+    </button>
+    <button class="potrow hide" id="potBtn" aria-label="Pot challenge">
+      <span class="p-ic" aria-hidden="true"></span><span class="p-t"><small>Pot challenge</small><span id="potT"></span></span><span class="p-v num" id="potV"></span><span class="p-s" id="potS"></span>
+    </button>
+  </div>
   <button class="btn btn-primary" id="playBtn">Play <span class="num" id="playAmt">0.1 SOL</span></button>
   <div class="err" id="lobbyErr" role="alert"></div>
-  <nav class="links">
-    <button data-panel="how">How to play</button>
-    <button data-panel="odds">Odds</button>
-    <button data-panel="fair">Fairness</button>
-  </nav>
 </section>
 
 <section id="vMissions" class="view hide" aria-label="Missions"><div class="vscroll" id="mBody"></div></section>
@@ -89,6 +86,11 @@
   <div class="lk-cats" id="lkCats" role="tablist" aria-label="Item type"></div>
   <div class="lk-info" id="lkInfo" aria-live="polite"></div>
   <div class="lk-grid" id="lkGrid"></div>
+</section>
+<!-- a page pushed over the current tab (How to play, Odds & fairness, Wallet, Trophies, Recent runs) -->
+<section id="vPage" class="view page hide" aria-labelledby="pgTitle">
+  <div class="vscroll" id="pgBody"></div>
+  <div class="pg-head"><button class="cap glass back" id="pgBack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5.5 8.5 12l6.5 6.5"/></svg><span id="pgBackT">Back</span></button></div>
 </section>
 
 <nav id="tabbar" role="tablist" aria-label="Sections">
@@ -102,11 +104,11 @@
   <div class="card-title">Paused</div>
   <div class="under muted" id="pauseSub"></div>
   <div class="group pause-set">
-    <div class="row"><span class="k">Sound</span><button class="switch" role="switch" id="pSound" aria-label="Sound"></button></div>
-    <div class="row"><span class="k">Vibration</span><button class="switch" role="switch" id="pHaptics" aria-label="Vibration"></button></div>
+    <div class="row"><span class="k">Sound</span><button class="switch" role="switch" id="pSound" data-set="sound" aria-label="Sound"></button></div>
+    <div class="row"><span class="k">Vibration</span><button class="switch" role="switch" id="pHaptics" data-set="haptics" aria-label="Vibration"></button></div>
   </div>
   <button class="btn btn-primary" id="resumeBtn">Resume</button>
-  <button class="btn btn-plain" data-panel="how">How to play</button>
+  <button class="btn btn-plain" data-page="how">How to play</button>
 </section>
 
 <section id="checkpoint" class="card hide" aria-label="Checkpoint" tabindex="-1">

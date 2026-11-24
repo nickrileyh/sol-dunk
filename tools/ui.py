@@ -1,6 +1,8 @@
-"""Checks the lobby's navigation and what lives behind it: the four tabs, the Locker (equip, try-on, leaving
+"""Checks the lobby's navigation and what lives behind it: the four tabs, the pages that push in over them (How to
+play, Odds & fairness, Wallet, Trophies, Recent runs) and their back button, the Locker (equip, try-on, leaving
 clears the try-on), the missions (daily, weekly, career progress after a run), the player card editor, the
-pause card, and that items already earned under the newer unlock list are handed out on load."""
+settings on Profile, the pause card, and that items already earned under the newer unlock list are handed out on
+load."""
 import asyncio, json
 from playwright.async_api import async_playwright
 from _paths import URL, SHOTS, CHROME
@@ -46,6 +48,41 @@ async def main():
         await page.click('#lkGrid .item[data-id="orbit"]'); await page.wait_for_timeout(300)
         await page.click('#tabPlay'); await page.wait_for_timeout(400)
         check(await page.evaluate("__solDunk.nav.try") is None and await page.evaluate("__solDunk.profile.eq.court") == 'arena', 'leaving the locker ends the try-on')
+        # pages: pushed over the current tab with a back button; one home each, no settings gear in the top bar
+        pg = lambda: page.evaluate("__solDunk.nav.page")
+        check(await page.evaluate("!document.getElementById('menuBtn') && !document.querySelector('#lobby .links')"), 'no settings gear in the top bar and no link row under the Play button')
+        await page.click('#lobby .foot-link'); await page.wait_for_timeout(500)
+        check(await pg() == 'odds' and await vis('#vPage') and await page.evaluate("document.getElementById('pgTitle').textContent") == 'Odds & fairness', 'the Odds link on the Play sheet opens Odds & fairness')
+        di = await page.evaluate("__solDunk.prefs ? __solDunk.prefs.di : null")
+        on = await page.evaluate("[...document.querySelectorAll('#oddsSeg button')].findIndex((b) => b.getAttribute('aria-pressed') === 'true')")
+        check(di is None or on == di, f'it opens on the tier picked on the Play sheet ({on})')
+        check(await page.evaluate("getComputedStyle(document.getElementById('hud')).visibility") == 'hidden', 'the top bar steps aside for the page header')
+        check(await page.evaluate("document.getElementById('pgBackT').textContent") == 'Play', 'the back button names the tab underneath')
+        await page.evaluate("document.activeElement.blur()")
+        await page.keyboard.press('Space'); await page.wait_for_timeout(300)
+        check(await page.evaluate('__solDunk.phase()') == 'lobby' and await pg() == 'odds', 'Space on a page does not start a run')
+        await page.click('#pgBack'); await page.wait_for_timeout(450)
+        check(await pg() is None and not await vis('#vPage') and await tab() == 'play', 'Back closes the page and shows the Play tab again')
+        await page.click('#balBtn'); await page.wait_for_timeout(450)
+        check(await pg() == 'wallet' and await page.evaluate("!!document.getElementById('resetBal')"), 'the balance opens the Wallet page, with the demo reset')
+        await page.click('#tabPlay'); await page.wait_for_timeout(400)
+        check(await pg() is None and await tab() == 'play' and await vis('#lobby'), 'tapping the current tab closes the page')
+        await page.click('#tabProfile'); await page.wait_for_timeout(400)
+        for k, title in [('trophies', 'Trophies'), ('runs', 'Recent runs'), ('how', 'How to play'), ('odds', 'Odds & fairness'), ('wallet', 'Wallet')]:
+            await page.click(f'#pBody [data-page="{k}"]'); await page.wait_for_timeout(450)
+            t = await page.evaluate("document.getElementById('pgTitle').textContent")
+            back = await page.evaluate("document.getElementById('pgBackT').textContent")
+            check(await pg() == k and t == title and back == 'Profile', f'Profile opens {title} with a way back to Profile')
+            await page.keyboard.press('Escape'); await page.wait_for_timeout(400)
+            check(await pg() is None and await tab() == 'profile', f'Escape closes {title}')
+        snd = await page.evaluate("__solDunk.settings ? __solDunk.settings.sound : null")
+        await page.click('#pBody .switch[data-set="sound"]'); await page.wait_for_timeout(200)
+        sw = await page.evaluate("document.querySelector('#pBody .switch[data-set=\"sound\"]').getAttribute('aria-checked')")
+        lbl = await page.evaluate("document.getElementById('muteBtn').getAttribute('aria-label')")
+        check(sw == 'false' and lbl == 'Turn sound on', f'the Sound switch on Profile turns sound off and the mute button follows ({sw}, {lbl})')
+        await page.click('#muteBtn'); await page.wait_for_timeout(200)
+        sw = await page.evaluate("document.querySelector('#pBody .switch[data-set=\"sound\"]').getAttribute('aria-checked')")
+        check(sw == 'true', 'the mute button turns it back on and the switch follows')
         # profile and the card editor
         await page.click('#profBtn'); await page.wait_for_timeout(400)
         check(await tab() == 'profile' and await vis('#vProfile'), 'the level capsule opens the Profile tab')
@@ -67,6 +104,13 @@ async def main():
         check(not await vis('#tabbar') or await page.evaluate("getComputedStyle(document.getElementById('tabbar')).opacity") == '0', 'the tab bar hides during a run')
         await page.click('#pauseBtn'); await page.wait_for_timeout(300)
         check(await page.evaluate('__solDunk.phase()') == 'paused' and await vis('#pauseCard'), 'pause shows the pause card')
+        await page.click('#pauseCard [data-page="how"]'); await page.wait_for_timeout(450)
+        check(await pg() == 'how' and await page.evaluate("document.getElementById('pgBackT').textContent") == 'Back', 'How to play opens over the paused run')
+        await page.evaluate("document.activeElement.blur()")
+        await page.keyboard.press('Space'); await page.wait_for_timeout(300)
+        check(await page.evaluate('__solDunk.phase()') == 'paused' and await pg() == 'how', 'Space on the page does not resume the run behind it')
+        await page.click('#pgBack'); await page.wait_for_timeout(450)
+        check(await pg() is None and await page.evaluate('__solDunk.phase()') == 'paused' and await page.evaluate("getComputedStyle(document.getElementById('pauseCard')).opacity") == '1', 'Back returns to the pause card')
         await page.click('#resumeBtn'); await page.wait_for_timeout(1600)
         check(await page.evaluate('__solDunk.phase()') in ('play', 'clearing', 'checkpoint') and not await vis('#pauseCard'), 'Resume counts down and plays on')
         for i in range(160):

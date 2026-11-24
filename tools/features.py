@@ -32,7 +32,7 @@ async def main():
         res_arming = await page.evaluate("document.getElementById('result').classList.contains('arming')")
         await page.wait_for_timeout(800)
         await page.click('#lobbyBtn'); await page.wait_for_timeout(700)
-        await page.click('[data-panel="fair"]'); await page.wait_for_timeout(500)
+        await page.click('#lobby .foot-link'); await page.wait_for_timeout(500)   # Odds & fairness
         await page.click('#fairVerify'); await page.wait_for_timeout(300)
         out = await page.evaluate("document.getElementById('fairOut').className + ' | ' + document.getElementById('fairOut').innerText.slice(0, 120)")
         await page.screenshot(path=SHOTS + '/x_fair.png')
