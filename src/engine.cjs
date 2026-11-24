@@ -18,7 +18,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 12; // v11 came from two chats at once (fair rims and pace; the lower ring band); v12 is both
+  const VERSION = 13; // v13: rings spread out 1:1 with v12's faster ball (v11 came from two chats at once; v12 was both)
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -55,29 +55,29 @@
   const LEVELS = 8;
   const MAX_TICKS = TICK_HZ * 45;   // a level can never take longer than this
   const Y_MIN = 220, Y_MAX = 500;   // rim centre band; v11: was 540, so even a bobbing ring's lowest point stays 152 above the floor
-  const FIRST_HOOP_X = 250;
+  const FIRST_HOOP_X = 300; // v13: 250 before; it grows with the speed like the spacing
   const START_Y = 300;
 
   // Difficulty tiers. Arrays are per level (1..8). Ring widths are the v9 numbers (RING_GROW is added).
-  // v11: fair rims make rim hits drop in more often, so to keep the same clear rates (and the house edge) the
-  // ball is 20% faster than v10 and the rings 5% further apart: about 12% less time between rims.
-  // Speed grows 4% per level and the rings spread out with it (spacing and the first ring's distance
-  // grow 4% too), so every level gives the same time between rims. Deeper levels get harder through
+  // Rings are spaced 1:1 with speed (the owner asked for this). v11/v12 made the ball 20% faster than v10 but moved
+  // the rings only 5% further apart; v13 moves them 20% further apart too (and the first ring), so there is as much
+  // time between rims as on v10. Speed grows 4% per level and the rings spread out with it (spacing and the first
+  // ring's distance grow 4% too), so every level gives the same time between rims. Deeper levels get harder through
   // tighter, moving and tilted rims and bigger height changes, not through less time to react.
   const DIFFS = [
     {
       id: 'rookie', name: 'Rookie', blurb: 'Wide rings, gentle pace',
-      speed: 166, spacing: 242, maxWin: 50,
-      hoopW:   [93, 92, 91, 90, 89, 88, 87, 86],
+      speed: 166, spacing: 277, maxWin: 50,
+      hoopW:   [92, 91, 90, 89, 88, 87, 86, 85],   // v13: 1 narrower, so level 1 keeps the house edge with more time between rims
       dy:      [115, 122, 129, 136, 143, 150, 157, 164],
-      moveP:   [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7, 0.8],   // a few rings bob gently from level 1
-      moveAmp: [22, 24, 28, 31, 34, 38, 42, 46],
+      moveP:   [0.45, 0.47, 0.5, 0.53, 0.57, 0.62, 0.7, 0.8],   // a few rings bob gently from level 1 (v13: a few more early on)
+      moveAmp: [26, 27, 29, 31, 34, 38, 42, 46],
       tiltP:   [0, 0, 0, 0, 0.2, 0.3, 0.4, 0.5],
       tiltMax: [0, 0, 0, 0, 8, 9, 10, 11]
     },
     {
       id: 'pro', name: 'Pro', blurb: 'The classic feel',
-      speed: 178, spacing: 246, maxWin: 100,
+      speed: 178, spacing: 281, maxWin: 100,
       hoopW:   [91, 90, 89, 88, 87, 86, 85, 84],
       dy:      [120, 128, 136, 144, 152, 160, 168, 176],
       moveP:   [0, 0.3, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95],
@@ -87,7 +87,7 @@
     },
     {
       id: 'allstar', name: 'All-Star', blurb: 'Moving rings',
-      speed: 192, spacing: 250, maxWin: 250,
+      speed: 192, spacing: 286, maxWin: 250,
       hoopW:   [87, 85, 83, 82, 81, 80, 79, 78],
       dy:      [140, 152, 164, 174, 182, 190, 198, 206],
       moveP:   [0, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
@@ -97,7 +97,7 @@
     },
     {
       id: 'legend', name: 'Legend', blurb: 'Fast and tilted',
-      speed: 204, spacing: 254, maxWin: 1000,
+      speed: 204, spacing: 290, maxWin: 1000,
       hoopW:   [85, 83, 81, 80, 79, 78, 77, 76],
       dy:      [150, 162, 174, 184, 192, 200, 208, 216],
       moveP:   [0.25, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1],

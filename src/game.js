@@ -787,7 +787,7 @@
   // ---------------------------------------------------------------- canvas & view
   // The client shows a 352-unit-wide window of the 400-unit world (a little zoomed in),
   // world y from -10 to 680. Physics never depends on this.
-  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 76; // the ball sits about 22% in, so more of the course shows ahead
+  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 56; // the ball sits about 16% in, so more of the course shows ahead (76 before engine v13 spread the rings out)
   const RV = P.R; // drawn ball radius = collision radius
   const cv = $('game'), cx = cv.getContext('2d');
   let vw = 0, vh = 0, dpr = 1, scale = 1, offX = 0, offY = 0;

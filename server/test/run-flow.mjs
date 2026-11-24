@@ -141,7 +141,7 @@ function playTaps(seed, di, L, skill, salt) {
 
   // challenge pots: entry, completion only on the challenge's tier and after entering, an equal split less the rake, rollover
   const POTS = require(path.join(root, 'src/pots.cjs'));
-  const srv3 = await boot(8801, { POT_GOAL: 'streak10', POT_ENTRY_LAMPORTS: '50000000' });
+  const srv3 = await boot(8801, { POT_GOAL: 'streak8', POT_ENTRY_LAMPORTS: '50000000' });
   const A = client_(8801), Bc = client_(8801), C = client_(8801);
   for (const x of [A, Bc, C]) { await x.signIn(); await x.api('/api/dev/faucet', { lamports: 1e9 }); }
   const fee = 50_000_000;
@@ -161,7 +161,7 @@ function playTaps(seed, di, L, skill, salt) {
   const before = await potRun(A, 1, 'perfect', 'pre', 2);
   check(before === null, 'a run before entering does not count');
   const p0 = await A.api('/api/pot');
-  check(p0.goal.id === 'streak10' && p0.entrants === 0 && p0.me && p0.me.entered === false, 'pot shows the challenge: ' + JSON.stringify(p0.goal));
+  check(p0.goal.id === 'streak8' && p0.entrants === 0 && p0.me && p0.me.entered === false, 'pot shows the challenge: ' + JSON.stringify(p0.goal));
   for (const x of [A, Bc, C]) {
     const b0 = (await x.api('/api/me')).balance, e = await x.api('/api/pot/enter', {});
     check(e.status === 200 && e.me.entered && e.balance === b0 - fee, 'enter the pot: the entry is debited');
@@ -170,7 +170,7 @@ function playTaps(seed, di, L, skill, salt) {
   const rook = await potRun(A, 0, 'perfect', 'rook', 2);
   check(rook && rook.counts === false && !rook.done, 'a run below the challenge tier does not count');
   const pro = await potRun(A, 1, 'perfect', 'pro', 2);
-  check(pro && pro.done && pro.just, 'a perfect run on Pro completes "swish 10 in a row"');
+  check(pro && pro.done && pro.just, 'a perfect run on Pro completes "swish 8 in a row"');
   const again = await potRun(A, 1, 'perfect', 'pro2', 2);
   check(again && again.done && !again.just, 'completing again does not count twice');
   const bRun = await potRun(Bc, 1, 'novice', 'b', 1);

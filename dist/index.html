@@ -972,7 +972,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 12; // v11 came from two chats at once (fair rims and pace; the lower ring band); v12 is both
+  const VERSION = 13; // v13: rings spread out 1:1 with v12's faster ball (v11 came from two chats at once; v12 was both)
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -1009,29 +1009,29 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   const LEVELS = 8;
   const MAX_TICKS = TICK_HZ * 45;   // a level can never take longer than this
   const Y_MIN = 220, Y_MAX = 500;   // rim centre band; v11: was 540, so even a bobbing ring's lowest point stays 152 above the floor
-  const FIRST_HOOP_X = 250;
+  const FIRST_HOOP_X = 300; // v13: 250 before; it grows with the speed like the spacing
   const START_Y = 300;
 
   // Difficulty tiers. Arrays are per level (1..8). Ring widths are the v9 numbers (RING_GROW is added).
-  // v11: fair rims make rim hits drop in more often, so to keep the same clear rates (and the house edge) the
-  // ball is 20% faster than v10 and the rings 5% further apart: about 12% less time between rims.
-  // Speed grows 4% per level and the rings spread out with it (spacing and the first ring's distance
-  // grow 4% too), so every level gives the same time between rims. Deeper levels get harder through
+  // Rings are spaced 1:1 with speed (the owner asked for this). v11/v12 made the ball 20% faster than v10 but moved
+  // the rings only 5% further apart; v13 moves them 20% further apart too (and the first ring), so there is as much
+  // time between rims as on v10. Speed grows 4% per level and the rings spread out with it (spacing and the first
+  // ring's distance grow 4% too), so every level gives the same time between rims. Deeper levels get harder through
   // tighter, moving and tilted rims and bigger height changes, not through less time to react.
   const DIFFS = [
     {
       id: 'rookie', name: 'Rookie', blurb: 'Wide rings, gentle pace',
-      speed: 166, spacing: 242, maxWin: 50,
-      hoopW:   [93, 92, 91, 90, 89, 88, 87, 86],
+      speed: 166, spacing: 277, maxWin: 50,
+      hoopW:   [92, 91, 90, 89, 88, 87, 86, 85],   // v13: 1 narrower, so level 1 keeps the house edge with more time between rims
       dy:      [115, 122, 129, 136, 143, 150, 157, 164],
-      moveP:   [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7, 0.8],   // a few rings bob gently from level 1
-      moveAmp: [22, 24, 28, 31, 34, 38, 42, 46],
+      moveP:   [0.45, 0.47, 0.5, 0.53, 0.57, 0.62, 0.7, 0.8],   // a few rings bob gently from level 1 (v13: a few more early on)
+      moveAmp: [26, 27, 29, 31, 34, 38, 42, 46],
       tiltP:   [0, 0, 0, 0, 0.2, 0.3, 0.4, 0.5],
       tiltMax: [0, 0, 0, 0, 8, 9, 10, 11]
     },
     {
       id: 'pro', name: 'Pro', blurb: 'The classic feel',
-      speed: 178, spacing: 246, maxWin: 100,
+      speed: 178, spacing: 281, maxWin: 100,
       hoopW:   [91, 90, 89, 88, 87, 86, 85, 84],
       dy:      [120, 128, 136, 144, 152, 160, 168, 176],
       moveP:   [0, 0.3, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95],
@@ -1041,7 +1041,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     },
     {
       id: 'allstar', name: 'All-Star', blurb: 'Moving rings',
-      speed: 192, spacing: 250, maxWin: 250,
+      speed: 192, spacing: 286, maxWin: 250,
       hoopW:   [87, 85, 83, 82, 81, 80, 79, 78],
       dy:      [140, 152, 164, 174, 182, 190, 198, 206],
       moveP:   [0, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
@@ -1051,7 +1051,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     },
     {
       id: 'legend', name: 'Legend', blurb: 'Fast and tilted',
-      speed: 204, spacing: 254, maxWin: 1000,
+      speed: 204, spacing: 290, maxWin: 1000,
       hoopW:   [85, 83, 81, 80, 79, 78, 77, 76],
       dy:      [150, 162, 174, 184, 192, 200, 208, 216],
       moveP:   [0.25, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1],
@@ -1366,7 +1366,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   if (typeof module === 'object' && module.exports) module.exports = P;
   else root.DunkPaytable = P;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-  return {"PAYTABLE":[[{"rim":1.001,"swish":[1.003,1.003,1.004,1.005,1.005]},{"rim":1.003,"swish":[1.007,1.008,1.009,1.011,1.012]},{"rim":1.005,"swish":[1.011,1.013,1.015,1.017,1.019]},{"rim":1.007,"swish":[1.013,1.016,1.018,1.021,1.024]},{"rim":1.01,"swish":[1.02,1.023,1.027,1.031,1.035]},{"rim":1.015,"swish":[1.03,1.036,1.042,1.048,1.053]},{"rim":1.023,"swish":[1.047,1.056,1.066,1.075,1.085]},{"rim":1.039,"swish":[1.079,1.095,1.111,1.126,1.142]}],[{"rim":1,"swish":[1.001,1.001,1.001,1.001,1.001]},{"rim":1.004,"swish":[1.008,1.01,1.012,1.014,1.015]},{"rim":1.007,"swish":[1.014,1.016,1.019,1.022,1.025]},{"rim":1.012,"swish":[1.024,1.029,1.034,1.039,1.044]},{"rim":1.02,"swish":[1.041,1.049,1.057,1.065,1.074]},{"rim":1.031,"swish":[1.063,1.076,1.088,1.101,1.113]},{"rim":1.055,"swish":[1.11,1.133,1.155,1.177,1.199]},{"rim":1.088,"swish":[1.175,1.21,1.245,1.28,1.316]}],[{"rim":1.002,"swish":[1.005,1.005,1.006,1.007,1.008]},{"rim":1.006,"swish":[1.012,1.015,1.017,1.02,1.022]},{"rim":1.013,"swish":[1.026,1.031,1.036,1.041,1.047]},{"rim":1.022,"swish":[1.045,1.054,1.063,1.072,1.081]},{"rim":1.039,"swish":[1.077,1.093,1.108,1.124,1.139]},{"rim":1.06,"swish":[1.12,1.145,1.169,1.193,1.217]},{"rim":1.098,"swish":[1.195,1.234,1.274,1.313,1.352]},{"rim":1.153,"swish":[1.307,1.368,1.43,1.491,1.552]}],[{"rim":1.005,"swish":[1.01,1.013,1.015,1.017,1.019]},{"rim":1.012,"swish":[1.024,1.029,1.034,1.038,1.043]},{"rim":1.023,"swish":[1.045,1.055,1.064,1.073,1.082]},{"rim":1.038,"swish":[1.075,1.091,1.106,1.121,1.136]},{"rim":1.065,"swish":[1.131,1.157,1.183,1.21,1.236]},{"rim":1.101,"swish":[1.201,1.242,1.282,1.322,1.363]},{"rim":1.148,"swish":[1.296,1.356,1.415,1.474,1.534]},{"rim":1.201,"swish":[1.403,1.483,1.564,1.645,1.725]}]],"AVG_CLEAR":[[0.8857,0.8632,0.8311,0.7878,0.7218,0.6552,0.5494,0.4344],[0.8964,0.8412,0.7856,0.6981,0.5932,0.4728,0.3428,0.2287],[0.8777,0.7785,0.6848,0.5785,0.4468,0.3262,0.22,0.1349],[0.8136,0.6752,0.5619,0.4426,0.3285,0.2212,0.1387,0.0927]],"AVG_SWISH":[[0.6888,0.659,0.6253,0.5897,0.5439,0.4991,0.4561,0.4119],[0.7092,0.6656,0.6218,0.5679,0.5145,0.4668,0.4195,0.3744],[0.6302,0.5627,0.5,0.4491,0.411,0.3683,0.3313,0.2918],[0.5482,0.4771,0.4232,0.3855,0.3487,0.3165,0.2838,0.2577]],"AVG_RTP":[[0.9003,0.81,0.7173,0.6094,0.4887,0.3726,0.2558,0.1583],[0.9002,0.7981,0.6805,0.5428,0.3967,0.2532,0.142,0.0673],[0.8999,0.7493,0.5852,0.4181,0.2639,0.1424,0.0677,0.0279],[0.8578,0.6519,0.4516,0.2775,0.1557,0.0752,0.0306,0.0113]],"META":{"mode":"edge","guard":1,"guardFrom":2,"capGood":0.97,"capPro":null,"cap1Good":0.99,"cap1Pro":null,"target":0.9,"weights":{"rim":0.5,"swish":[1,1.2,1.4,1.6,1.8]},"generated":"2026-11-24","engine":12,"samples":24000}};
+  return {"PAYTABLE":[[{"rim":1.001,"swish":[1.001,1.002,1.002,1.002,1.003]},{"rim":1.003,"swish":[1.005,1.006,1.007,1.009,1.01]},{"rim":1.006,"swish":[1.011,1.014,1.016,1.018,1.021]},{"rim":1.006,"swish":[1.013,1.016,1.018,1.021,1.023]},{"rim":1.009,"swish":[1.019,1.022,1.026,1.03,1.034]},{"rim":1.015,"swish":[1.03,1.035,1.041,1.047,1.053]},{"rim":1.023,"swish":[1.047,1.056,1.066,1.075,1.085]},{"rim":1.038,"swish":[1.075,1.09,1.106,1.121,1.136]}],[{"rim":1,"swish":[1,1,1,1,1]},{"rim":1.004,"swish":[1.009,1.01,1.012,1.014,1.015]},{"rim":1.007,"swish":[1.014,1.017,1.02,1.023,1.026]},{"rim":1.012,"swish":[1.025,1.03,1.035,1.04,1.045]},{"rim":1.02,"swish":[1.041,1.049,1.057,1.065,1.073]},{"rim":1.035,"swish":[1.071,1.085,1.099,1.114,1.128]},{"rim":1.056,"swish":[1.111,1.133,1.156,1.178,1.2]},{"rim":1.087,"swish":[1.175,1.21,1.245,1.28,1.315]}],[{"rim":1.004,"swish":[1.007,1.008,1.01,1.011,1.013]},{"rim":1.008,"swish":[1.016,1.019,1.022,1.025,1.029]},{"rim":1.018,"swish":[1.035,1.042,1.049,1.056,1.063]},{"rim":1.028,"swish":[1.056,1.067,1.079,1.09,1.101]},{"rim":1.046,"swish":[1.093,1.112,1.13,1.149,1.167]},{"rim":1.077,"swish":[1.153,1.184,1.215,1.246,1.276]},{"rim":1.116,"swish":[1.233,1.28,1.326,1.373,1.419]},{"rim":1.174,"swish":[1.349,1.419,1.488,1.558,1.628]}],[{"rim":1.007,"swish":[1.015,1.018,1.021,1.024,1.027]},{"rim":1.015,"swish":[1.03,1.036,1.042,1.048,1.053]},{"rim":1.029,"swish":[1.058,1.069,1.081,1.093,1.104]},{"rim":1.046,"swish":[1.093,1.112,1.13,1.149,1.167]},{"rim":1.073,"swish":[1.147,1.176,1.206,1.235,1.265]},{"rim":1.119,"swish":[1.238,1.286,1.334,1.381,1.429]},{"rim":1.168,"swish":[1.337,1.404,1.472,1.539,1.606]},{"rim":1.222,"swish":[1.444,1.533,1.622,1.711,1.8]}]],"AVG_CLEAR":[[0.892,0.8709,0.8408,0.8068,0.7366,0.655,0.5521,0.4331],[0.8997,0.8445,0.7851,0.6855,0.5808,0.4515,0.3333,0.2186],[0.8385,0.7383,0.6354,0.5214,0.4044,0.2887,0.183,0.1116],[0.7699,0.6294,0.5232,0.4005,0.2864,0.1956,0.1182,0.0763]],"AVG_SWISH":[[0.6811,0.6476,0.6152,0.5818,0.5391,0.5003,0.4657,0.4265],[0.6456,0.6028,0.5644,0.516,0.4716,0.4353,0.3971,0.3586],[0.5463,0.4789,0.4258,0.3838,0.3474,0.3153,0.2871,0.2589],[0.5264,0.4534,0.4005,0.3613,0.3246,0.2852,0.2553,0.2308]],"AVG_RTP":[[0.8996,0.8095,0.7278,0.6307,0.5123,0.3894,0.2686,0.1637],[0.8997,0.7979,0.6767,0.5265,0.372,0.2321,0.1258,0.0562],[0.8705,0.6955,0.5206,0.3474,0.2069,0.11,0.0483,0.0186],[0.8292,0.6027,0.4085,0.2423,0.1247,0.0595,0.0231,0.0079]],"META":{"mode":"edge","guard":1,"guardFrom":2,"capGood":0.97,"capPro":null,"cap1Good":0.99,"cap1Pro":null,"target":0.9,"weights":{"rim":0.5,"swish":[1,1.2,1.4,1.6,1.8]},"generated":"2026-11-24","engine":13,"samples":24000}};
 });
 </script>
 <script>/*
@@ -1573,19 +1573,28 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   // The challenges. tier = the easiest tier where it counts (0 Rookie, 1 Pro, 2 All-Star, 3 Legend).
   // p = the chance one run makes it at that tier for a [casual, average, good] player, from the simulator
   // (they keep going until they bust); the demo uses it to simulate other entrants. Aim: an average player
-  // makes one in about 4-15% of runs, a strong one in 25-50%. Measured on engine v12: its fair rims made
-  // "Clear level 4" on All-Star too easy (28% / 60%) and "Swish every ring in two levels" too hard (2% / 18%),
-  // so those became "Clear level 5" and "Score 120 in one run" (any tier).
+  // makes one in about 4-15% of runs, a strong one in 25-50%. Measured on engine v13 (20,000 runs per skill):
+  // with the rings spread out 1:1 with the speed, swishes got rarer (an average player swishes 65% of Pro's
+  // level-1 rings, down from 71%), so the streak, swish and score challenges came down and "Swish every ring in
+  // a level" moved to Pro. Each replaced its v12 challenge in place, so every day keeps the same kind of challenge.
   const GOALS = [
-    { id: 'streak10', kind: 'best', n: 10, tier: 1, text: 'Swish 10 in a row', p: [0.016, 0.053, 0.281] },
-    { id: 'perfect1', kind: 'perfect', n: 1, tier: 2, text: 'Swish every ring in a level', p: [0.026, 0.102, 0.335] },
-    { id: 'clear5', kind: 'clears', n: 5, tier: 2, text: 'Clear level 5', p: [0.029, 0.125, 0.405] },
-    { id: 'score100', kind: 'score', n: 100, tier: 1, text: 'Score 100 in one run', p: [0.009, 0.084, 0.521] },
-    { id: 'swish25', kind: 'swishes', n: 25, tier: 1, text: 'Swish 25 rings in one run', p: [0.003, 0.046, 0.413] },
-    { id: 'streak8a', kind: 'best', n: 8, tier: 2, text: 'Swish 8 in a row', p: [0.013, 0.051, 0.233] },
-    { id: 'score120', kind: 'score', n: 120, tier: 0, text: 'Score 120 in one run', p: [0.003, 0.052, 0.471] }
+    { id: 'streak8', kind: 'best', n: 8, tier: 1, text: 'Swish 8 in a row', p: [0.019, 0.076, 0.336] },
+    { id: 'perfect1', kind: 'perfect', n: 1, tier: 1, text: 'Swish every ring in a level', p: [0.038, 0.116, 0.408] },
+    { id: 'clear5', kind: 'clears', n: 5, tier: 2, text: 'Clear level 5', p: [0.017, 0.082, 0.345] },
+    { id: 'score90', kind: 'score', n: 90, tier: 1, text: 'Score 90 in one run', p: [0.005, 0.06, 0.48] },
+    { id: 'swish15', kind: 'swishes', n: 15, tier: 2, text: 'Swish 15 rings in one run', p: [0.006, 0.061, 0.433] },
+    { id: 'streak6', kind: 'best', n: 6, tier: 2, text: 'Swish 6 in a row', p: [0.027, 0.075, 0.267] },
+    { id: 'score120', kind: 'score', n: 120, tier: 0, text: 'Score 120 in one run', p: [0.002, 0.039, 0.465] }
   ];
-  const GOAL_BY = Object.fromEntries(GOALS.map((g) => [g.id, g]));
+  // challenges taken out of the rotation (engine v13): no new pot gets one, but a pot that opened with one before
+  // an update is still shown and judged by it until it closes
+  const RETIRED = [
+    { id: 'streak10', kind: 'best', n: 10, tier: 1, text: 'Swish 10 in a row' },
+    { id: 'score100', kind: 'score', n: 100, tier: 1, text: 'Score 100 in one run' },
+    { id: 'swish25', kind: 'swishes', n: 25, tier: 1, text: 'Swish 25 rings in one run' },
+    { id: 'streak8a', kind: 'best', n: 8, tier: 2, text: 'Swish 8 in a row' }
+  ];
+  const GOAL_BY = Object.fromEntries(RETIRED.concat(GOALS).map((g) => [g.id, g]));
   const TIER_NAMES = ['Rookie', 'Pro', 'All-Star', 'Legend'];
   const tierText = (t) => (t >= 3 ? 'on Legend' : t > 0 ? 'on ' + TIER_NAMES[t] + ' or harder' : 'on any tier');
 
@@ -1848,14 +1857,14 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   // @@PRIZES@@ written by node sim/special.cjs --write: prize (× entry) per recipe, and the share of attempts that
   // clear it for [casual, average, good, pro] players. Don't edit by hand.
   const PRIZES = {
-    gauntlet: { x: 2.65, p: [0.0367, 0.1148, 0.3583, 0.6509] },
-    tilt: { x: 2.85, p: [0.0222, 0.0893, 0.3314, 0.6732] },
-    zigzag: { x: 2.75, p: [0.0469, 0.1238, 0.3413, 0.5909] },
-    needle: { x: 2.35, p: [0.0464, 0.1361, 0.3988, 0.7386] },
-    marathon: { x: 2.7, p: [0.0295, 0.1023, 0.3466, 0.6419] },
-    wave: { x: 2.95, p: [0.023, 0.0886, 0.3212, 0.6562] },
-    express: { x: 2.65, p: [0.0359, 0.1125, 0.3539, 0.6834] }
-  }; // engine v12, 20000 attempts each, 2026-11-24
+    gauntlet: { x: 3, p: [0.0272, 0.0975, 0.3151, 0.6357] },
+    tilt: { x: 3.15, p: [0.0179, 0.0726, 0.298, 0.6493] },
+    zigzag: { x: 2.1, p: [0.0676, 0.1758, 0.4471, 0.7323] },
+    needle: { x: 2.6, p: [0.0327, 0.1152, 0.3629, 0.7105] },
+    marathon: { x: 2.75, p: [0.0276, 0.0973, 0.3398, 0.66] },
+    wave: { x: 3, p: [0.0187, 0.0848, 0.3159, 0.6475] },
+    express: { x: 3.3, p: [0.0259, 0.085, 0.2866, 0.6028] }
+  }; // engine v13, 20000 attempts each, 2026-11-24
   // @@END@@
 
   // the recipe's settings: the base level's, changed as the recipe says
@@ -2714,7 +2723,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   // ---------------------------------------------------------------- canvas & view
   // The client shows a 352-unit-wide window of the 400-unit world (a little zoomed in),
   // world y from -10 to 680. Physics never depends on this.
-  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 76; // the ball sits about 22% in, so more of the course shows ahead
+  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 56; // the ball sits about 16% in, so more of the course shows ahead (76 before engine v13 spread the rings out)
   const RV = P.R; // drawn ball radius = collision radius
   const cv = $('game'), cx = cv.getContext('2d');
   let vw = 0, vh = 0, dpr = 1, scale = 1, offX = 0, offY = 0;

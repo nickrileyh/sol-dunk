@@ -42,14 +42,14 @@
   // @@PRIZES@@ written by node sim/special.cjs --write: prize (× entry) per recipe, and the share of attempts that
   // clear it for [casual, average, good, pro] players. Don't edit by hand.
   const PRIZES = {
-    gauntlet: { x: 2.65, p: [0.0367, 0.1148, 0.3583, 0.6509] },
-    tilt: { x: 2.85, p: [0.0222, 0.0893, 0.3314, 0.6732] },
-    zigzag: { x: 2.75, p: [0.0469, 0.1238, 0.3413, 0.5909] },
-    needle: { x: 2.35, p: [0.0464, 0.1361, 0.3988, 0.7386] },
-    marathon: { x: 2.7, p: [0.0295, 0.1023, 0.3466, 0.6419] },
-    wave: { x: 2.95, p: [0.023, 0.0886, 0.3212, 0.6562] },
-    express: { x: 2.65, p: [0.0359, 0.1125, 0.3539, 0.6834] }
-  }; // engine v12, 20000 attempts each, 2026-11-24
+    gauntlet: { x: 3, p: [0.0272, 0.0975, 0.3151, 0.6357] },
+    tilt: { x: 3.15, p: [0.0179, 0.0726, 0.298, 0.6493] },
+    zigzag: { x: 2.1, p: [0.0676, 0.1758, 0.4471, 0.7323] },
+    needle: { x: 2.6, p: [0.0327, 0.1152, 0.3629, 0.7105] },
+    marathon: { x: 2.75, p: [0.0276, 0.0973, 0.3398, 0.66] },
+    wave: { x: 3, p: [0.0187, 0.0848, 0.3159, 0.6475] },
+    express: { x: 3.3, p: [0.0259, 0.085, 0.2866, 0.6028] }
+  }; // engine v13, 20000 attempts each, 2026-11-24
   // @@END@@
 
   // the recipe's settings: the base level's, changed as the recipe says
