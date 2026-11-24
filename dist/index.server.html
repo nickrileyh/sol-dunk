@@ -72,6 +72,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
   box-shadow: inset 0 0 0 0.5px var(--glass-line);
 }
+/* During a run the capsules, the streak meter and goal notices sit over a canvas that redraws every frame, so a
+   blur behind them would have to be recomputed every frame too, which costs phones frames. Over the dark court a
+   slightly denser fill looks the same. */
+.hud-play .glass, .hud-play .streak, .hud-play #notice { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.hud-play .glass, .hud-play .streak { background: rgba(40, 40, 44, 0.8); }
+.hud-play #notice { background: rgba(44, 44, 46, 0.94); }
 .cap {
   pointer-events: auto;
   display: inline-flex; align-items: center; gap: 5px;
@@ -112,8 +118,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 }
 .score.hot { color: rgb(var(--heat-text)); }
 .score.nova { color: rgb(var(--nova-text)); }
-.score.bump { animation: bump 0.45s cubic-bezier(.2, .9, .2, 1); }
-@keyframes bump { 0% { transform: scale(1.2); } 100% { transform: scale(1); } }
+/* the multiplier's bump, the streak meter's pump, the pot's +gain and the callouts are played from game.js with the
+   Web Animations API (hudAnim), so restarting one never forces a layout mid-frame */
 .pot { margin-top: 3px; font-family: var(--font-round); font-weight: 600; font-size: 15px; color: rgba(255, 255, 255, 0.8); font-variant-numeric: tabular-nums; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7); white-space: nowrap; }
 .pot .unit { color: var(--label-3); }
 .hud-lobby #hud { z-index: 12; display: flex; justify-content: flex-end; padding-left: 16px; padding-right: 16px; }
@@ -346,8 +352,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .streak.t5 .flame { color: rgb(var(--nova-hi)); }
 .streak.t5 .heat i.f { background: rgb(var(--nova)); }
 .streak.t5 #stkT { color: rgb(var(--nova-text)); }
-.streak.pump { animation: stkPump 0.35s ease-out; }
-@keyframes stkPump { 0% { transform: scale(1); } 40% { transform: scale(1.09); } 100% { transform: scale(1); } }
 .streak.broke { animation: stkBreak 0.65s ease-out forwards; }
 .streak.broke .flame, .streak.broke #stkT { color: var(--label-3); filter: none; }
 @keyframes stkBreak {
@@ -359,16 +363,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .pot { transition: color 0.35s, text-shadow 0.35s; }
 .pot.up { color: var(--green); }
 .delta { position: absolute; left: 0; right: 0; top: 76px; font-size: 13px; font-weight: 700; color: var(--green); opacity: 0; white-space: nowrap; text-align: center; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6); }
-.delta.go { animation: deltaUp 1s ease-out; }
-@keyframes deltaUp { 0% { opacity: 0; transform: translateY(-8px); } 15% { opacity: 1; transform: none; } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(8px); } }
 
 /* ---------- big moments ---------- */
 #callout { position: fixed; left: 0; right: 0; top: max(21%, calc(var(--safe-t) + 168px)); z-index: 4; text-align: center; pointer-events: none; opacity: 0; }
-#callout.show { animation: callPop 1.3s cubic-bezier(.2, .9, .2, 1) forwards; }
-@keyframes callPop {
-  0% { opacity: 0; transform: scale(0.55); } 14% { opacity: 1; transform: scale(1.1); } 26% { transform: scale(1); }
-  76% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-16px) scale(0.98); }
-}
 #callout .c1 {
   display: inline-block; padding: 0 8px;
   font-family: var(--font-round); font-weight: 700; font-size: 44px; letter-spacing: -0.01em; line-height: 1.05;
@@ -538,8 +535,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 #tabbar svg .fill { fill: currentColor; stroke: none; }
 #tabbar button[aria-selected="true"] { color: var(--orange); }
 #tabbar button[aria-selected="true"] svg { stroke-width: 2.1; }
-#tabbar button.pop svg { animation: tabPop 0.35s cubic-bezier(.2, .9, .2, 1); }
-@keyframes tabPop { 0% { transform: scale(0.86); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
+/* the tab icon's pop on a tap is played by hudAnim() in game.js */
 #tabbar .badge { position: absolute; top: 5px; left: calc(50% + 8px); width: 8px; height: 8px; border-radius: 4px; background: var(--red); display: none; }
 #tabbar .badge.on { display: block; }
 .hud-play #tabbar { transform: translateY(100%); opacity: 0; pointer-events: none; }
@@ -830,16 +826,13 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   #prompt .ring::before, #prompt .ring::after { animation: none; }
   #prompt .ring::after { transform: scale(1); opacity: 0.45; }
-  .score.bump { animation: none; }
-  #callout.show { animation: callFade 1.3s linear forwards; }
-  .streak.pump, .streak.broke, .gain, .delta.go { animation: none; }
+  .streak.broke, .gain { animation: none; }
   #notice { transition: opacity 0.2s; transform: translate(-50%, 0); }
   .streak.broke { opacity: 0; }
   .sheet, .card, .panel, .view, #tabbar { transition: opacity 0.15s; }
   .view.page.hide { transform: none; }
-  #tabbar button.pop svg { animation: none; }
 }
-@keyframes callFade { 0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
 </style>
 </head>
 <body class="hud-lobby">
@@ -2129,7 +2122,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       nova: { outer: [120, 44, 220], mid: [214, 80, 214], inner: [255, 172, 232], core: [255, 244, 252] } },
     rose: { name: 'Rose', base: { outer: [214, 20, 84], mid: [255, 72, 140], inner: [255, 160, 200], core: [255, 236, 246] },
       nova: { outer: [130, 40, 255], mid: [184, 92, 255], inner: [228, 172, 255], core: [255, 246, 255] } },
-    eclipse: { name: 'Eclipse', base: { outer: [30, 20, 44], mid: [78, 42, 98], inner: [255, 104, 44], core: [255, 222, 158] },
+    eclipse: { name: 'Eclipse', dark: true, base: { outer: [30, 20, 44], mid: [78, 42, 98], inner: [255, 104, 44], core: [255, 222, 158] },
       nova: { outer: [14, 14, 26], mid: [44, 46, 72], inner: [120, 196, 255], core: [236, 248, 255] } },
     plasma: { name: 'Plasma', base: { outer: [196, 0, 156], mid: [255, 56, 196], inner: [255, 168, 238], core: [255, 240, 255] },
       nova: { outer: [0, 112, 255], mid: [0, 196, 255], inner: [168, 240, 255], core: [255, 255, 255] } },
@@ -2760,7 +2753,9 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   const perf = { avg: 1 / 60, slow: 0 };
   let bgEl = null;      // cached backdrop, rebuilt on resize
   let sheetTopC = -1, heroT = 0, heroB = 0;   // the page's window onto the arena, in screen px (layout read only when it changes)
+  const HUD_DIRTY = { on: true }; // the in-play HUD changed shape: measure it again at the start of the next frame
   function resize() {
+    HUD_DIRTY.on = true;
     dpr = Math.min(window.devicePixelRatio || 1, dprCap);
     bgEl = null; sheetTopC = -1;
     vw = window.innerWidth; vh = window.innerHeight;
@@ -3071,6 +3066,34 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const el = farStrip(A), tw = A.far.tw, base = view.camX * (1 - A.far.p);
     for (let x = base + Math.floor((left - base) / tw) * tw; x < left + width; x += tw) c.drawImage(el, x, W.FLOOR - A.far.h, tw, A.far.h);
   }
+  // Text drawn on the canvas during play (ring labels, the checkpoint label, BEST, the LED board, the 8-ball) is
+  // rasterised once per string, size and colour and then just stamped, so a frame never sets a canvas font:
+  // setting one can make the browser recompute the page's styles in the middle of the frame, and on a phone that
+  // shows up as a hitch right when something scores.
+  const TXT = new Map();
+  const newCanvas = (w, h) => { const el = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(w, h) : document.createElement('canvas'); el.width = w; el.height = h; return el; };
+  function textSprite(text, weight, px, family, color) { // px: font size in device pixels
+    px = Math.max(4, Math.round(px));
+    const key = text + '|' + weight + '|' + px + '|' + color + '|' + family;
+    let t = TXT.get(key);
+    if (t) return t;
+    const font = weight + ' ' + px + 'px ' + family, pad = Math.ceil(px * 0.25) + 2;
+    let el = newCanvas(8, 8), g = el.getContext('2d');
+    g.font = font;
+    const tw = g.measureText(text).width, w = Math.ceil(tw) + pad * 2, h = Math.ceil(px * 1.3) + pad * 2;
+    el.width = w; el.height = h; g = el.getContext('2d'); // resizing resets the context
+    g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = color;
+    g.fillText(text, w / 2, h / 2);
+    t = { el, w, h, tw, px };
+    if (TXT.size > 96) TXT.delete(TXT.keys().next().value); // the oldest goes first
+    TXT.set(key, t);
+    return t;
+  }
+  // stamp a text sprite centred on (x, y) in the current space, where k device pixels make one unit
+  function drawText(c, t, x, y, k, s) {
+    const sc = (s || 1) / k;
+    c.drawImage(t.el, x - t.w * sc / 2, y - t.h * sc / 2, t.w * sc, t.h * sc);
+  }
   // the big multiplier behind play, rasterised once per value instead of every frame
   const mult = { key: '', el: null, w: 0, h: 0 };
   function multSprite(text, col) {
@@ -3093,16 +3116,42 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   // ---------------------------------------------------------------- fire palette
   // Fire runs from a near-white core out to its edge colour; a 5+ swish streak burns in the flame's hotter "nova"
   // palette (blue-white for the Fire flame). Every flame skin brings both palettes (FLAMES).
+  // Going from the base palette to the full-heat one, the fire burns through white-hot on the way (orange, then
+  // yellow-white, then blue-white for the Fire flame), the way heating up looks. A straight mix of the two
+  // palettes passed through a muddy grey-pink halfway.
   const palMix = { outer: [0, 0, 0], mid: [0, 0, 0], inner: [0, 0, 0], core: [0, 0, 0] };
+  const HOT = { outer: 0.75, mid: 0.8, inner: 0.85, core: 1 }; // how far each layer goes toward white-hot halfway
   function flamePal(n) {
     const F = eqFlame(), A = F.base, B = F.nova;
+    const lo = n < 0.5, u = lo ? n * 2 : (n - 0.5) * 2, e = u * u * (3 - 2 * u);
     for (const k in palMix) {
-      const a = A[k], b = B[k], o = palMix[k];
-      o[0] = Math.round(a[0] + (b[0] - a[0]) * n); o[1] = Math.round(a[1] + (b[1] - a[1]) * n); o[2] = Math.round(a[2] + (b[2] - a[2]) * n);
+      const a = A[k], b = B[k], o = palMix[k], h = F.dark ? 0 : HOT[k]; // a dark flame stays dark
+      for (let i = 0; i < 3; i++) {
+        const w = (a[i] + b[i]) / 2 + ((A.core[i] + B.core[i]) / 2 - (a[i] + b[i]) / 2) * h; // the white-hot midpoint
+        o[i] = Math.round(lo ? a[i] + (w - a[i]) * e : w + (b[i] - w) * e);
+      }
     }
     return palMix;
   }
   function rgba(c3, a) { return 'rgba(' + c3[0] + ',' + c3[1] + ',' + c3[2] + ',' + clamp(a, 0, 1).toFixed(3) + ')'; }
+  // Soft round glows (the fire's light, its pool on the floor, the rings' shadows): one gradient per colour, made
+  // for a unit circle and drawn scaled, with the strength in globalAlpha, instead of a new gradient every frame.
+  const GLOWS = new Map();
+  function softGlow(c, x, y, rx, ry, c3, a, inner) {
+    if (!(a > 0.002) || !(rx > 0) || !(ry > 0)) return;
+    const key = (typeof c3 === 'string' ? c3 : c3.join(',')) + '|' + (inner || 0);
+    let g = GLOWS.get(key);
+    if (!g) {
+      g = c.createRadialGradient(0, 0, inner || 0, 0, 0, 1);
+      g.addColorStop(0, 'rgba(' + key.split('|')[0] + ',1)'); g.addColorStop(1, 'rgba(' + key.split('|')[0] + ',0)');
+      if (GLOWS.size > 32) GLOWS.delete(GLOWS.keys().next().value);
+      GLOWS.set(key, g);
+    }
+    c.save(); c.translate(x, y); c.scale(rx, ry);
+    c.globalAlpha = Math.min(1, a); c.fillStyle = g;
+    c.beginPath(); c.arc(0, 0, 1, 0, Math.PI * 2); c.fill();
+    c.restore();
+  }
   // colour of a flame lick by age: t = 1 when born (hot) down to 0 (cool red edge)
   function lickRgba(n, t, a) {
     const P = flamePal(n), hot = t > 0.5;
@@ -3245,18 +3294,23 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     gift: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 11h7v10H5a1 1 0 0 1-1-1zm9 0h7v9a1 1 0 0 1-1 1h-6zM3 7.5A1.5 1.5 0 0 1 4.5 6h15A1.5 1.5 0 0 1 21 7.5v1A1.5 1.5 0 0 1 19.5 10H13V6h-2v4H4.5A1.5 1.5 0 0 1 3 8.5zM8.6 2.6c1.4-.4 2.6.8 3.4 2.9.8-2.1 2-3.3 3.4-2.9 1.6.5 1.6 2.6-.3 3.4H8.9C7 5.2 7 3.1 8.6 2.6Z"/></svg>'
   };
   // numbers roll to their new value instead of jumping
+  // Numbers that count up (the pot, the checkpoint pot, a win) tick in the game's own frame, after the canvas is
+  // drawn, so their writes to the page come last in the frame instead of landing before the next frame's work.
+  const COUNTS = [];
   function countUp(el, from, to, fmt, ms) {
     const id = (el._cu = (el._cu || 0) + 1);
     if (REDUCED || !(Math.abs(to - from) > 1e-12)) { el.textContent = fmt(to); return; }
-    const t0 = performance.now();
-    const tick = (t) => {
-      if (el._cu !== id) return;
-      const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3);
-      el.textContent = fmt(from + (to - from) * e);
-      if (k < 1) requestAnimationFrame(tick);
-    };
+    COUNTS.push({ el, id, from, to, fmt, ms, t0: performance.now() });
     el.textContent = fmt(from);
-    requestAnimationFrame(tick);
+  }
+  function tickCounts(now) {
+    for (let i = COUNTS.length - 1; i >= 0; i--) {
+      const u = COUNTS[i];
+      if (u.el._cu !== u.id) { COUNTS.splice(i, 1); continue; } // replaced by a newer count, or set directly
+      const k = clamp((now - u.t0) / u.ms, 0, 1), e = 1 - Math.pow(1 - k, 3), txt = u.fmt(u.from + (u.to - u.from) * e);
+      if (u.el.textContent !== txt) u.el.textContent = txt;
+      if (k >= 1) COUNTS.splice(i, 1);
+    }
   }
   let potShown = 0, potUpTimer = 0;
   function fmtDelta(d) { return d >= 0.0001 ? fmtSol(d) : d >= 0.000001 ? d.toFixed(6) : '0'; }
@@ -3272,7 +3326,9 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     ui.mult.textContent = fmtMult(run.total);
     if (animate && v > potShown + 1e-12) { // a green "+gain" under the pot and a brief glow
       ui.delta.textContent = '+' + fmtDelta(v - potShown) + ' SOL';
-      ui.delta.classList.remove('go'); void ui.delta.offsetWidth; ui.delta.classList.add('go');
+      if (!REDUCED) hudAnim(ui.delta, 'up', [
+        { opacity: 0, transform: 'translateY(-8px)', easing: 'ease-out' }, { opacity: 1, transform: 'none', offset: 0.15, easing: 'ease-out' },
+        { opacity: 1, offset: 0.7, easing: 'ease-out' }, { opacity: 0, transform: 'translateY(8px)' }], { duration: 1000 });
       ui.potCap.classList.add('up'); clearTimeout(potUpTimer); potUpTimer = setTimeout(() => ui.potCap.classList.remove('up'), 700);
     }
     if (animate) countUp(ui.pot, potShown, v, fmtSol, 320); else { ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = fmtSol(v); }
@@ -3281,7 +3337,17 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 
   // the big multiplier warms with the swish streak, like the ball, and bumps on every ring
   function setHeat(streak) { ui.mult.classList.toggle('hot', streak >= 3 && streak < 5); ui.mult.classList.toggle('nova', streak >= 5); }
-  function bumpScore() { if (REDUCED) return; const el = ui.mult; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+  // (Re)start a short HUD animation with the Web Animations API. Restarting a CSS animation by removing its class,
+  // reading offsetWidth and adding it back makes the browser lay out the whole page in the middle of a frame,
+  // which on a phone can drop a frame right as the ball goes through a ring. This runs on the compositor instead.
+  function hudAnim(el, name, frames, opts) {
+    if (!el.animate) return null;
+    const a = el._anims || (el._anims = {});
+    if (a[name]) a[name].cancel();
+    return (a[name] = el.animate(frames, opts));
+  }
+  const EASE_OUT = 'cubic-bezier(.2, .9, .2, 1)';
+  function bumpScore() { if (!REDUCED) hudAnim(ui.mult, 'bump', [{ transform: 'scale(1.2)' }, { transform: 'scale(1)' }], { duration: 450, easing: EASE_OUT }); }
 
   // streak meter: flame, count, five heat bars (the swish pay tiers) and what the next swish pays
   const STK = { el: $('streak'), n: $('stkN'), t: $('stkT'), next: $('stkNext'), heat: $('streak').querySelectorAll('.heat i'), timer: 0, rect: null, k: 0, under: false };
@@ -3290,8 +3356,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   function streakDodge() {
     const el = STK.el;
     let under = false;
-    if (phase === 'play' && !ball.hidden && el.classList.contains('on') && view.bsr) {
-      if (!STK.rect || ++STK.k % 12 === 0) STK.rect = el.getBoundingClientRect();
+    if (phase === 'play' && !ball.hidden && el.classList.contains('on') && view.bsr && STK.rect) {
       const R = STK.rect, r = view.bsr + 8;
       under = view.bsx + r > R.left && view.bsx - r < R.right && view.bsy + r > R.top && view.bsy - r < R.bottom;
     }
@@ -3300,19 +3365,20 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   function setStreakHud(mode) {
     const s = run.streak, el = STK.el;
     clearTimeout(STK.timer);
-    if (mode === 'broke') {
-      el.classList.remove('pump'); void el.offsetWidth; el.classList.add('broke');
+    if (mode === 'broke') { // a different animation from the pump, so switching classes starts it without a reflow
+      el.classList.remove('pump'); el.classList.add('broke');
       STK.timer = setTimeout(() => el.classList.remove('broke', 'on'), 650);
       return;
     }
     el.classList.remove('broke');
+    STK.dirty = true; HUD_DIRTY.on = true;
     if (s <= 1) { el.classList.remove('on', 'pump'); return; }
     el.classList.add('on');
     el.classList.toggle('t3', s >= 3 && s < 5); el.classList.toggle('t5', s >= 5);
     STK.n.textContent = s; STK.t.textContent = streakName(s);
     STK.heat.forEach((i, k) => i.classList.toggle('f', k < Math.min(s, 5)));
     STK.next.textContent = 'Next swish ' + fmtX(E.hoopMultiplier(PAY.PAYTABLE[run.di][run.level - 1], 'S', s + 1));
-    if (mode === 'pump') { el.classList.remove('pump'); void el.offsetWidth; el.classList.add('pump'); }
+    if (mode === 'pump' && !REDUCED) hudAnim(el, 'pump', [{ transform: 'scale(1)' }, { transform: 'scale(1.09)', offset: 0.4 }, { transform: 'scale(1)' }], { duration: 350, easing: 'ease-out' });
   }
 
   function hideStreak() { clearTimeout(STK.timer); STK.el.classList.remove('on', 'pump', 'broke', 'tuck'); }
@@ -3330,8 +3396,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     CALL.busy = true;
     CALL.t.textContent = c.t; CALL.s.textContent = c.s || '';
     CALL.el.className = c.cls || '';
-    void CALL.el.offsetWidth;
-    CALL.el.classList.add('show');
+    const e = EASE_OUT;
+    hudAnim(CALL.el, 'pop', REDUCED
+      ? [{ opacity: 0 }, { opacity: 1, offset: 0.1 }, { opacity: 1, offset: 0.8 }, { opacity: 0 }]
+      : [{ opacity: 0, transform: 'scale(0.55)', easing: e }, { opacity: 1, transform: 'scale(1.1)', offset: 0.14, easing: e },
+        { transform: 'scale(1)', offset: 0.26, easing: e }, { opacity: 1, transform: 'none', offset: 0.76, easing: e },
+        { opacity: 0, transform: 'translateY(-16px) scale(0.98)' }], { duration: 1300 });
     setTimeout(nextCallout, 800);
   }
   function clearCallouts() { CALL.q.length = 0; }
@@ -3340,7 +3410,17 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   // they happen. They are awarded when the run ends, whatever happens next, as before.
   // One at a time. A pot notice (money) goes to the front and cuts the current one short; when several goals land
   // together each one shows for less time, so they don't trail on long after the moment.
-  const NOTE = { el: $('notice'), q: [], busy: false, timer: 0, cur: null };
+  const NOTE = { el: $('notice'), q: [], busy: false, timer: 0, cur: null, parts: null, icons: new Map() };
+  // A notice arrives in the middle of a frame (a ring scored), so it fills in text and reuses each icon, parsed once:
+  // setting innerHTML there makes the browser restyle the page on the spot.
+  function noteIcon(svg) {
+    let n = NOTE.icons.get(svg);
+    if (!n) { const t = document.createElement('template'); t.innerHTML = svg; n = t.content.firstElementChild || t.content; NOTE.icons.set(svg, n); }
+    return n;
+  }
+  NOTE.el.innerHTML = '<span class="ni"></span><span class="nb"><span class="nt"></span><span class="ns"></span></span>';
+  NOTE.parts = ['.ni', '.nt', '.ns'].map((q) => NOTE.el.querySelector(q));
+  [ICON.check, ICON.flag, ICON.medal, ICON.trophy, ICON.gift].forEach((i) => { if (i) noteIcon(i); }); // parsed now, not mid-run
   function notice(kind, icon, title, sub, first) {
     const n = { kind, icon, title, sub, first: !!first };
     if (first) NOTE.q.unshift(n); else NOTE.q.push(n);
@@ -3352,9 +3432,11 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     NOTE.cur = n || null;
     if (!n) { NOTE.busy = false; return; }
     NOTE.busy = true;
+    const [ni, nt, ns] = NOTE.parts;
     el.className = n.kind;
-    el.innerHTML = `<span class="ni">${n.icon}</span><span class="nb"><span class="nt">${n.title}</span><span class="ns">${n.sub}</span></span>`;
-    void el.offsetWidth; el.classList.add('show');
+    if (ni.firstChild !== noteIcon(n.icon)) ni.replaceChildren(noteIcon(n.icon));
+    nt.textContent = n.title; ns.textContent = n.sub;
+    el.classList.add('show'); // it has been hidden since the last one left, so its transition starts from there
     Sound.goal(); buzz(8);
     NOTE.timer = setTimeout(() => { el.classList.remove('show'); NOTE.timer = setTimeout(nextNotice, 320); }, n.first ? 2600 : NOTE.q.length ? 1500 : 2200);
   }
@@ -3420,19 +3502,27 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   function refreshProfileHud() { syncBadges(); }
   // no run under way: every mission at its saved progress
   const runFacts0 = () => ({});
+  // The ring pips are built once per level; after that a ring scored only changes classes on the existing ones,
+  // so each pip eases to its new colour (rebuilding them every ring made them snap, and re-parsed HTML mid-frame).
   function setPips(st) {
-    let h = '';
     const n = st ? st.hoops.length : NH;
-    for (let i = 0; i < n; i++) {
-      const o = st ? st.outcomes[i] : null;
-      const now = st && !st.done && i === st.next;
-      h += '<span class="seg-i' + (i === n - 1 ? ' cp' : '') + (o ? ' on' + (o === 'S' ? ' sw' : '') : '') + (now ? ' now' : '') + '"></span>';
+    if (ui.pips.children.length !== n) {
+      let h = '';
+      for (let i = 0; i < n; i++) h += '<span class="seg-i' + (i === n - 1 ? ' cp' : '') + '"></span>';
+      ui.pips.innerHTML = h;
+      // a special has more rings: thinner segments in about the same width
+      ui.pips.style.gridTemplateColumns = n === NH ? '' : 'repeat(' + n + ', ' + Math.max(3, Math.floor((128 - (n - 1) * 2) / n)) + 'px)';
+      ui.pips.style.gap = n === NH ? '' : '2px';
     }
-    ui.pips.innerHTML = h;
-    // a special has more rings: thinner segments in about the same width
-    ui.pips.style.gridTemplateColumns = n === NH ? '' : 'repeat(' + n + ', ' + Math.max(3, Math.floor((128 - (n - 1) * 2) / n)) + 'px)';
-    ui.pips.style.gap = n === NH ? '' : '2px';
-    ui.level.textContent = run.mode === 'special' ? SP.BY[run.recipe].name : 'Level ' + run.level;
+    for (let i = 0; i < n; i++) {
+      const o = st ? st.outcomes[i] : null, el = ui.pips.children[i], cl = el.classList;
+      if (cl.contains('on') !== !!o) cl.toggle('on', !!o);
+      if (cl.contains('sw') !== (o === 'S')) cl.toggle('sw', o === 'S');
+      const now = !!(st && !st.done && i === st.next);
+      if (cl.contains('now') !== now) cl.toggle('now', now);
+    }
+    const lv = run.mode === 'special' ? SP.BY[run.recipe].name : 'Level ' + run.level;
+    if (ui.level.textContent !== lv) { ui.level.textContent = lv; HUD_DIRTY.on = true; }
   }
   function setBalance() {
     ui.bal.textContent = fmtBal(bank.balance());
@@ -3451,7 +3541,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   function toast(msg) { ui.toast.textContent = msg; ui.toast.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => ui.toast.classList.remove('show'), 2600); }
   // optional SOL token icon next to amounts: set SOL_DUNK_CONFIG.solIconUrl to the official asset
   if (CFG.solIconUrl) document.querySelectorAll('.sol-ico').forEach((el) => { const im = new Image(); im.alt = ''; im.src = CFG.solIconUrl; el.appendChild(im); });
-  function setHudMode(play) { document.body.classList.toggle('hud-play', play); document.body.classList.toggle('hud-lobby', !play); }
+  function setHudMode(play) { document.body.classList.toggle('hud-play', play); document.body.classList.toggle('hud-lobby', !play); HUD_DIRTY.on = true; }
   function show(el, on) { el.classList.toggle('hide', !on); }
   function armCard(el, ms) {
     el.classList.add('arming'); clearTimeout(el._arm);
@@ -3727,7 +3817,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     run.st = E.createState(def); view.st = run.st; run.taps = []; run.lvlStart = run.total;
     if (autoBot) autoBot = BOT.createBot(autoBot.p, E.makeRng('auto' + Math.random()));
     settleOffset();
-    ball.glide = { fx: ball.x, fy: ball.y, tx: view.offset, ty: def.startY, t: 0, d: 0.45 };
+    ball.glide = glideTo(view.offset, def.startY, 0.45, 0, 0);
     ball.fall = null; ball.hidden = false;
     phase = 'ready';
     run.lvlSw = 0; run.log.push([]);
@@ -3738,6 +3828,15 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   }
 
   function settleOffset() { ball.x += ball.ox; ball.y += ball.oy; ball.ox = 0; ball.oy = 0; }
+  // A glide carries the ball to the start of a level. It leaves with the ball's own motion and arrives with the
+  // motion that comes next (at rest for a run, already flying for the lobby's demo), on a cubic Hermite curve, so
+  // there is no jolt at either end. Its speed along the way is the ball's speed, so the flame, lean and spin follow.
+  function glideTo(tx, ty, d, v1x, v1y) {
+    let vx = ball.vx || 0, vy = ball.vy || 0;
+    const vmax = 2 * Math.hypot(tx - ball.x, ty - ball.y) / d + 60, v = Math.hypot(vx, vy);
+    if (v > vmax) { vx *= vmax / v; vy *= vmax / v; } // a fast fall bends the path a little, never loops it
+    return { fx: ball.x, fy: ball.y, tx, ty, t: 0, d, v0x: vx, v0y: vy, v1x, v1y };
+  }
   function beginPlay() {
     hidePrompt();
     const fx = ball.x + ball.ox, fy = ball.y + ball.oy; // where the ball is drawn right now
@@ -4071,16 +4170,17 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     $('xpGain').textContent = '+' + pr.xp + ' XP';
     $('xpLvl').textContent = 'Level ' + b.l;
     box.classList.remove('up');
-    fill.style.transition = 'none'; fill.style.width = (b.into / b.need * 100).toFixed(1) + '%';
-    void fill.offsetWidth;
+    if (fill._anims && fill._anims.fill) fill._anims.fill.cancel();
+    fill.style.transition = 'none'; fill.style.width = (b.into / b.need * 100).toFixed(1) + '%'; // applied at the next frame, before the timer below
     xpTimers.push(setTimeout(() => {
       fill.style.transition = 'width 0.8s cubic-bezier(.2,.9,.2,1)';
       fill.style.width = (up ? 100 : a.into / a.need * 100).toFixed(1) + '%';
     }, 250));
     if (up) xpTimers.push(setTimeout(() => {
       box.classList.add('up'); $('xpLvl').textContent = 'Level up! You\'re level ' + a.l;
-      fill.style.transition = 'none'; fill.style.width = '0%'; void fill.offsetWidth;
-      fill.style.transition = 'width 0.6s cubic-bezier(.2,.9,.2,1)'; fill.style.width = (a.into / a.need * 100).toFixed(1) + '%';
+      const w = (a.into / a.need * 100).toFixed(1) + '%';
+      fill.style.transition = 'none'; fill.style.width = w;
+      hudAnim(fill, 'fill', [{ width: '0%' }, { width: w }], { duration: REDUCED ? 1 : 600, easing: EASE_OUT });
       Sound.levelUp(); buzz([10, 40, 10]);
     }, 1100));
     const g = [];
@@ -4146,7 +4246,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   function hopFx() {
     ball.flapV = -20;
     if (REDUCED) return;
-    ball.flare = 1;      // a flap fans the flame (it throws off a few more wisps)...
+    ball.flareT = Math.max(ball.flareT || 0, 1); // a flap fans the flame (it throws off a few more wisps)...
     if (ball.fire > 0.1) ball.lickAcc += 1.5 * ball.fire;
     // ...and pushes a puff of air down from the wings
     spawn({ x: ball.x - RV * 0.35, y: ball.y + RV * 0.8, vx: ball.vx * 0.25, vy: 140, life: 0.28, max: 0.28, size: RV * 0.62, kind: 8, drag: 5 });
@@ -4183,7 +4283,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       for (let i = 0; i < 16; i++) { const a = rnd(0, Math.PI * 2), s = rnd(60, 230); spawn({ x: hx, y: hy + 6, vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.55 - 30, life: 0.55, max: 0.55, size: rnd(1.4, 2.8), color: pal ? pal[i % 4] : '#ffffff', kind: 0, drag: 2.2 }); }
       spawn({ x: hx, y: hy, kind: 3, life: 0.5, max: 0.5, size: h.w / 2 + P.RP, color: nova ? heatHex(1, 'inner') : hot ? heatHex(0, 'inner') : '#ffffff' });
       if (streak === 3 || streak === 5) ignite(nova ? 1 : 0);
-      if (!REDUCED && streak >= 2) ball.flare = Math.max(ball.flare, streak === 3 || streak === 5 ? 1.6 : 0.9); // each swish feeds the fire
+      if (!REDUCED && streak >= 2) ball.flareT = Math.max(ball.flareT || 0, streak === 3 || streak === 5 ? 1.6 : 0.9); // each swish feeds the fire
       Sound.swish(streak); buzz(10);
     } else { Sound.score(); }
     if (m != null) {
@@ -4199,7 +4299,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const N = REDUCED ? 5 : 12;
     for (let i = 0; i < N; i++) {
       const a = (i + rnd(-0.4, 0.4)) / N * Math.PI * 2, sp = rnd(90, 210);
-      spawn({ x: ball.x + Math.cos(a) * RV * 0.6, y: ball.y + Math.sin(a) * RV * 0.6, vx: Math.cos(a) * sp + ball.vx * 0.6, vy: Math.sin(a) * sp - 40, life: rnd(0.24, 0.4), max: 0.4, size: RV * rnd(0.35, 0.6), kind: 6, n, burst: true, drag: 4 });
+      spawn({ x: ball.x + Math.cos(a) * RV * 0.6, y: ball.y + Math.sin(a) * RV * 0.6, vx: Math.cos(a) * sp + ball.vx * 0.6, vy: Math.sin(a) * sp - 40, life: rnd(0.24, 0.4), max: 0.4, size: RV * rnd(0.35, 0.6), kind: 6, n, burst: true, drag: 4, sw: rnd(-1, 1) });
     }
     spawn({ x: ball.x, y: ball.y, kind: 3, life: 0.4, max: 0.4, size: RV * 1.1, color: heatHex(n ? 1 : 0, 'inner') });
   }
@@ -4234,7 +4334,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       attract.bot = BOT.createBot('perfect', E.makeRng('a' + Math.random()));
       attract.tap = true; attract.acc = 0; attract.streak = 0;
       settleOffset();
-      ball.glide = { fx: ball.x, fy: ball.y, tx: view.offset, ty: def.startY, t: 0, d: 0.5 };
+      ball.glide = glideTo(view.offset, def.startY, 0.5, def.speed, 0); // arrives already flying at the level's speed
       return;
     }
     if (ball.glide) return;
@@ -4264,16 +4364,39 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   }
 
   // ---------------------------------------------------------------- main loop
+  // The page's layout is read only here, at the start of a frame, before anything in the frame writes to the page:
+  // the browser has just laid it out to paint the last frame, so the read costs nothing. Reading it after a write
+  // (a ring scored, the pot ticking up) would make the browser lay the page out again in the middle of the frame.
+  const HUD_Q = ['#hud .hud-left .lvl', '#streak.on', '#hud .hud-mid'];
+  function measureHero() { // the page's window onto the arena, in screen px: measured after the page changes (a tab, a resize)
+    const lk = nav.tab === 'locker', sheet = lk ? vL : ui.lobby;
+    if (sheet.classList.contains('hide')) return;
+    const h = lk ? $('lkHero') : $('hero');
+    heroT = sheet.offsetTop + h.offsetTop; heroB = heroT + h.offsetHeight; sheetTopC = heroT;
+  }
+  function readLayout() {
+    if (phase === 'lobby') { view.hudBot = 0; STK.rect = null; if (sheetTopC < 0) measureHero(); return; }
+    // the streak meter, so it can fade while the ball flies behind it: measured after it changes (its name grows
+    // from "Double" to "Unstoppable"), and once a second in case the page moved
+    if (STK.el.classList.contains('on') && (!STK.rect || STK.dirty || HUD_DIRTY.on || ++STK.k % 60 === 0)) { STK.rect = STK.el.getBoundingClientRect(); STK.dirty = false; }
+    if (HUD_DIRTY.on || !(view.time - view.hudAt < 2)) { // where the HUD ends, so ring labels float below it (small phones)
+      view.hudAt = view.time; HUD_DIRTY.on = false;
+      let b = 0;
+      for (const q of HUD_Q) { const e = document.querySelector(q), r = e && e.getBoundingClientRect(); if (r && r.height && r.right > offX && r.left < offX + VIEW_W * scale) b = Math.max(b, r.bottom); }
+      view.hudBot = b;
+    }
+  }
   let last = performance.now();
   function frame(tNow) {
     let dt = (tNow - last) / 1000; last = tNow;
     if (dbg.hold) { // frozen for tests; step(n) plays n more frames of 1/60 s
-      if (!(dbg.steps > 0)) { requestAnimationFrame(frame); return; }
-      dbg.steps--; dt = 1 / 60;
+      if (!(dbg.steps > 0)) { tickCounts(tNow); requestAnimationFrame(frame); return; }
+      dbg.steps--; dt = dbg.stepDt || 1 / 60;
     }
     if (dt > 0.1) dt = 0.1;
     if (dt < 0) dt = 0;
-    if (nav.cover && phase === 'lobby') { requestAnimationFrame(frame); return; } // a full page covers the arena
+    if (nav.cover && phase === 'lobby') { tickCounts(tNow); requestAnimationFrame(frame); return; } // a full page covers the arena
+    readLayout();
     view.time += dt;
     if (eqFlame().prism) prismTick(view.time);
     // a phone that can't hold about 40 fps during play for 2 s draws at a lower resolution, so the game stays smooth
@@ -4293,12 +4416,16 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 
     // cosmetic ball motion outside physics
     if (ball.glide) {
-      const g = ball.glide; g.t += dt / g.d;
-      const k = g.t >= 1 ? 1 : 1 - Math.pow(1 - g.t, 3);
+      const g = ball.glide; g.t = Math.min(1, g.t + dt / g.d);
+      const u = g.t, u2 = u * u, u3 = u2 * u, D = g.d;
+      const h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = 3 * u2 - 2 * u3, h11 = u3 - u2;
+      const d00 = 6 * u2 - 6 * u, d10 = 3 * u2 - 4 * u + 1, d01 = 6 * u - 6 * u2, d11 = 3 * u2 - 2 * u;
       ball.px = ball.x; ball.py = ball.y;
-      ball.x = lerp(g.fx, g.tx, k); ball.y = lerp(g.fy, g.ty, k);
-      ball.vx = 0; ball.vy = 0;
-      if (g.t >= 1) { ball.glide = null; ball.fall = null; }
+      ball.x = h00 * g.fx + h10 * D * g.v0x + h01 * g.tx + h11 * D * g.v1x;
+      ball.y = h00 * g.fy + h10 * D * g.v0y + h01 * g.ty + h11 * D * g.v1y;
+      ball.vx = (d00 * g.fx + d01 * g.tx) / D + d10 * g.v0x + d11 * g.v1x;
+      ball.vy = (d00 * g.fy + d01 * g.ty) / D + d10 * g.v0y + d11 * g.v1y;
+      if (g.t >= 1) { ball.glide = null; ball.fall = null; ball.readyT = 0; }
     } else if (ball.fall && (phase !== 'play' && (phase !== 'lobby' || !attract.st))) {
       const f = ball.fall; f.t += dt;
       ball.px = ball.x; ball.py = ball.y;
@@ -4311,17 +4438,24 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       if (!f.hover && ball.y > W.FLOOR - P.R) { ball.y = W.FLOOR - P.R; f.vy *= -0.35; f.vx *= 0.7; if (Math.abs(f.vy) < 40) f.vy = 0; }
       ball.vy = f.vy; ball.vx = f.vx;
     } else if (phase === 'ready' && run.st) {
-      const bob = Math.sin(view.time * 4) * 5;
+      // waiting for the tap: a gentle bob that eases in from rest where the glide left the ball, no jump
+      const T = (ball.readyT = (ball.readyT || 0) + dt), e = clamp(T / 0.6, 0, 1), k = e * e * (3 - 2 * e);
       ball.px = ball.x; ball.py = ball.y;
-      ball.x = view.offset + run.st.ball.x; ball.y = run.st.ball.y + bob;
-      if (Math.floor(view.time * 2.2) !== Math.floor((view.time - dt) * 2.2)) ball.flapV = -16;
-      ball.vy = Math.cos(view.time * 4) * 20; ball.vx = 0;
+      ball.x = view.offset + run.st.ball.x; ball.y = run.st.ball.y + Math.sin(T * 4) * 5 * k;
+      if (Math.floor(T * 2.2) !== Math.floor((T - dt) * 2.2)) ball.flapV = -16;
+      ball.vy = Math.cos(T * 4) * 20 * k; ball.vx = 0;
     }
-    const alpha = phase === 'play' ? clamp(acc / DT, 0, 1) : 1;
+    // Physics runs at 120 Hz; the ball is drawn between its last two physics positions, by how far the clock has
+    // got toward the next tick, so it moves evenly whatever the screen's refresh rate. The lobby's demo run does
+    // the same (it used to draw the latest tick, so it judders whenever a frame got one tick more or fewer).
+    const demo = phase === 'lobby' && attract.st && !ball.glide;
+    const alpha = phase === 'play' ? clamp(acc / DT, 0, 1) : demo ? clamp(attract.acc / DT, 0, 1) : 1;
+    view.alpha = alpha; view.interp = phase === 'play' || demo;
     const ix = lerp(ball.px, ball.x, alpha), iy = lerp(ball.py, ball.y, alpha);
     updateFx(dt, ix, iy);
-    render(alpha, ix + ball.ox, iy + ball.oy);
+    render(alpha, ix + ball.ox, iy + ball.oy, dt);
     streakDodge();
+    tickCounts(tNow); // writes to the page last
     requestAnimationFrame(frame);
   }
 
@@ -4354,7 +4488,10 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (vis === 0 && ball.lastVis >= 2 && ball.fire > 0.12 && !ball.hidden) douse(dxw, dyw);
     ball.lastVis = vis;
     // the flame: burning gas shed by the ball (see updateFlame)
-    ball.flare *= Math.exp(-dt * 6);
+    // the flare rises to a tap or a swish over a few hundredths of a second (a step from one frame to the next
+    // made the whole flame jump) and dies back over a quarter of a second
+    ball.flareT = (ball.flareT || 0) * Math.exp(-dt * 6);
+    ball.flare += (ball.flareT - ball.flare) * (1 - Math.exp(-dt * 30));
     ball.flick = 0.86 + 0.14 * noise1(view.time * 9.5 + 40);
     updateFlame(Math.min(dt, 1 / 20));
     if (ball.fire > 0.04 && !ball.hidden) {
@@ -4365,7 +4502,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
         ball.lickAcc -= 1;
         const p = flame.T[(Math.random() * flame.T.length) | 0].pts[0];
         if (!p) break;
-        spawn({ x: dxw + p.x, y: dyw + p.y, vx: p.vx * 0.5, vy: p.vy * 0.5 - 40, g: -300, life: rnd(0.14, 0.26), max: 0.26, size: RV * rnd(0.16, 0.28) * (0.6 + 0.6 * f), kind: 6, n, drag: 2.4, rot: -Math.PI / 2 + rnd(-0.5, 0.5) });
+        spawn({ x: dxw + p.x, y: dyw + p.y, vx: p.vx * 0.5, vy: p.vy * 0.5 - 40, g: -300, life: rnd(0.18, 0.3), max: 0.3, size: RV * rnd(0.16, 0.28) * (0.6 + 0.6 * f), kind: 6, n, drag: 2.4, sw: rnd(-1, 1) });
       }
       ball.emberAcc += dt * (REDUCED ? 3 : 16) * f;
       while (ball.emberAcc >= 1) {
@@ -4374,14 +4511,17 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
         spawn({ x: dxw + rnd(-0.6, 0.6) * RV, y: dyw + rnd(-0.6, 0.6) * RV, vx: ball.vx * 0.3 + dx * rnd(40, 120) + rnd(-30, 30), vy: ball.vy * 0.3 + dy * rnd(40, 120) - 50, life: rnd(0.45, 0.85), max: 0.85, size: rnd(1, 2.2), color: pal[(Math.random() * 3) | 0], kind: 5, drag: 1.4 });
       }
     }
-    for (let i = parts.length - 1; i >= 0; i--) {
+    let live = 0;
+    for (let i = 0; i < parts.length; i++) { // the spent ones are dropped in one pass, keeping the drawing order
       const p = parts[i];
       p.life -= dt;
-      if (p.life <= 0) { parts.splice(i, 1); continue; }
+      if (p.life <= 0) continue;
       p.vy += p.g * dt;
       if (p.drag) { const k = Math.exp(-p.drag * dt); p.vx *= k; p.vy *= k; }
       p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+      parts[live++] = p;
     }
+    parts.length = live;
     for (let i = texts.length - 1; i >= 0; i--) { const t = texts[i]; t.life -= dt; t.y -= 30 * dt; if (t.life <= 0) texts.splice(i, 1); }
     const springs = (h) => {
       const v = h.vis; if (!v) return;
@@ -4401,10 +4541,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     let zoomT = 1, centreY = null, centreW = 0;
     const lk = nav.tab === 'locker', sheet = lk ? vL : ui.lobby;
     if (phase === 'lobby' && !sheet.classList.contains('hide')) {
-      if (sheetTopC < 0) {
-        const h = lk ? $('lkHero') : $('hero');
-        heroT = sheet.offsetTop + h.offsetTop; heroB = heroT + h.offsetHeight; sheetTopC = heroT;
-      }
+      if (sheetTopC < 0) measureHero(); // normally done at the frame's start (readLayout), unless the page changed since
       const near = lk && nav.cat !== 'court', top = 130, bot = near ? 560 : 676; // courts show their floor line
       zoomT = clamp((heroB - heroT - 8) / ((bot - top) * scale), 0.45, 1);
       centreY = (heroT + heroB) / 2; centreW = (top + bot) / 2;
@@ -4432,7 +4569,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   const levelZoom = (L) => 1 / (1 + 0.035 * (L - 1));
 
   // ---------------------------------------------------------------- rendering
-  function render(alpha, bx, by) {
+  function render(alpha, bx, by, dt) {
     const c = cx;
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.globalCompositeOperation = 'source-over';
@@ -4441,7 +4578,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 
     // the score, huge and quiet, behind everything (Flappy Dunk style); the pot sits in the HUD
     const bannerOn = performance.now() < bannerUntil;
-    view.scoreA = lerp(view.scoreA == null ? 1 : view.scoreA, bannerOn ? 0 : CALL.busy ? 0.2 : 1, bannerOn ? 0.3 : 0.12);
+    view.scoreA = lerp(view.scoreA == null ? 1 : view.scoreA, bannerOn ? 0 : CALL.busy ? 0.2 : 1, 1 - Math.exp(-dt * (bannerOn ? 21 : 7.7)));
     if (phase !== 'lobby' && run.st && run.score > 0) {
       const p = view.pulse, best = profile.best[run.di], cy = offY + 205 * scale, fa = view.scoreA;
       const col = run.newBest ? '245,197,66' : run.streak >= 5 ? heatText(1) : run.streak >= 3 ? heatText(0) : '255,255,255';
@@ -4450,9 +4587,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       c.drawImage(m.el, vw / 2 - m.w * k / 2, cy - m.h * k / 2, m.w * k, m.h * k);
       if (best > 0) {
         c.globalAlpha = (run.newBest ? 0.55 : 0.26) * fa;
-        c.font = '600 ' + (15 * scale).toFixed(1) + 'px ' + FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
-        c.fillStyle = run.newBest ? '#f5c542' : '#ffffff';
-        c.fillText(run.newBest ? 'New best' : 'Best ' + best, vw / 2, cy + 48 * scale);
+        drawText(c, textSprite(run.newBest ? 'New best' : 'Best ' + best, 600, 15 * scale * dpr, FONT_DISPLAY, run.newBest ? '#f5c542' : '#ffffff'), vw / 2, cy + 48 * scale, dpr);
       }
       c.globalAlpha = 1;
     }
@@ -4468,14 +4603,9 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     view.bsr = P.R * S;
     const worldLeft = view.camX - ox / S, worldW = vw / S;
     view.wl = view.camX + (offX - ox) / S; view.wr = view.camX + (offX + VIEW_W * scale - ox) / S; // the window everyone sees
-    if (!(view.time - view.hudAt < 0.4)) { // where the HUD ends, so ring labels float below it (small phones)
-      view.hudAt = view.time;
-      const bot = (q) => { const e = document.querySelector(q), r = e && e.getBoundingClientRect(); return r && r.height && r.right > offX && r.left < offX + VIEW_W * scale ? r.bottom : 0; };
-      view.hudBot = phase === 'lobby' ? 0 : Math.max(bot('#hud .hud-left .lvl'), bot('#streak.on'), bot('#hud .hud-mid'));
-    }
     view.wt = view.hudBot ? view.camY + (view.hudBot - oy) / S : null;
     const st = view.st;
-    const tNow = st ? (phase === 'play' ? (st.tick - 1 + alpha) * DT : st.tick * DT) : 0;
+    const tNow = st ? (view.interp ? (st.tick - 1 + alpha) * DT : st.tick * DT) : 0; // moving rings, between ticks too
     const hoops = [];
     for (const p of view.prevHoops) hoops.push({ h: p.h, off: p.off, t: p.t });
     if (st) for (const h of st.hoops) hoops.push({ h, off: view.offset, t: Math.max(0, tNow) });
@@ -4501,7 +4631,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (!ball.hidden) drawBall(c, bx, by);
     for (const o of vis) drawRing(c, o, false);
     drawParts(c, false);
-    drawTexts(c);
+    drawTexts(c, dt);
     if (view.flash > 0.004) {
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       c.globalCompositeOperation = 'lighter';
@@ -4528,10 +4658,9 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   // A polished floor that catches the level's light, boards receding toward you, the ball's shadow
   // and, when it burns, the glow of its flame on the boards.
   function fireLight(c, x, y) {
-    const R = RV * (6 + 3 * ball.fire), g = c.createRadialGradient(x, y, RV, x, y, R), Pf = flamePal(ball.nova);
-    g.addColorStop(0, rgba(Pf.mid, 0.12 * ball.fire * ball.flick)); g.addColorStop(1, rgba(Pf.mid, 0));
-    c.globalCompositeOperation = 'lighter'; c.fillStyle = g;
-    c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fill();
+    const R = RV * (6 + 3 * ball.fire);
+    c.globalCompositeOperation = 'lighter';
+    softGlow(c, x, y, R, R, flamePal(ball.nova).mid, 0.12 * ball.fire * ball.flick, 0.13);
     c.globalCompositeOperation = 'source-over';
   }
   // The far side of the arena, behind the court: the courtside crowd in silhouette against the haze, and an
@@ -4566,22 +4695,24 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     standsK = k;
     return (standsEl = el);
   }
+  const ARENA_G = { glow: null, bd: null };
   function drawArena(c, left, width) {
     const F = W.FLOOR, top = F - BOARD_H, x0 = left - 20, w = width + 40;
     const tile = standsTile(), shift = view.camX * 0.65; // the stands move at 35% of the court's speed
     for (let u = Math.floor((left - shift) / STANDS_W) * STANDS_W; u < left - shift + width; u += STANDS_W) {
       c.drawImage(tile, u + shift, top - STANDS_H, STANDS_W, STANDS_H);
     }
-    const glow = c.createLinearGradient(0, top - 18, 0, top); // the board lights the front row
-    glow.addColorStop(0, 'rgba(' + COURT_ART.arena.light + ',0)'); glow.addColorStop(1, 'rgba(' + COURT_ART.arena.light + ',0.15)');
-    c.fillStyle = glow; c.fillRect(x0, top - 18, w, 18);
-    const bd = c.createLinearGradient(0, top, 0, F);
-    bd.addColorStop(0, '#0f1730'); bd.addColorStop(1, '#070b18');
-    c.fillStyle = bd; c.fillRect(x0, top, w, BOARD_H);
+    if (!ARENA_G.glow) { // world-space gradients: made once, reused every frame
+      ARENA_G.glow = c.createLinearGradient(0, top - 18, 0, top); // the board lights the front row
+      ARENA_G.glow.addColorStop(0, 'rgba(' + COURT_ART.arena.light + ',0)'); ARENA_G.glow.addColorStop(1, 'rgba(' + COURT_ART.arena.light + ',0.15)');
+      ARENA_G.bd = c.createLinearGradient(0, top, 0, F);
+      ARENA_G.bd.addColorStop(0, '#0f1730'); ARENA_G.bd.addColorStop(1, '#070b18');
+    }
+    c.fillStyle = ARENA_G.glow; c.fillRect(x0, top - 18, w, 18);
+    c.fillStyle = ARENA_G.bd; c.fillRect(x0, top, w, BOARD_H);
     c.fillStyle = 'rgba(130,165,255,0.5)'; c.fillRect(x0, top, w, 0.7);
-    c.font = '800 6.5px ' + FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillStyle = 'rgba(140,175,255,0.4)';
-    for (let x = Math.floor((left - 60) / 160) * 160; x < left + width + 60; x += 160) c.fillText('SOL DUNK', x, top + BOARD_H / 2 + 0.4);
+    const sp = textSprite('SOL DUNK', 800, 6.5 * scale * dpr, FONT_DISPLAY, 'rgba(140,175,255,0.4)');
+    for (let x = Math.floor((left - 60) / 160) * 160; x < left + width + 60; x += 160) drawText(c, sp, x, top + BOARD_H / 2 + 0.4, scale * dpr);
   }
   function drawCourt(c, left, width, S, bx, by, rings) {
     const A = courtArt(), x0 = left - 20, w = width + 40, F = W.FLOOR;
@@ -4590,21 +4721,18 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (rings) for (const o of rings) {
       const h = o.h, x = o.off + h.x, d = clamp((F - E.hoopY(h, o.t)) / 700, 0, 1);
       const rx = (h.w / 2 + P.RP) * (1 + 0.5 * d), a = (0.42 - 0.3 * d) * (h.st === 1 ? 0.4 : 1);
-      const sg = c.createRadialGradient(x, F + 3, 0, x, F + 3, rx);
-      sg.addColorStop(0, 'rgba(0,0,0,' + a.toFixed(3) + ')'); sg.addColorStop(1, 'rgba(0,0,0,0)');
-      c.save(); c.translate(x, F + 3); c.scale(1, 0.13); c.translate(-x, -(F + 3));
-      c.fillStyle = sg; c.beginPath(); c.arc(x, F + 3, rx, 0, Math.PI * 2); c.fill(); c.restore();
+      softGlow(c, x, F + 3, rx, rx * 0.13, '0,0,0', a, 0);
     }
+    c.globalAlpha = 1;
     if (!ball.hidden) {
       const hgt = clamp((F - by) / 560, 0, 1), sw = RV * (1.7 - 0.8 * hgt);
       c.fillStyle = 'rgba(0,0,0,' + (0.55 * (1 - hgt) + 0.1).toFixed(3) + ')';
       c.beginPath(); c.ellipse(bx, F + 3, sw, sw * 0.17, 0, 0, Math.PI * 2); c.fill();
       if (ball.fire > 0.03) {
-        const pal = flamePal(ball.nova), rr = 130 * (1 - 0.45 * hgt);
-        c.save(); c.globalCompositeOperation = 'lighter'; c.translate(bx, F + 1); c.scale(1, 0.2);
-        const pg = c.createRadialGradient(0, 0, 0, 0, 0, rr);
-        pg.addColorStop(0, rgba(pal.mid, 0.4 * ball.fire * ball.flick * (1 - 0.6 * hgt))); pg.addColorStop(1, rgba(pal.mid, 0));
-        c.fillStyle = pg; c.beginPath(); c.arc(0, 0, rr, 0, Math.PI * 2); c.fill(); c.restore();
+        const rr = 130 * (1 - 0.45 * hgt);
+        c.globalCompositeOperation = 'lighter';
+        softGlow(c, bx, F + 1, rr, rr * 0.2, flamePal(ball.nova).mid, 0.4 * ball.fire * ball.flick * (1 - 0.6 * hgt), 0);
+        c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
       }
     }
     const fl = c.createLinearGradient(left, 0, left + width, 0);
@@ -4698,9 +4826,9 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     c.translate(x, y);
     const lf = !back && next && h.cp ? clamp((x - (view.drawX || 0) - 70) / 80, 0, 1) : 0;
     if (lf > 0) { // the gold ring ahead says what it is, and gets out of the way as the ball arrives
-      c.font = '700 12px ' + FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillStyle = 'rgba(245,197,66,' + ((0.62 + 0.18 * Math.sin(view.time * 5)) * lf).toFixed(3) + ')';
-      c.fillText('Checkpoint', 0, -(h.w / 2) * RING_RY - P.RP - 13);
+      c.globalAlpha = (0.62 + 0.18 * Math.sin(view.time * 5)) * lf;
+      drawText(c, textSprite('Checkpoint', 700, 12 * scale * dpr, FONT_DISPLAY, '#f5c542'), 0, -(h.w / 2) * RING_RY - P.RP - 13, scale * dpr);
+      c.globalAlpha = 1;
     }
     c.rotate(h.tilt);
     c.globalAlpha = h.st === 1 ? 0.32 : o.later || 1;
@@ -4768,21 +4896,37 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       c.fillRect(x - cell / 2, y - cell / 2, cell + 0.25, cell + 0.25);
     }
   }
+  // A skin's shading never changes, so on the game's own canvas its gradients are made once and reused (a
+  // gradient is drawn in whatever space is current when it's used, so the ball's moves and squash still apply).
+  function skinGrads(c, r, sk) {
+    if (c === cx && r === RV && sk._g) return sk._g;
+    const G = sk.grad, o = {};
+    o.body = c.createRadialGradient(-r * 0.38, -r * 0.42, r * 0.05, 0, 0, r * 1.02);
+    o.body.addColorStop(0, G[0]); o.body.addColorStop(0.45, G[1]); o.body.addColorStop(0.85, G[2]); o.body.addColorStop(1, G[3]);
+    if (sk.chrome) {
+      o.sky = c.createLinearGradient(0, -r, 0, r * 0.12);
+      o.sky.addColorStop(0, 'rgba(255,255,255,0.95)'); o.sky.addColorStop(1, 'rgba(150,162,186,0.9)');
+      o.ground = c.createLinearGradient(0, r * 0.12, 0, r);
+      o.ground.addColorStop(0, 'rgba(58,64,78,0.95)'); o.ground.addColorStop(1, 'rgba(10,12,18,0.95)');
+    }
+    if (sk.land) {
+      o.air = c.createRadialGradient(0, 0, r * 0.78, 0, 0, r);
+      o.air.addColorStop(0, 'rgba(150,210,255,0)'); o.air.addColorStop(1, 'rgba(170,225,255,0.55)');
+    }
+    o.hl = c.createRadialGradient(-r * 0.4, -r * 0.5, 0, -r * 0.4, -r * 0.5, r * (sk.shine ? 0.62 : 0.5));
+    o.hl.addColorStop(0, 'rgba(255,255,255,' + (sk.shine ? 0.75 : 0.45) + ')'); o.hl.addColorStop(1, 'rgba(255,255,255,0)');
+    if (c === cx && r === RV) sk._g = o;
+    return o;
+  }
   function drawBallBody(c, r, rot, sk) {
     sk = sk || eqBall();
     if (sk.pixel) { drawPixelBall(c, r, rot, sk); return; }
-    const G = sk.grad;
-    const g = c.createRadialGradient(-r * 0.38, -r * 0.42, r * 0.05, 0, 0, r * 1.02);
-    g.addColorStop(0, G[0]); g.addColorStop(0.45, G[1]); g.addColorStop(0.85, G[2]); g.addColorStop(1, G[3]);
-    c.fillStyle = g; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
+    const GR = skinGrads(c, r, sk);
+    c.fillStyle = GR.body; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
     c.save(); c.beginPath(); c.arc(0, 0, r - 0.3, 0, Math.PI * 2); c.clip();
     if (sk.chrome) { // a mirror: sky above the horizon, ground below; reflections don't turn with the ball
-      const sky = c.createLinearGradient(0, -r, 0, r * 0.12);
-      sky.addColorStop(0, 'rgba(255,255,255,0.95)'); sky.addColorStop(1, 'rgba(150,162,186,0.9)');
-      c.fillStyle = sky; c.fillRect(-r, -r, r * 2, r * 1.12);
-      const gr = c.createLinearGradient(0, r * 0.12, 0, r);
-      gr.addColorStop(0, 'rgba(58,64,78,0.95)'); gr.addColorStop(1, 'rgba(10,12,18,0.95)');
-      c.fillStyle = gr; c.fillRect(-r, r * 0.12, r * 2, r);
+      c.fillStyle = GR.sky; c.fillRect(-r, -r, r * 2, r * 1.12);
+      c.fillStyle = GR.ground; c.fillRect(-r, r * 0.12, r * 2, r);
       c.fillStyle = 'rgba(255,255,255,0.6)'; c.fillRect(-r, r * 0.1, r * 2, r * 0.05);
     }
     c.rotate(rot);
@@ -4839,8 +4983,8 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     }
     if (sk.eight) {
       c.fillStyle = '#f7f7f4'; c.beginPath(); c.arc(r * 0.16, -r * 0.1, r * 0.42, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#0d0f14'; c.font = '800 ' + (r * 0.56).toFixed(2) + 'px ' + FONT_ROUND; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText('8', r * 0.16, -r * 0.07);
+      const t8 = textSprite('8', 800, 48, FONT_ROUND, '#0d0f14');
+      drawText(c, t8, r * 0.16, -r * 0.07, 48 / (r * 0.56));
     }
     if (sk.facets) { // a cut gem: a table in the middle, facets out to the edge
       const I = [], O = [];
@@ -4865,14 +5009,10 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (sk.seam) seams(r * 0.085, sk.seam);
     c.restore();
     if (sk.land) { // a thin bright atmosphere round the planet
-      const at = c.createRadialGradient(0, 0, r * 0.78, 0, 0, r);
-      at.addColorStop(0, 'rgba(150,210,255,0)'); at.addColorStop(1, 'rgba(170,225,255,0.55)');
-      c.fillStyle = at; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
+      c.fillStyle = GR.air; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
     }
     if (sk.rim) { c.strokeStyle = sk.rim; c.lineWidth = r * 0.07; c.beginPath(); c.arc(0, 0, r - r * 0.04, Math.PI * 0.62, Math.PI * 1.08); c.stroke(); }
-    const hl = c.createRadialGradient(-r * 0.4, -r * 0.5, 0, -r * 0.4, -r * 0.5, r * (sk.shine ? 0.62 : 0.5));
-    hl.addColorStop(0, 'rgba(255,255,255,' + (sk.shine ? 0.75 : 0.45) + ')'); hl.addColorStop(1, 'rgba(255,255,255,0)');
-    c.fillStyle = hl; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
+    c.fillStyle = GR.hl; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
   }
   // Wing outlines, all in the same span (s = the wing's size) so every shape stays short and close to the ball.
   function wingPath(c, s, shape) {
@@ -4937,9 +5077,14 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     c.rotate(flap); c.scale(1, fold);
     if (!far) { c.save(); c.translate(1.2, 2.2); wingPath(c, s, sh); c.fillStyle = 'rgba(0,0,0,0.28)'; c.fill(); c.restore(); }
     wingPath(c, s, sh);
-    const g = c.createLinearGradient(-0.2 * s, -0.95 * s, -0.55 * s, 0.05 * s);
-    if (far) { g.addColorStop(0, wg.far[0]); g.addColorStop(1, wg.far[1]); }
-    else { g.addColorStop(0, wg.near[0]); g.addColorStop(0.55, wg.near[1]); g.addColorStop(1, wg.near[2]); }
+    const key = far ? '_gf' : '_gn', mine = c === cx && r === RV;
+    let g = mine && wg[key];
+    if (!g) {
+      g = c.createLinearGradient(-0.2 * s, -0.95 * s, -0.55 * s, 0.05 * s);
+      if (far) { g.addColorStop(0, wg.far[0]); g.addColorStop(1, wg.far[1]); }
+      else { g.addColorStop(0, wg.near[0]); g.addColorStop(0.55, wg.near[1]); g.addColorStop(1, wg.near[2]); }
+      if (mine) wg[key] = g;
+    }
     c.fillStyle = g; c.fill();
     c.save(); c.clip();
     c.beginPath();
@@ -4966,9 +5111,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const q = ball.sq > 0.002 ? ball.sq : 0, nx = ball.sqX, ny = ball.sqY;
     c.save(); c.translate(x - nx * r * q, y - ny * r * q);
     if (ball.fire > 0.01) drawFlame(c, r, ball.fire, ball.nova, view.time);
-    const hc = eqBall().halo, halo = c.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 1.9);
-    halo.addColorStop(0, 'rgba(' + hc + ',0.13)'); halo.addColorStop(1, 'rgba(' + hc + ',0)');
-    c.fillStyle = halo; c.beginPath(); c.arc(0, 0, r * 1.9, 0, Math.PI * 2); c.fill();
+    const sk = eqBall();
+    if (!sk._halo) {
+      sk._halo = c.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 1.9);
+      sk._halo.addColorStop(0, 'rgba(' + sk.halo + ',0.13)'); sk._halo.addColorStop(1, 'rgba(' + sk.halo + ',0)');
+    }
+    c.fillStyle = sk._halo; c.beginPath(); c.arc(0, 0, r * 1.9, 0, Math.PI * 2); c.fill();
     c.save(); c.rotate(ball.tilt); c.translate(r * 0.18, -r * 0.55); drawWing(c, r, a * 0.9 + 0.08, true); c.restore();
     c.save();
     if (q) { const ang = Math.atan2(ny, nx); c.rotate(ang); c.scale(1 - q, 1 + q * 0.5); c.rotate(-ang); }
@@ -5008,6 +5156,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   const FLAME_T = [[-1.2, 0.62, 3.1], [-0.6, 0.86, 7.7], [0, 1, 1.3], [0.6, 0.86, 5.9], [1.2, 0.62, 9.4]];
   const flame = { T: FLAME_T.map(([ang, size, seed]) => ({ ang, size, seed, acc: 0, pts: [] })), dx: 0, dy: -1 };
   const F_STEP = 1 / 80; // each tongue sheds a parcel every 12.5 ms
+  const PARCELS = []; // spent parcels of gas, reused so the flame makes no garbage
   function breath(T, t) { // how much gas a tongue gives off right now; at 0 it pinches off
     const calm = REDUCED ? 0.35 : 1;
     return clamp(0.64 + calm * (0.7 * noise1(t * 4.4 + T.seed * 5) + 0.12 * noise1(t * 13 + T.seed)), 0, 1.25);
@@ -5030,11 +5179,11 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const Lmax2 = Math.pow(RV * (3 + 2.2 * f), 2);                  // and no tongue reaches further than this
     const life = (0.14 + 0.11 * f) * (1 + 0.25 * ball.flare), drag = Math.exp(-dt * 10), lift = 1000 * dt;
     for (const T of flame.T) {
-      if (ball.hidden) T.pts.length = 0;
+      if (ball.hidden) { for (const p of T.pts) PARCELS.push(p); T.pts.length = 0; }
       for (let i = T.pts.length - 1; i >= 0; i--) {
         const p = T.pts[i], rel = Math.hypot(p.vx - evx, p.vy - evy);
         p.age += dt * (1 + Math.max(0, rel - 260) / 260);             // gas torn away fast burns out sooner
-        if (p.age >= p.life || p.x * p.x + p.y * p.y > Lmax2) { T.pts.splice(i, 1); continue; }
+        if (p.age >= p.life || p.x * p.x + p.y * p.y > Lmax2) { PARCELS.push(p); T.pts.splice(i, 1); continue; }
         p.vx *= drag; p.vy = p.vy * drag - lift;                       // slows to the air and rises
         const stir = stir0 * p.age / p.life;                           // older gas is stirred more
         p.x += (p.vx - evx + stir * noise1(p.y * 0.05 + t * 2.3 + T.seed)) * dt;
@@ -5042,13 +5191,19 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       }
       if (!live) { T.acc = 0; continue; }
       T.acc += dt;
-      const E2 = emitter(T), push = 110 + 60 * ball.flare;
+      const E2 = emitter(T), push = 110 + 60 * ball.flare, fan = 1 + 0.22 * ball.flare;
       while (T.acc >= F_STEP) {
         T.acc -= F_STEP;
         const a = T.acc, vx0 = evx * 0.5 + E2.nx * push, vy0 = evy * 0.5 + E2.ny * push; // left `a` seconds ago
-        T.pts.push({ x: E2.x + (vx0 - evx) * a, y: E2.y + (vy0 - evy) * a, vx: vx0, vy: vy0, age: a, life: life * (0.9 + 0.2 * Math.random()), w: breath(T, t - a) });
+        const p = PARCELS.pop() || {};
+        p.x = E2.x + (vx0 - evx) * a; p.y = E2.y + (vy0 - evy) * a; p.vx = vx0; p.vy = vy0; p.age = a;
+        // each parcel's life varies smoothly from one to the next (a random life per parcel made the tip jitter
+        // back and forth every frame), and it keeps the fanning it left with, so a flap's fanning flows out
+        // along the flame instead of the whole flame widening at once
+        p.life = life * (1 + 0.1 * noise1((t - a) * 6 + T.seed * 11)); p.w = breath(T, t - a); p.s = fan;
+        T.pts.push(p);
       }
-      if (T.pts.length > 48) T.pts.splice(0, T.pts.length - 48);
+      if (T.pts.length > 48) { for (let i = 0; i < T.pts.length - 48; i++) PARCELS.push(T.pts[i]); T.pts.splice(0, T.pts.length - 48); }
     }
   }
   const FLAME_LAYERS = [ // [ribbon width, ribbon length, colour, alpha, cap front radius, cap half-width]; caps in ball radii
@@ -5057,56 +5212,77 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     [0.5, 0.6, 'inner', 0.97, 0.9, 0.92],
     [0.28, 0.4, 'core', 0.92, 0.78, 0.72]
   ];
-  const RBX = [], RBY = [], RBH = [];
-  // one tongue in one layer: a ribbon through its parcels (relative to the ball), newest first
-  function ribbon(c, T, W, ws, ls) {
+  // scratch space for the ribbons, allocated once
+  const RBX = new Float32Array(66), RBY = new Float32Array(66), RBH = new Float32Array(66), RBW = new Float32Array(66);
+  const QX = new Float32Array(68), QY = new Float32Array(68), QH = new Float32Array(68);
+  const OLX = new Float32Array(68), OLY = new Float32Array(68), ORX = new Float32Array(68), ORY = new Float32Array(68);
+  const prof = (u) => Math.pow(1 - u, 0.62) * (1 + 0.4 * Math.sin(Math.PI * u)); // width along a tongue, root to tip
+  // One tongue in one layer: a ribbon through its parcels (relative to the ball), newest first. Where the tongue
+  // pinched off (its gas thinned below `cut`), the ribbon breaks, and each part burns as its own lick with a point at
+  // both ends instead of hanging on by a thread. `cut` is the same width in every layer, so the hotter, narrower
+  // layers break sooner and always sit inside the outer ones.
+  function ribbon(c, T, W, ws, ls, rootW, cut) {
     const E2 = emitter(T), pts = T.pts;
-    let m = 0, tipX = 0, tipY = 0;
-    const prof = (u) => Math.pow(1 - u, 0.62) * (1 + 0.4 * Math.sin(Math.PI * u));
-    RBX[0] = E2.x; RBY[0] = E2.y; RBH[0] = W * ws * breath(T, view.time); m = 1;
-    let lastU = 0;
-    for (let i = pts.length - 1; i >= 0; i--) {
-      const p = pts[i], u = p.age / (p.life * ls), x = p.x, y = p.y;
+    let m = 1, lastU = 0, tipped = false;
+    RBX[0] = E2.x; RBY[0] = E2.y; RBW[0] = rootW; RBH[0] = rootW - cut;
+    for (let i = pts.length - 1; i >= 0 && m < 64; i--) {
+      const p = pts[i], u = p.age / (p.life * ls);
       if (u >= 1) { // the tip burns out between this parcel and the last one
         const k = (1 - lastU) / Math.max(1e-6, u - lastU);
-        tipX = RBX[m - 1] + (x - RBX[m - 1]) * k; tipY = RBY[m - 1] + (y - RBY[m - 1]) * k;
-        break;
+        RBX[m] = RBX[m - 1] + (p.x - RBX[m - 1]) * k; RBY[m] = RBY[m - 1] + (p.y - RBY[m - 1]) * k; RBW[m] = 0; RBH[m] = -cut; m++;
+        tipped = true; break;
       }
-      RBX[m] = x; RBY[m] = y; RBH[m] = W * ws * p.w * prof(u); m++; lastU = u;
-      if (i === 0) { tipX = x; tipY = y; RBH[m - 1] = 0; }
+      const w = W * ws * p.w * p.s * prof(u);
+      RBX[m] = p.x; RBY[m] = p.y; RBW[m] = w; RBH[m] = w - cut; m++; lastU = u;
     }
-    if (m < 2) return;
-    c.beginPath();
-    const L = [], R = [];
-    for (let i = 0; i < m; i++) {
-      const a = Math.max(0, i - 1), b = Math.min(m - 1, i + 1);
-      let tx = RBX[b] - RBX[a], ty = RBY[b] - RBY[a];
+    if (!tipped) { RBW[m - 1] = 0; RBH[m - 1] = -cut; } // the oldest gas is the tip
+    // each run of points wider than the cut is one lick; its ends sit where the width crosses the cut
+    let i = 0;
+    while (i < m) {
+      while (i < m && RBH[i] <= 0) i++;
+      if (i >= m) break;
+      let j = i;
+      while (j + 1 < m && RBH[j + 1] > 0) j++;
+      let n = 0;
+      if (i > 0) { const k = RBH[i - 1] / (RBH[i - 1] - RBH[i]); QX[n] = RBX[i - 1] + (RBX[i] - RBX[i - 1]) * k; QY[n] = RBY[i - 1] + (RBY[i] - RBY[i - 1]) * k; QH[n] = 0; n++; }
+      // full width wherever the gas is twice the cut or more, easing to nothing at the break
+      let top = 0;
+      for (let q = i; q <= j; q++) { const e = Math.min(1, RBH[q] / cut); QX[n] = RBX[q]; QY[n] = RBY[q]; QH[n] = RBW[q] * e * e * (3 - 2 * e); top = Math.max(top, QH[n]); n++; }
+      if (j < m - 1) { const k = RBH[j] / (RBH[j] - RBH[j + 1]); QX[n] = RBX[j] + (RBX[j + 1] - RBX[j]) * k; QY[n] = RBY[j] + (RBY[j + 1] - RBY[j]) * k; QH[n] = 0; n++; }
+      if (n >= 3 && top > cut * 1.5) lick(c, n); // a needle of gas this thin has burnt out
+      i = j + 1;
+    }
+  }
+  // fill the outline of one lick through QX/QY with half-widths QH (a blunt root if QH[0] > 0, else a point)
+  function lick(c, n) {
+    for (let k = 0; k < n; k++) {
+      const a = k > 0 ? k - 1 : 0, b = k < n - 1 ? k + 1 : n - 1;
+      let tx = QX[b] - QX[a], ty = QY[b] - QY[a];
       const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
-      L.push(RBX[i] - ty * RBH[i], RBY[i] + tx * RBH[i]); R.push(RBX[i] + ty * RBH[i], RBY[i] - tx * RBH[i]);
+      OLX[k] = QX[k] - ty * QH[k]; OLY[k] = QY[k] + tx * QH[k]; ORX[k] = QX[k] + ty * QH[k]; ORY[k] = QY[k] - tx * QH[k];
     }
-    c.moveTo(R[0], R[1]); c.lineTo(L[0], L[1]);
-    for (let i = 1; i < m - 1; i++) c.quadraticCurveTo(L[2 * i], L[2 * i + 1], (L[2 * i] + L[2 * i + 2]) / 2, (L[2 * i + 1] + L[2 * i + 3]) / 2);
-    c.quadraticCurveTo(L[2 * m - 2], L[2 * m - 1], tipX, tipY);
-    c.quadraticCurveTo(R[2 * m - 2], R[2 * m - 1], (R[2 * m - 2] + R[2 * m - 4]) / 2, (R[2 * m - 1] + R[2 * m - 3]) / 2);
-    for (let i = m - 2; i > 0; i--) c.quadraticCurveTo(R[2 * i], R[2 * i + 1], (R[2 * i] + R[2 * i - 2]) / 2, (R[2 * i + 1] + R[2 * i - 1]) / 2);
+    c.beginPath();
+    c.moveTo(ORX[0], ORY[0]); c.lineTo(OLX[0], OLY[0]);
+    for (let k = 1; k < n - 1; k++) c.quadraticCurveTo(OLX[k], OLY[k], (OLX[k] + OLX[k + 1]) / 2, (OLY[k] + OLY[k + 1]) / 2);
+    c.lineTo(QX[n - 1], QY[n - 1]);
+    c.lineTo((ORX[n - 2] + QX[n - 1]) / 2, (ORY[n - 2] + QY[n - 1]) / 2);
+    for (let k = n - 2; k > 0; k--) c.quadraticCurveTo(ORX[k], ORY[k], (ORX[k] + ORX[k - 1]) / 2, (ORY[k] + ORY[k - 1]) / 2);
     c.closePath(); c.fill();
   }
   function drawFlame(c, r, f, n, t) {
     const P = flamePal(n), dx = ball.fdx, dy = ball.fdy;
     // a soft glow first, flickering with the fire
     c.globalCompositeOperation = 'lighter';
-    const gr = r * (2.2 + 1.8 * f), gx = dx * r * 0.9, gy = dy * r * 0.9;
-    const gl = c.createRadialGradient(dx * r * 0.6, dy * r * 0.6, r * 0.3, gx, gy, gr);
-    gl.addColorStop(0, rgba(P.outer, 0.4 * f * ball.flick)); gl.addColorStop(1, rgba(P.outer, 0));
-    c.fillStyle = gl; c.beginPath(); c.arc(gx, gy, gr, 0, Math.PI * 2); c.fill();
-    c.globalCompositeOperation = 'source-over';
+    const gr = r * (2.2 + 1.8 * f);
+    softGlow(c, dx * r * 0.75, dy * r * 0.75, gr, gr, P.outer, 0.4 * f * ball.flick, 0.08);
+    c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
     const g = 0.5 + 0.5 * Math.min(1, f * 1.6), a = Math.min(1, f * 3), ang = Math.atan2(dy, dx), fan = 1 + 0.1 * ball.flare;
-    const W = r * (0.5 + 0.32 * f) * (1 + 0.22 * ball.flare);
+    const W = r * (0.5 + 0.32 * f), cut = W * 0.065, rootFan = 1 + 0.22 * ball.flare;
     for (const Ly of FLAME_LAYERS) {
       c.fillStyle = rgba(P[Ly[2]], Ly[3] * a);
       const rf = r * (1 + (Ly[4] - 1) * g), w = (r * Ly[5] * g + r * 0.55 * (1 - g)) * fan;
       c.beginPath(); c.ellipse(0, 0, rf, w, ang, 0, Math.PI * 2); c.fill(); // wraps the front of the ball
-      for (const T of flame.T) ribbon(c, T, W * T.size, Ly[0], Ly[1]);
+      for (const T of flame.T) ribbon(c, T, W * T.size, Ly[0], Ly[1], W * T.size * Ly[0] * breath(T, t) * rootFan, cut);
     }
   }
 
@@ -5125,20 +5301,32 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
         c.fillStyle = p.color; c.beginPath(); c.arc(0, 0, p.size, 0, Math.PI * 2); c.fill();
         c.fillStyle = 'rgba(255,255,255,0.35)'; c.beginPath(); c.arc(-p.size * 0.25, -p.size * 0.3, p.size * 0.35, 0, Math.PI * 2); c.fill();
         c.restore();
-      } else if (p.kind === 5) { c.globalAlpha = Math.min(1, t * 1.6) * 0.9; c.fillStyle = p.color; c.beginPath(); c.arc(p.x, p.y, p.size * (0.4 + t * 0.6), 0, Math.PI * 2); c.fill(); }
+      } else if (p.kind === 5) { c.globalAlpha = Math.min(1, t * 1.6, (1 - t) * 12) * 0.9; c.fillStyle = p.color; c.beginPath(); c.arc(p.x, p.y, p.size * (0.4 + t * 0.6), 0, Math.PI * 2); c.fill(); }
       else if (p.kind === 6) {
-        // a flame wisp: a small flat teardrop, pointed the way it flies
-        const sz = p.size * (0.35 + 0.65 * t);
-        c.globalAlpha = 1; c.fillStyle = lickRgba(p.n, t, Math.min(1, t * 3) * 0.95);
-        c.save(); c.translate(p.x, p.y); c.rotate(p.burst ? Math.atan2(p.vy, p.vx) : p.rot);
-        c.beginPath(); c.arc(0, 0, sz * 0.7, Math.PI / 2, Math.PI * 1.5, false);
-        c.quadraticCurveTo(sz * 0.6, -sz * 0.7, sz * 1.9, 0); c.quadraticCurveTo(sz * 0.6, sz * 0.7, 0, sz * 0.7); c.fill(); c.restore();
+        // a lick of flame breaking away: it swells in, curls as it rises, cools from the flame's hot colours
+        // to its edge colour and burns down to nothing. Two layers, like the flame: its edge, then a hotter middle.
+        const e = Math.min(1, (1 - t) / 0.2), grow = e * e * (3 - 2 * e);
+        const sz = p.size * (0.45 + 0.55 * grow) * (0.4 + 0.6 * t), a = grow * Math.min(1, t * 3);
+        if (a < 0.01) continue;
+        const L = sz * 2.4, Wd = sz * 0.62, bend = Math.sin(p.life * 18 + (p.sw || 0) * 6) * sz * 0.45;
+        c.save(); c.translate(p.x, p.y); c.rotate(Math.atan2(p.vy, p.vx));
+        for (let k = 0; k < 2; k++) {
+          const q = k ? 0.55 : 1;
+          c.globalAlpha = 1; c.fillStyle = lickRgba(p.n, k ? Math.min(1, t + 0.45) : t, a * (k ? 0.9 : 0.85));
+          c.beginPath(); c.moveTo(-L * 0.3 * q, 0);
+          c.quadraticCurveTo(-L * 0.1 * q, -Wd * q, L * 0.25 * q, -Wd * 0.5 * q + bend * 0.5);
+          c.quadraticCurveTo(L * 0.5 * q, -Wd * 0.12 * q + bend, L * 0.72 * q, bend);
+          c.quadraticCurveTo(L * 0.45 * q, Wd * 0.3 * q + bend * 0.7, L * 0.15 * q, Wd * 0.62 * q);
+          c.quadraticCurveTo(-L * 0.14 * q, Wd * 0.7 * q, -L * 0.3 * q, 0);
+          c.fill();
+        }
+        c.restore();
       } else if (p.kind === 7) {
-        const sz = p.size * (1.7 - 0.7 * t);
-        c.globalAlpha = 0.55 * t; c.drawImage(smokeSprite(), p.x - sz, p.y - sz, sz * 2, sz * 2);
+        const sz = p.size * (1.7 - 0.7 * t), e = Math.min(1, (1 - t) / 0.15);
+        c.globalAlpha = 0.55 * t * e * e * (3 - 2 * e); c.drawImage(smokeSprite(), p.x - sz, p.y - sz, sz * 2, sz * 2);
       } else if (p.kind === 8) { // an air puff from a flap
         const rr = p.size * (1.8 - 0.8 * t);
-        c.globalAlpha = 0.28 * t; c.strokeStyle = "#ffffff"; c.lineWidth = 0.6 + 1.8 * t; c.lineCap = 'round';
+        c.globalAlpha = 0.28 * t * Math.min(1, (1 - t) * 6); c.strokeStyle = "#ffffff"; c.lineWidth = 0.6 + 1.8 * t; c.lineCap = 'round';
         c.beginPath(); c.arc(p.x, p.y - rr * 0.7, rr, Math.PI * 0.2, Math.PI * 0.8); c.stroke();
       } else if (p.kind === 9) { // a twinkle: a four-point star
         const sz = p.size * (0.4 + 0.6 * Math.sin(t * Math.PI)), q = sz * 0.28;
@@ -5159,14 +5347,16 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   }
   // Ring labels start fully in view, then drift back at a quarter of the court's speed, so they stay
   // readable with the ball sitting near the left edge. They fade while the ball flies through them.
-  function drawTexts(c) {
-    c.textAlign = 'center'; c.textBaseline = 'alphabetic';
+  function drawTexts(c, dt) {
     const wl = view.wl != null ? view.wl : view.camX, wr = view.wr != null ? view.wr : view.camX + VIEW_W;
+    const K = scale * dpr; // device pixels per world unit at full zoom: the sprites are drawn at that size
     for (const t of texts) {
-      const k = t.life / t.max, a = k > 0.8 ? (1 - k) * 5 : Math.min(1, k * 2.5);
-      const s = 1 + (k > 0.85 ? (k - 0.85) * 1.6 : 0);
-      c.font = '700 ' + (t.size * s).toFixed(1) + 'px ' + FONT_DISPLAY;
-      const half = c.measureText(t.text).width / 2 + 8;
+      const k = t.life / t.max;
+      // in: fade and settle from a touch larger, eased; out: fade over the last 40%
+      const kin = clamp((1 - k) / 0.2, 0, 1), a = Math.min(kin * kin * (3 - 2 * kin), Math.min(1, k * 2.5));
+      const s = 1 + 0.24 * Math.pow(1 - clamp((1 - k) / 0.15, 0, 1), 2);
+      const sp = t.sp || (t.sp = textSprite(t.text, 700, t.size * 1.25 * K, FONT_DISPLAY, t.color)); // 1.25: room for the pop
+      const half = sp.tw * s / (1.25 * K) / 2 + 8; // includes the pop, as when the label was measured in its font
       if (t.cx == null) t.x = clamp(t.x, wl + half, wr - half);
       else t.x += (view.camX - t.cx) * 0.75;
       t.cx = view.camX;
@@ -5174,12 +5364,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       if (view.wt != null) t.y = Math.max(t.y, view.wt + t.size * 0.9 + 4); // never behind the HUD
       const bx = view.drawX, by = view.drawY, r = RV + 4;
       const onBall = bx != null && !ball.hidden && Math.abs(bx - t.x) < half + r && by > t.y - t.size - r && by < t.y + 18 + r;
-      t.dim = lerp(t.dim == null ? 1 : t.dim, onBall ? 0.28 : 1, 0.25);
+      t.dim = lerp(t.dim == null ? 1 : t.dim, onBall ? 0.28 : 1, 1 - Math.exp(-dt * 16));
       c.globalAlpha = clamp(a, 0, 1) * t.dim;
-      c.fillStyle = t.color; c.fillText(t.text, t.x, t.y);
+      drawText(c, sp, t.x, t.y - t.size * 0.36, 1.25 * K, s); // the sprite is centred on the text's middle, not its baseline
       if (t.sub) {
-        c.font = '700 12px ' + FONT_ROUND;
-        c.fillStyle = 'rgba(47,211,107,0.95)'; c.fillText(t.sub, t.x, t.y + 15);
+        const ss = t.ss || (t.ss = textSprite(t.sub, 700, 12 * K, FONT_ROUND, 'rgba(47,211,107,0.95)'));
+        drawText(c, ss, t.x, t.y + 15 - 4.3, K);
       }
     }
     c.globalAlpha = 1;
@@ -5559,7 +5749,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     document.querySelectorAll('#tabbar [data-tab]').forEach((b) => {
       const on = b.dataset.tab === tabOf(t);
       b.setAttribute('aria-selected', String(on));
-      if (on && tabOf(was) !== tabOf(t) && !quiet) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
+      if (on && tabOf(was) !== tabOf(t) && !quiet && !REDUCED) hudAnim(b.querySelector('svg') || b, 'pop', [{ transform: 'scale(0.86)' }, { transform: 'scale(1.06)', offset: 0.6 }, { transform: 'scale(1)' }], { duration: 350, easing: EASE_OUT });
     });
     const inLobby = phase === 'lobby';
     show(ui.lobby, inLobby && t === 'play');
@@ -5787,7 +5977,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     autoplay: (skill) => { autoBot = skill ? BOT.createBot(skill, E.makeRng('auto' + Math.random())) : null; },
     fx: (streak) => { dbg.fx = streak; }, // show the flame for a streak without touching the run
     hold: (on) => { dbg.hold = !!on; },   // stop the clock with the last frame on screen
-    step: (n) => { dbg.steps = n | 0; },  // while held: play n frames of 1/60 s
+    step: (n, dt) => { dbg.steps = n | 0; dbg.stepDt = dt > 0 ? dt : 1 / 60; },  // while held: play n frames of 1/60 s (or dt)
     stepsLeft: () => dbg.steps | 0,
     pot: () => potState, // the challenge pot as the client sees it
     special: () => specState, // today's special level as the client sees it

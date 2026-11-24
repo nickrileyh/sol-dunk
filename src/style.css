@@ -63,6 +63,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
   box-shadow: inset 0 0 0 0.5px var(--glass-line);
 }
+/* During a run the capsules, the streak meter and goal notices sit over a canvas that redraws every frame, so a
+   blur behind them would have to be recomputed every frame too, which costs phones frames. Over the dark court a
+   slightly denser fill looks the same. */
+.hud-play .glass, .hud-play .streak, .hud-play #notice { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.hud-play .glass, .hud-play .streak { background: rgba(40, 40, 44, 0.8); }
+.hud-play #notice { background: rgba(44, 44, 46, 0.94); }
 .cap {
   pointer-events: auto;
   display: inline-flex; align-items: center; gap: 5px;
@@ -103,8 +109,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 }
 .score.hot { color: rgb(var(--heat-text)); }
 .score.nova { color: rgb(var(--nova-text)); }
-.score.bump { animation: bump 0.45s cubic-bezier(.2, .9, .2, 1); }
-@keyframes bump { 0% { transform: scale(1.2); } 100% { transform: scale(1); } }
+/* the multiplier's bump, the streak meter's pump, the pot's +gain and the callouts are played from game.js with the
+   Web Animations API (hudAnim), so restarting one never forces a layout mid-frame */
 .pot { margin-top: 3px; font-family: var(--font-round); font-weight: 600; font-size: 15px; color: rgba(255, 255, 255, 0.8); font-variant-numeric: tabular-nums; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.7); white-space: nowrap; }
 .pot .unit { color: var(--label-3); }
 .hud-lobby #hud { z-index: 12; display: flex; justify-content: flex-end; padding-left: 16px; padding-right: 16px; }
@@ -337,8 +343,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .streak.t5 .flame { color: rgb(var(--nova-hi)); }
 .streak.t5 .heat i.f { background: rgb(var(--nova)); }
 .streak.t5 #stkT { color: rgb(var(--nova-text)); }
-.streak.pump { animation: stkPump 0.35s ease-out; }
-@keyframes stkPump { 0% { transform: scale(1); } 40% { transform: scale(1.09); } 100% { transform: scale(1); } }
 .streak.broke { animation: stkBreak 0.65s ease-out forwards; }
 .streak.broke .flame, .streak.broke #stkT { color: var(--label-3); filter: none; }
 @keyframes stkBreak {
@@ -350,16 +354,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .pot { transition: color 0.35s, text-shadow 0.35s; }
 .pot.up { color: var(--green); }
 .delta { position: absolute; left: 0; right: 0; top: 76px; font-size: 13px; font-weight: 700; color: var(--green); opacity: 0; white-space: nowrap; text-align: center; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6); }
-.delta.go { animation: deltaUp 1s ease-out; }
-@keyframes deltaUp { 0% { opacity: 0; transform: translateY(-8px); } 15% { opacity: 1; transform: none; } 70% { opacity: 1; } 100% { opacity: 0; transform: translateY(8px); } }
 
 /* ---------- big moments ---------- */
 #callout { position: fixed; left: 0; right: 0; top: max(21%, calc(var(--safe-t) + 168px)); z-index: 4; text-align: center; pointer-events: none; opacity: 0; }
-#callout.show { animation: callPop 1.3s cubic-bezier(.2, .9, .2, 1) forwards; }
-@keyframes callPop {
-  0% { opacity: 0; transform: scale(0.55); } 14% { opacity: 1; transform: scale(1.1); } 26% { transform: scale(1); }
-  76% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-16px) scale(0.98); }
-}
 #callout .c1 {
   display: inline-block; padding: 0 8px;
   font-family: var(--font-round); font-weight: 700; font-size: 44px; letter-spacing: -0.01em; line-height: 1.05;
@@ -529,8 +526,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 #tabbar svg .fill { fill: currentColor; stroke: none; }
 #tabbar button[aria-selected="true"] { color: var(--orange); }
 #tabbar button[aria-selected="true"] svg { stroke-width: 2.1; }
-#tabbar button.pop svg { animation: tabPop 0.35s cubic-bezier(.2, .9, .2, 1); }
-@keyframes tabPop { 0% { transform: scale(0.86); } 60% { transform: scale(1.06); } 100% { transform: scale(1); } }
+/* the tab icon's pop on a tap is played by hudAnim() in game.js */
 #tabbar .badge { position: absolute; top: 5px; left: calc(50% + 8px); width: 8px; height: 8px; border-radius: 4px; background: var(--red); display: none; }
 #tabbar .badge.on { display: block; }
 .hud-play #tabbar { transform: translateY(100%); opacity: 0; pointer-events: none; }
@@ -821,13 +817,10 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 @media (prefers-reduced-motion: reduce) {
   #prompt .ring::before, #prompt .ring::after { animation: none; }
   #prompt .ring::after { transform: scale(1); opacity: 0.45; }
-  .score.bump { animation: none; }
-  #callout.show { animation: callFade 1.3s linear forwards; }
-  .streak.pump, .streak.broke, .gain, .delta.go { animation: none; }
+  .streak.broke, .gain { animation: none; }
   #notice { transition: opacity 0.2s; transform: translate(-50%, 0); }
   .streak.broke { opacity: 0; }
   .sheet, .card, .panel, .view, #tabbar { transition: opacity 0.15s; }
   .view.page.hide { transform: none; }
-  #tabbar button.pop svg { animation: none; }
 }
-@keyframes callFade { 0% { opacity: 0; } 10% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+
