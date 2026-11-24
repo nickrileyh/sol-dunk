@@ -85,8 +85,9 @@ sim/               Monte Carlo runner, calibrator, quick stats
 server/            Express API, Solana deposits/withdrawals, replay verification, tests
 tools/             browser checks (Playwright + Chrome): flows.py plays every run outcome,
                    contact.py freezes rim contacts, audit.py screenshots every screen (to ./shots),
-                   speed.py plays deep into a tier and reports how much of the next ring is in view;
-                   sync_check.cjs (npm run check) checks every copy is the same build
+                   speed.py plays deep into a tier and reports how much of the next ring is in view,
+                   clip.py records exact 60 fps frames of a run (contact sheet + mp4), e.g. to
+                   review the flame; sync_check.cjs (npm run check) checks every copy is the same build
 ```
 
 ## Working on it

@@ -280,7 +280,10 @@
     const SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.5, 1568, 1760];
     return {
       unlock,
-      flap() { if (!on()) return; const t = ac.currentTime; hiss(t, 0.08, 800, 1600, 1.2, 0.13); tone(200, t, 0.06, 'sine', 0.05, 130); },
+      flap(fire) {
+        if (!on()) return; const t = ac.currentTime; hiss(t, 0.08, 800, 1600, 1.2, 0.13); tone(200, t, 0.06, 'sine', 0.05, 130);
+        if (fire > 0.2) hiss(t, 0.2, 240, 820, 0.7, 0.09 * fire, 'lowpass'); // the flame whooshes
+      },
       swish(streak) {
         if (!on()) return; const t = ac.currentTime;
         hiss(t, 0.26, 5200, 1800, 0.8, 0.2, 'bandpass');
@@ -556,6 +559,7 @@
   const ball = {
     x: 0, y: 300, px: 0, py: 300, ox: 0, oy: 0, rot: 0, rv: 0, flap: 0, flapV: 0, vy: 0, vx: 160, glide: null, fall: null, hidden: false,
     fire: 0, nova: 0, fdx: -0.3, fdy: -0.95, lickAcc: 0, emberAcc: 0, lastVis: 0, // the flame on swish streaks
+    fsp: [], tips: [], flare: 0, flick: 1, // the flame's spine and tongue tips (relative to the ball), flap flare, flicker
     tilt: 0, tiltV: 0,        // whole ball + wings lean: kicks back on a flap, noses down as it falls
     st: 0, stV: 0,            // takeoff stretch (springy)
     sq: 0, sqV: 0, sqX: 0, sqY: -1, // impact squash along the contact normal
@@ -838,7 +842,7 @@
 
   function handleEvents(ev, st, hi) {
     const h = st.hoops[hi];
-    if (ev & EV.FLAP) { hopFx(); Sound.flap(); }
+    if (ev & EV.FLAP) { hopFx(); Sound.flap(ball.fire); }
     if (ev & EV.RIM) { rimFx(h, st); if (dbg.freezeOnRim) { dbg.freezeOnRim = false; dbg.frozen = true; phase = 'paused'; acc = 0; } }
     if (ev & EV.SCORE) {
       const o = st.outcomes[st.outcomes.length - 1];
@@ -1125,6 +1129,10 @@
   function hopFx() {
     ball.flapV = -20;
     if (REDUCED) return;
+    ball.flare = 1;      // a flap fans the flame (it throws off a few more wisps)...
+    if (ball.fire > 0.1) ball.lickAcc += 2.5 * ball.fire;
+    // ...and pushes a puff of air down from the wings
+    spawn({ x: ball.x - RV * 0.35, y: ball.y + RV * 0.8, vx: ball.vx * 0.25, vy: 140, life: 0.28, max: 0.28, size: RV * 0.62, kind: 8, drag: 5 });
     ball.tiltV -= 6.2;   // lean back on the push...
     ball.stV += 1.7;     // ...stretch up a touch...
     ball.rv -= 4.2;      // ...and a little back-spin
@@ -1158,6 +1166,7 @@
       for (let i = 0; i < 16; i++) { const a = rnd(0, Math.PI * 2), s = rnd(60, 230); spawn({ x: hx, y: hy + 6, vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.55 - 30, life: 0.55, max: 0.55, size: rnd(1.4, 2.8), color: pal ? pal[i % 4] : '#ffffff', kind: 0, drag: 2.2 }); }
       spawn({ x: hx, y: hy, kind: 3, life: 0.5, max: 0.5, size: h.w / 2 + P.RP, color: nova ? heatHex(1, 'inner') : hot ? heatHex(0, 'inner') : '#ffffff' });
       if (streak === 3 || streak === 5) ignite(nova ? 1 : 0);
+      if (!REDUCED && streak >= 2) ball.flare = Math.max(ball.flare, streak === 3 || streak === 5 ? 1.6 : 0.9); // each swish feeds the fire
       Sound.swish(streak); buzz(10);
     } else { Sound.score(); }
     if (m != null) {
@@ -1238,8 +1247,11 @@
   // ---------------------------------------------------------------- main loop
   let last = performance.now();
   function frame(tNow) {
-    if (dbg.hold) { last = tNow; requestAnimationFrame(frame); return; }
     let dt = (tNow - last) / 1000; last = tNow;
+    if (dbg.hold) { // frozen for tests; step(n) plays n more frames of 1/60 s
+      if (!(dbg.steps > 0)) { requestAnimationFrame(frame); return; }
+      dbg.steps--; dt = 1 / 60;
+    }
     if (dt > 0.1) dt = 0.1;
     if (dt < 0) dt = 0;
     view.time += dt;
@@ -1312,20 +1324,19 @@
     if (fireT > 0) ball.nova = lerp(ball.nova, vis >= 5 ? 1 : 0, 1 - Math.exp(-dt * 3));
     if (vis === 0 && ball.lastVis >= 2 && ball.fire > 0.12 && !ball.hidden) douse(dxw, dyw);
     ball.lastVis = vis;
-    // the flame trails opposite the motion and leans upward, as heat rises
-    const spd = Math.hypot(ball.vx, ball.vy);
-    let tx = spd > 30 ? -ball.vx / spd : -0.3, ty = (spd > 30 ? -ball.vy / spd : -0.95) - 0.9;
-    const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
-    const kd = 1 - Math.exp(-dt * 9);
-    ball.fdx += (tx - ball.fdx) * kd; ball.fdy += (ty - ball.fdy) * kd;
+    // the flame streams off the ball along a spine that trails it like a streamer in the wind (see updateSpine)
+    ball.flare *= Math.exp(-dt * 6);
+    ball.flick = 0.86 + 0.14 * noise1(view.time * 9.5 + 40);
+    updateSpine(Math.min(dt, 1 / 30));
     if (ball.fire > 0.04 && !ball.hidden) {
-      const f = ball.fire, n = ball.nova, dl = Math.hypot(ball.fdx, ball.fdy) || 1, dx = ball.fdx / dl, dy = ball.fdy / dl;
-      ball.lickAcc += dt * (REDUCED ? 6 : 26) * f;
-      const L = RV * (1.5 + 2.9 * f);
+      const f = ball.fire, n = ball.nova, dx = ball.fdx, dy = ball.fdy;
+      // the tips of the tongues break off as wisps that drift back and rise
+      ball.lickAcc += dt * (REDUCED ? 4 : 20) * f;
       while (ball.lickAcc >= 1) {
         ball.lickAcc -= 1;
-        const along = L * rnd(0.5, 0.85), side = rnd(-0.55, 0.55) * RV, sp = rnd(50, 110);
-        spawn({ x: dxw + dx * along - dy * side, y: dyw + dy * along + dx * side, vx: ball.vx * 0.6 + dx * sp, vy: ball.vy * 0.6 + dy * sp - 20, life: rnd(0.12, 0.24), max: 0.24, size: RV * rnd(0.2, 0.34) * (0.6 + 0.6 * f), kind: 6, n, drag: 1.5 });
+        const T = ball.tips[(Math.random() * ball.tips.length) | 0];
+        if (!T) break;
+        spawn({ x: dxw + T.x, y: dyw + T.y, vx: ball.vx * 0.5 + T.dx * 50, vy: ball.vy * 0.5 + T.dy * 50 - 30, g: -300, life: rnd(0.16, 0.3), max: 0.3, size: RV * rnd(0.22, 0.36) * (0.6 + 0.6 * f), kind: 6, n, drag: 2.4, rot: Math.atan2(T.dy, T.dx) });
       }
       ball.emberAcc += dt * (REDUCED ? 3 : 16) * f;
       while (ball.emberAcc >= 1) {
@@ -1481,7 +1492,7 @@
   // and, when it burns, the glow of its flame on the boards.
   function fireLight(c, x, y) {
     const R = RV * (6 + 3 * ball.fire), g = c.createRadialGradient(x, y, RV, x, y, R), Pf = flamePal(ball.nova);
-    g.addColorStop(0, rgba(Pf.mid, 0.12 * ball.fire)); g.addColorStop(1, rgba(Pf.mid, 0));
+    g.addColorStop(0, rgba(Pf.mid, 0.12 * ball.fire * ball.flick)); g.addColorStop(1, rgba(Pf.mid, 0));
     c.globalCompositeOperation = 'lighter'; c.fillStyle = g;
     c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fill();
     c.globalCompositeOperation = 'source-over';
@@ -1516,7 +1527,7 @@
         const pal = flamePal(ball.nova), rr = 130 * (1 - 0.45 * hgt);
         c.save(); c.globalCompositeOperation = 'lighter'; c.translate(bx, F + 1); c.scale(1, 0.2);
         const pg = c.createRadialGradient(0, 0, 0, 0, 0, rr);
-        pg.addColorStop(0, rgba(pal.mid, 0.4 * ball.fire * (1 - 0.6 * hgt))); pg.addColorStop(1, rgba(pal.mid, 0));
+        pg.addColorStop(0, rgba(pal.mid, 0.4 * ball.fire * ball.flick * (1 - 0.6 * hgt))); pg.addColorStop(1, rgba(pal.mid, 0));
         c.fillStyle = pg; c.beginPath(); c.arc(0, 0, rr, 0, Math.PI * 2); c.fill(); c.restore();
       }
     }
@@ -1728,7 +1739,7 @@
       const Pl = flamePal(ball.nova), f = ball.fire, dl = Math.hypot(ball.fdx, ball.fdy) || 1;
       c.globalCompositeOperation = 'lighter';
       const hg = c.createRadialGradient(ball.fdx / dl * r * 0.55, ball.fdy / dl * r * 0.55, 0, 0, 0, r);
-      hg.addColorStop(0, rgba(Pl.inner, 0.5 * f)); hg.addColorStop(0.7, rgba(Pl.mid, 0.16 * f)); hg.addColorStop(1, rgba(Pl.outer, 0.04 * f));
+      hg.addColorStop(0, rgba(Pl.inner, 0.5 * f * (0.8 + 0.2 * ball.flick))); hg.addColorStop(0.7, rgba(Pl.mid, 0.16 * f)); hg.addColorStop(1, rgba(Pl.outer, 0.04 * f));
       c.fillStyle = hg; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
       c.globalCompositeOperation = 'source-over';
     }
@@ -1739,48 +1750,113 @@
 
 
   // ---------------------------------------------------------------- the flame
-  // A flat, layered flame (red edge to white-hot core) over a soft additive glow. Each layer hugs the
-  // front of the ball, flares at its sides and streams away from the motion in three flickering tips.
-  const FLAME_LAYERS = [ // [front radius, width, length, colour, alpha, flicker seed] in ball radii
-    [1.12, 1.34, 1, 'outer', 0.97, 0],
-    [1.02, 1.14, 0.8, 'mid', 0.97, 1.9],
-    [0.9, 0.95, 0.6, 'inner', 0.97, 3.7],
-    [0.78, 0.74, 0.4, 'core', 0.92, 5.3]
+  // The flame hangs off a spine of points that trails the ball like a streamer in the wind: the burning gas stays
+  // roughly where it was while the ball flies on, and rises as heat does. So the flame bends behind a flap, swings
+  // up as the ball falls, stretches when the ball is fast and stands up when it slows. Three tongues (a long middle
+  // one and two shorter sides) run along the spine, each waving and growing and shrinking on its own, and their tips
+  // break off as rising wisps. Layers run from the edge colour in to a white-hot core.
+  const FS_N = 7; // points on the spine; the first sits at the ball's centre
+  for (let k = 0; k < FS_N; k++) ball.fsp.push({ x: 0, y: -k * 6 });
+  for (let j = 0; j < 3; j++) ball.tips.push({ x: 0, y: -RV * 2, dx: 0, dy: -1 });
+  const NZ = new Float32Array(256);
+  for (let i = 0; i < 256; i++) NZ[i] = Math.random() * 2 - 1;
+  function noise1(x) { // smooth 1D noise, about -1..1
+    const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f), a = NZ[i & 255];
+    return a + (NZ[(i + 1) & 255] - a) * u;
+  }
+  function updateSpine(dt) {
+    const S = ball.fsp, f = Math.max(ball.fire, 0.05);
+    // the wind the flame feels: the ball's own motion, reversed (vertical motion counts a little less), plus the rise of hot gas
+    const wx = -ball.vx, wy = -0.6 * ball.vy - 240, ws = Math.hypot(wx, wy);
+    const L = RV * (1.5 + 2.9 * f) * (0.88 + 0.3 * clamp(ws / 520, 0, 1)) * (1 + 0.25 * ball.flare) * 1.15;
+    const seg = L / (FS_N - 1), stiff = 1 - Math.exp(-dt * 7.5);
+    for (let k = 1; k < FS_N; k++) {
+      const q = S[k], p0 = S[k - 1], mob = 0.42 - 0.035 * k; // older gas, further out, follows more lazily
+      q.x += wx * dt * mob; q.y += wy * dt * mob;
+      if (k > 1) { const p1 = S[k - 2]; q.x += (2 * p0.x - p1.x - q.x) * stiff * 0.9; q.y += (2 * p0.y - p1.y - q.y) * stiff * 0.9; } // curve, don't fold
+      const dx = q.x - p0.x, dy = q.y - p0.y, d = Math.hypot(dx, dy) || 1;
+      q.x = p0.x + dx / d * seg; q.y = p0.y + dy / d * seg;
+    }
+    const d1 = Math.hypot(S[1].x, S[1].y) || 1;
+    ball.fdx = S[1].x / d1; ball.fdy = S[1].y / d1;
+  }
+  // the spine as a smooth curve (Catmull-Rom), resampled, with arc length
+  const SP = [];
+  for (let i = 0; i <= 4 * (FS_N - 1); i++) SP.push({ x: 0, y: 0, s: 0 });
+  function buildSpine() {
+    const S = ball.fsp;
+    let j = 0;
+    for (let k = 0; k < FS_N - 1; k++) {
+      const a = S[Math.max(0, k - 1)], b = S[k], c2 = S[k + 1], d = S[Math.min(FS_N - 1, k + 2)];
+      for (let i = 0; i < 4; i++, j++) {
+        const t = i / 4, t2 = t * t, t3 = t2 * t, o = SP[j];
+        o.x = 0.5 * (2 * b.x + (c2.x - a.x) * t + (2 * a.x - 5 * b.x + 4 * c2.x - d.x) * t2 + (3 * b.x - a.x - 3 * c2.x + d.x) * t3);
+        o.y = 0.5 * (2 * b.y + (c2.y - a.y) * t + (2 * a.y - 5 * b.y + 4 * c2.y - d.y) * t2 + (3 * b.y - a.y - 3 * c2.y + d.y) * t3);
+      }
+    }
+    SP[j].x = S[FS_N - 1].x; SP[j].y = S[FS_N - 1].y;
+    for (let i = 1; i < SP.length; i++) SP[i].s = SP[i - 1].s + Math.hypot(SP[i].x - SP[i - 1].x, SP[i].y - SP[i - 1].y);
+    return SP[SP.length - 1].s;
+  }
+  const AT = { x: 0, y: 0, tx: 1, ty: 0 };
+  function spineAt(s) { // the point at arc length s (straight on past the end) and the direction there
+    let i = 1;
+    while (i < SP.length - 1 && SP[i].s < s) i++;
+    const a = SP[i - 1], b = SP[i], l = b.s - a.s || 1e-6, u = (s - a.s) / l;
+    AT.tx = (b.x - a.x) / l; AT.ty = (b.y - a.y) / l; AT.x = a.x + (b.x - a.x) * u; AT.y = a.y + (b.y - a.y) * u;
+    return AT;
+  }
+  const TONGUES = [[0, 1, 0.64, 0.3], [-1, 0.66, 0.48, 2.1], [1, 0.74, 0.48, 4.7]]; // [side, length, base half-width, seed]
+  const BODY = [0, 0.56, 0.96, 9.1]; // the flame's body: the tongues split out of it
+  const FLAME_LAYERS = [ // [front radius, half-width, length, colour, alpha, seed] in ball radii
+    [1.12, 1.3, 1, 'outer', 0.97, 0],
+    [1.02, 1.1, 0.8, 'mid', 0.97, 1.9],
+    [0.9, 0.92, 0.62, 'inner', 0.97, 3.7],
+    [0.78, 0.72, 0.42, 'core', 0.92, 5.3]
   ];
-  function flamePath(c, rf, w, L, t, sd) {
-    const s1 = Math.sin(t * 13 + sd), s2 = Math.sin(t * 17.3 + sd * 1.7), s3 = Math.sin(t * 9.7 + sd * 2.3);
-    const tm = L * (0.9 + 0.1 * s1), ta = L * (0.58 + 0.08 * s2), tb = L * (0.66 + 0.08 * s3), sw = w * 0.2 * s3;
-    c.beginPath();
-    c.moveTo(0, w);
-    c.ellipse(0, 0, rf, w, 0, Math.PI / 2, Math.PI * 1.5, false);
-    c.quadraticCurveTo(ta * 0.5, -w * 1.08, ta, -w * (0.92 - 0.12 * s2));
-    c.quadraticCurveTo(ta * 0.72, -w * 0.42, tm * 0.56, -w * 0.3);
-    c.quadraticCurveTo(tm * 0.82, -w * 0.22 + sw, tm, sw);
-    c.quadraticCurveTo(tm * 0.8, w * 0.3 + sw, tb * 0.6, w * 0.36);
-    c.quadraticCurveTo(tb * 0.78, w * 0.66, tb, w * (0.88 + 0.1 * s1));
-    c.quadraticCurveTo(tb * 0.48, w * 1.08, 0, w);
-    c.closePath();
+  const TPL = [], TPR = [];
+  for (let i = 0; i <= 9; i++) { TPL.push([0, 0]); TPR.push([0, 0]); }
+  // one tongue: from the ball along the spine, off to its side, waving as it goes and tapering to a point
+  function tongue(c, len, w, T, t, calm, tip) {
+    const N = 9, side = T[0], sd = T[3];
+    for (let i = 0; i <= N; i++) {
+      const u = i / N, A = spineAt(len * u), nx = -A.ty, ny = A.tx;
+      const off = side * w * (0.44 + 0.4 * u) + w * 0.45 * calm * Math.pow(u, 1.3) * noise1(t * 4.4 - u * 2.6 + sd * 5);
+      const h = w * T[2] * Math.pow(1 - u, 0.85), cx = A.x + nx * off, cy = A.y + ny * off;
+      TPL[i][0] = cx + nx * h; TPL[i][1] = cy + ny * h; TPR[i][0] = cx - nx * h; TPR[i][1] = cy - ny * h;
+      if (tip && i === N) { tip.x = cx; tip.y = cy; tip.dx = A.tx; tip.dy = A.ty; }
+    }
+    c.beginPath(); c.moveTo(TPR[0][0], TPR[0][1]); c.lineTo(TPL[0][0], TPL[0][1]);
+    for (let i = 1; i < N; i++) { const p = TPL[i], q = TPL[i + 1]; c.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2); }
+    for (let i = N - 1; i > 0; i--) { const p = TPR[i], q = TPR[i - 1]; c.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2); }
+    c.closePath(); c.fill();
   }
   function drawFlame(c, r, f, n, t) {
-    const P = flamePal(n), dl = Math.hypot(ball.fdx, ball.fdy) || 1;
-    c.save();
-    c.rotate(Math.atan2(ball.fdy / dl, ball.fdx / dl));
+    const P = flamePal(n), calm = REDUCED ? 0.3 : 1, dx = ball.fdx, dy = ball.fdy;
+    const L = buildSpine() / 1.15;
+    // a soft glow first, flickering with the fire
     c.globalCompositeOperation = 'lighter';
-    const gr = r * (2.2 + 1.8 * f);
-    const gl = c.createRadialGradient(r * 0.6, 0, r * 0.3, r * 0.9, 0, gr);
-    gl.addColorStop(0, rgba(P.outer, 0.4 * f)); gl.addColorStop(1, rgba(P.outer, 0));
-    c.fillStyle = gl; c.beginPath(); c.arc(r * 0.9, 0, gr, 0, Math.PI * 2); c.fill();
+    const gr = r * (2.2 + 1.8 * f), gx = dx * r * 0.9, gy = dy * r * 0.9;
+    const gl = c.createRadialGradient(dx * r * 0.6, dy * r * 0.6, r * 0.3, gx, gy, gr);
+    gl.addColorStop(0, rgba(P.outer, 0.4 * f * ball.flick)); gl.addColorStop(1, rgba(P.outer, 0));
+    c.fillStyle = gl; c.beginPath(); c.arc(gx, gy, gr, 0, Math.PI * 2); c.fill();
     c.globalCompositeOperation = 'source-over';
-    const L = r * (1.5 + 2.9 * f), g = 0.5 + 0.5 * Math.min(1, f * 1.6), a = Math.min(1, f * 3);
-    for (const Ly of FLAME_LAYERS) {
+    const g = 0.5 + 0.5 * Math.min(1, f * 1.6), a = Math.min(1, f * 3), ang = Math.atan2(dy, dx), fan = 1 + 0.1 * ball.flare;
+    for (let li = 0; li < FLAME_LAYERS.length; li++) {
+      const Ly = FLAME_LAYERS[li];
+      const rf = r * (1 + (Ly[0] - 1) * g), w = (r * Ly[1] * g + r * 0.55 * (1 - g)) * fan;
       c.fillStyle = rgba(P[Ly[3]], Ly[4] * a);
-      flamePath(c, r * (1 + (Ly[0] - 1) * g), r * Ly[1] * g + r * 0.55 * (1 - g), L * Ly[2], t, Ly[5]);
-      c.fill();
+      c.beginPath(); c.ellipse(0, 0, rf, w, ang, 0, Math.PI * 2); c.fill(); // wraps the front of the ball
+      tongue(c, L * Ly[2] * BODY[1], w, BODY, t, calm * 0.6, null);
+      for (let j = 0; j < TONGUES.length; j++) {
+        const T = TONGUES[j];
+        const len = L * Ly[2] * T[1] * (1 + calm * (0.16 * noise1(t * 3.3 + T[3] * 7) + 0.07 * noise1(t * 10 + T[3] * 3 + Ly[5] * 11)));
+        tongue(c, len, w, T, t, calm, li === 0 ? ball.tips[j] : null);
+      }
     }
-    c.restore();
   }
 
-  const BEHIND = [false, false, false, false, false, true, true, true]; // embers, flame licks and smoke sit behind the ball
+  const BEHIND = [false, false, false, false, false, true, true, true, true]; // embers, flame licks, smoke and air puffs sit behind the ball
   function drawParts(c, behind) {
     for (const p of parts) {
       if (BEHIND[p.kind] !== behind) continue;
@@ -1800,12 +1876,16 @@
         // a flame wisp: a small flat teardrop, pointed the way it flies
         const sz = p.size * (0.35 + 0.65 * t);
         c.globalAlpha = 1; c.fillStyle = lickRgba(p.n, t, Math.min(1, t * 3) * 0.95);
-        c.save(); c.translate(p.x, p.y); c.rotate(Math.atan2(p.vy, p.vx));
+        c.save(); c.translate(p.x, p.y); c.rotate(p.burst ? Math.atan2(p.vy, p.vx) : p.rot);
         c.beginPath(); c.arc(0, 0, sz * 0.7, Math.PI / 2, Math.PI * 1.5, false);
         c.quadraticCurveTo(sz * 0.6, -sz * 0.7, sz * 1.9, 0); c.quadraticCurveTo(sz * 0.6, sz * 0.7, 0, sz * 0.7); c.fill(); c.restore();
       } else if (p.kind === 7) {
         const sz = p.size * (1.7 - 0.7 * t);
         c.globalAlpha = 0.55 * t; c.drawImage(smokeSprite(), p.x - sz, p.y - sz, sz * 2, sz * 2);
+      } else if (p.kind === 8) { // an air puff from a flap
+        const rr = p.size * (1.8 - 0.8 * t);
+        c.globalAlpha = 0.28 * t; c.strokeStyle = "#ffffff"; c.lineWidth = 0.6 + 1.8 * t; c.lineCap = 'round';
+        c.beginPath(); c.arc(p.x, p.y - rr * 0.7, rr, Math.PI * 0.2, Math.PI * 0.8); c.stroke();
       }
     }
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
@@ -2097,6 +2177,8 @@
     autoplay: (skill) => { autoBot = skill ? BOT.createBot(skill, E.makeRng('auto' + Math.random())) : null; },
     fx: (streak) => { dbg.fx = streak; }, // show the flame for a streak without touching the run
     hold: (on) => { dbg.hold = !!on; },   // stop the clock with the last frame on screen
+    step: (n) => { dbg.steps = n | 0; },  // while held: play n frames of 1/60 s
+    stepsLeft: () => dbg.steps | 0,
     ballScreen: () => ({ x: view.bsx, y: view.bsy }),
     equip: (t, id) => { if (COS[t] && COS[t][id]) { profile.eq[t] = id; if (t === 'flame') applyFlameTheme(); } } // test hook: try a skin without unlocking it
   };
