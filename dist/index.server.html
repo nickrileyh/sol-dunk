@@ -386,19 +386,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .nx-s:empty, .nx-r:empty, .nx-f:empty { display: none; }
 .cp-badge { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; vertical-align: 4px; background: rgba(255, 214, 10, 0.18); color: var(--yellow); }
 
-/* ---------- run recap: every ring, one group per level ---------- */
-.recap { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px 12px; max-width: 300px; margin: 14px auto 0; }
-.recap:empty { display: none; }
-.recap.cp { margin: -6px auto 12px; }
-.recap .lv { display: flex; gap: 3px; }
-.recap i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.12); }
-.recap i.s { background: #ffffff; }
-.recap i.f { background: rgb(var(--heat)); box-shadow: 0 0 6px rgba(var(--heat), 0.75); }
-.recap i.n { background: rgb(var(--nova-hi)); box-shadow: 0 0 6px rgba(var(--nova), 0.85); }
-.recap i.r { background: none; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.5); }
-.recap i.x { background: var(--red); box-shadow: 0 0 6px rgba(255, 90, 78, 0.6); }
-.recap:not(:empty) + .tiles { margin-top: 16px; }
-
 /* ---------- goals reached mid-run ---------- */
 #notice {
   position: fixed; left: 50%; bottom: calc(var(--safe-b) + 18px); z-index: 6; pointer-events: none;
@@ -611,7 +598,6 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 <section id="checkpoint" class="card hide" aria-label="Checkpoint" tabindex="-1">
   <div class="kicker" id="cpKicker">Checkpoint</div>
   <div class="card-title" id="cpTitle">Level 1 cleared</div>
-  <div class="recap cp" id="cpRecap" aria-hidden="true"></div>
   <div class="big"><span class="sol-ico"></span><span id="cpPot">0.0000</span><span class="unit">SOL</span></div>
   <div class="under" id="cpMult">1.00×</div>
   <div class="next" id="cpNext">
@@ -628,7 +614,6 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   <div class="card-title" id="resTitle">Cashed out</div>
   <div class="big" id="resAmount"><span class="sol-ico"></span><span id="resNum">+0</span><span class="unit">SOL</span></div>
   <div class="under muted" id="resSub"></div>
-  <div class="recap" id="resRecap" aria-hidden="true"></div>
   <div class="tiles" id="resStats"></div>
   <div class="xp" id="resXp">
     <div class="xp-h"><span id="xpLvl">Level 1</span><span class="num" id="xpGain"></span></div>
@@ -672,7 +657,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 10;
+  const VERSION = 11;
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -694,7 +679,12 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     TFRIC: 0.2,     // tangential damping on a firm rim knock (scaled down for gentle contact)
     KNOCK: 30,      // normal speed above which a contact is a knock (bounce + rim event); below it the ball rests/rolls
     VX_K: 5.0,      // how fast forward speed recovers to level speed (1/s)
-    RECOVER: 54     // ticks after a rim knock over which that push fades back in (0.45 s), so the bounce plays out
+    RECOVER: 54,    // ticks after a rim knock over which that push fades back in (0.45 s), so the bounce plays out
+    // Fair rims (v11): once the ball has touched a ring, while its centre is over the opening and not far above it,
+    // the rim's curve soaks up its forward speed instead of letting it carry on over the back rim, so a ball that
+    // lands mostly inside drops in. One that comes down on or past the end of the rim still bounces out.
+    SETTLE_H: 100,  // how far above the rim line this reaches
+    SETTLE_D: 5     // how fast forward speed fades while over the opening (1/s)
   };
 
   // the swish gap (rim to rim, less the ball) = w - 2*(R + RP); keep it at the v9 value (R 17, RP 7)
@@ -707,14 +697,16 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   const FIRST_HOOP_X = 250;
   const START_Y = 300;
 
-  // Difficulty tiers. Arrays are per level (1..8).
+  // Difficulty tiers. Arrays are per level (1..8). Ring widths are the v9 numbers (RING_GROW is added).
+  // v11: fair rims make rim hits drop in more often, so to keep the same clear rates (and the house edge) the
+  // ball is 20% faster than v10 and the rings 5% further apart: about 12% less time between rims.
   // Speed grows 4% per level and the rings spread out with it (spacing and the first ring's distance
   // grow 4% too), so every level gives the same time between rims. Deeper levels get harder through
   // tighter, moving and tilted rims and bigger height changes, not through less time to react.
   const DIFFS = [
     {
       id: 'rookie', name: 'Rookie', blurb: 'Wide rings, gentle pace',
-      speed: 138, spacing: 230, maxWin: 50,
+      speed: 166, spacing: 242, maxWin: 50,
       hoopW:   [93, 92, 91, 90, 89, 88, 87, 86],
       dy:      [115, 122, 129, 136, 143, 150, 157, 164],
       moveP:   [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7, 0.8],   // a few rings bob gently from level 1
@@ -724,7 +716,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     },
     {
       id: 'pro', name: 'Pro', blurb: 'The classic feel',
-      speed: 148, spacing: 234, maxWin: 100,
+      speed: 178, spacing: 246, maxWin: 100,
       hoopW:   [91, 90, 89, 88, 87, 86, 85, 84],
       dy:      [120, 128, 136, 144, 152, 160, 168, 176],
       moveP:   [0, 0.3, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95],
@@ -734,7 +726,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     },
     {
       id: 'allstar', name: 'All-Star', blurb: 'Moving rings',
-      speed: 160, spacing: 238, maxWin: 250,
+      speed: 192, spacing: 250, maxWin: 250,
       hoopW:   [87, 85, 83, 82, 81, 80, 79, 78],
       dy:      [140, 152, 164, 174, 182, 190, 198, 206],
       moveP:   [0, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
@@ -744,7 +736,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     },
     {
       id: 'legend', name: 'Legend', blurb: 'Fast and tilted',
-      speed: 170, spacing: 242, maxWin: 1000,
+      speed: 204, spacing: 254, maxWin: 1000,
       hoopW:   [85, 83, 81, 80, 79, 78, 77, 76],
       dy:      [150, 162, 174, 184, 192, 200, 208, 216],
       moveP:   [0.25, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1],
@@ -966,8 +958,16 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     // from zero, so a bounce keeps its own direction instead of the ball ploughing on through the rim.
     // While the ball rests on a rim the push is steady, so it can't balance on the edge.
     const since = st.tick - st.knockTick;
-    const kx = since >= P.RECOVER ? P.VX_K : P.VX_K * (since / P.RECOVER);
+    let kx = since >= P.RECOVER ? P.VX_K : P.VX_K * (since / P.RECOVER);
     const onRim = st.contact; st.contact = false;
+    // Fair rims: after a touch, while the ball is over the opening its forward speed fades and the push waits,
+    // so it drops in instead of rolling on over the back rim. A ball past the end of the rim still bounces out.
+    const hn = st.hoops[st.next];
+    if (hn && hn.touched) {
+      const dx = b.x - hn.x, dy = b.y - hoopY(hn, st.tick * DT);
+      const lx = dx * hn.c + dy * hn.s, ly = -dx * hn.s + dy * hn.c, half = hn.w * 0.5;
+      if (ly < 0 && ly > -P.SETTLE_H && lx > -half && lx < half) { kx = 0; b.vx -= b.vx * (P.SETTLE_D * DT); }
+    }
     if (onRim) { if (b.vx < st.speed) { b.vx += st.speed * (kx * DT); if (b.vx > st.speed) b.vx = st.speed; } }
     else b.vx += (st.speed - b.vx) * (kx * DT);
     b.x += b.vx * DT; b.y += b.vy * DT;
@@ -1051,7 +1051,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   if (typeof module === 'object' && module.exports) module.exports = P;
   else root.DunkPaytable = P;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-  return {"PAYTABLE":[[{"rim":1,"swish":[1.001,1.001,1.001,1.001,1.001]},{"rim":1.003,"swish":[1.005,1.006,1.007,1.009,1.01]},{"rim":1.005,"swish":[1.01,1.012,1.014,1.016,1.017]},{"rim":1.007,"swish":[1.013,1.016,1.018,1.021,1.023]},{"rim":1.01,"swish":[1.019,1.023,1.027,1.031,1.035]},{"rim":1.015,"swish":[1.03,1.036,1.041,1.047,1.053]},{"rim":1.023,"swish":[1.046,1.055,1.064,1.073,1.082]},{"rim":1.039,"swish":[1.078,1.094,1.11,1.126,1.141]}],[{"rim":1.001,"swish":[1.001,1.002,1.002,1.002,1.002]},{"rim":1.004,"swish":[1.009,1.01,1.012,1.014,1.015]},{"rim":1.009,"swish":[1.017,1.021,1.024,1.028,1.031]},{"rim":1.014,"swish":[1.029,1.035,1.041,1.046,1.052]},{"rim":1.022,"swish":[1.045,1.054,1.063,1.072,1.081]},{"rim":1.037,"swish":[1.075,1.09,1.105,1.12,1.135]},{"rim":1.055,"swish":[1.109,1.131,1.153,1.175,1.197]},{"rim":1.086,"swish":[1.172,1.207,1.241,1.276,1.31]}],[{"rim":1.004,"swish":[1.008,1.009,1.011,1.012,1.014]},{"rim":1.01,"swish":[1.021,1.025,1.029,1.033,1.038]},{"rim":1.021,"swish":[1.042,1.05,1.059,1.067,1.075]},{"rim":1.035,"swish":[1.07,1.084,1.097,1.111,1.125]},{"rim":1.053,"swish":[1.105,1.126,1.147,1.169,1.19]},{"rim":1.082,"swish":[1.165,1.198,1.231,1.264,1.297]},{"rim":1.121,"swish":[1.242,1.29,1.338,1.387,1.435]},{"rim":1.186,"swish":[1.373,1.448,1.522,1.597,1.671]}],[{"rim":1.009,"swish":[1.019,1.022,1.026,1.03,1.033]},{"rim":1.02,"swish":[1.04,1.048,1.056,1.065,1.073]},{"rim":1.037,"swish":[1.074,1.088,1.103,1.118,1.133]},{"rim":1.056,"swish":[1.113,1.136,1.158,1.181,1.203]},{"rim":1.085,"swish":[1.17,1.204,1.239,1.273,1.307]},{"rim":1.125,"swish":[1.249,1.299,1.349,1.398,1.448]},{"rim":1.188,"swish":[1.376,1.451,1.527,1.602,1.677]},{"rim":1.258,"swish":[1.516,1.619,1.722,1.825,1.928]}]],"AVG_CLEAR":[[0.8961,0.8657,0.8267,0.779,0.7025,0.6196,0.5155,0.4103],[0.8925,0.8176,0.7463,0.6397,0.5363,0.4217,0.3123,0.2115],[0.8173,0.6865,0.573,0.467,0.3537,0.2553,0.1616,0.0927],[0.7178,0.5542,0.4455,0.3386,0.2414,0.157,0.0941,0.0554]],"AVG_SWISH":[[0.7782,0.7526,0.7248,0.6925,0.6547,0.6152,0.5753,0.5293],[0.7354,0.7001,0.6647,0.616,0.5733,0.5293,0.4839,0.4437],[0.6458,0.5824,0.5215,0.4813,0.4415,0.4072,0.3695,0.3361],[0.6183,0.5479,0.4965,0.4551,0.4145,0.3718,0.3357,0.3048]],"AVG_RTP":[[0.9003,0.8099,0.716,0.6075,0.4806,0.3539,0.2342,0.1434],[0.9002,0.7784,0.6475,0.4899,0.3355,0.2075,0.1094,0.0501],[0.855,0.6599,0.4702,0.3095,0.1786,0.0937,0.041,0.0158],[0.7958,0.5477,0.3524,0.2021,0.1029,0.0447,0.0175,0.0061]],"META":{"mode":"edge","guard":1,"guardFrom":2,"capGood":0.97,"capPro":null,"cap1Good":0.99,"cap1Pro":null,"target":0.9,"weights":{"rim":0.5,"swish":[1,1.2,1.4,1.6,1.8]},"generated":"2026-11-24","engine":10,"samples":24000}};
+  return {"PAYTABLE":[[{"rim":1.001,"swish":[1.003,1.004,1.004,1.005,1.005]},{"rim":1.003,"swish":[1.006,1.008,1.009,1.01,1.012]},{"rim":1.005,"swish":[1.01,1.012,1.015,1.017,1.019]},{"rim":1.006,"swish":[1.013,1.016,1.018,1.021,1.023]},{"rim":1.01,"swish":[1.02,1.024,1.029,1.033,1.037]},{"rim":1.015,"swish":[1.03,1.036,1.042,1.049,1.055]},{"rim":1.023,"swish":[1.047,1.056,1.066,1.075,1.084]},{"rim":1.039,"swish":[1.079,1.095,1.111,1.126,1.142]}],[{"rim":1,"swish":[1.001,1.001,1.001,1.001,1.001]},{"rim":1.004,"swish":[1.009,1.01,1.012,1.014,1.015]},{"rim":1.007,"swish":[1.014,1.016,1.019,1.022,1.024]},{"rim":1.012,"swish":[1.024,1.029,1.033,1.038,1.043]},{"rim":1.02,"swish":[1.041,1.049,1.057,1.066,1.074]},{"rim":1.032,"swish":[1.063,1.076,1.088,1.101,1.114]},{"rim":1.056,"swish":[1.111,1.134,1.156,1.178,1.2]},{"rim":1.087,"swish":[1.175,1.21,1.245,1.28,1.315]}],[{"rim":1.002,"swish":[1.005,1.005,1.006,1.007,1.008]},{"rim":1.006,"swish":[1.012,1.015,1.017,1.02,1.022]},{"rim":1.013,"swish":[1.026,1.032,1.037,1.042,1.048]},{"rim":1.022,"swish":[1.045,1.054,1.063,1.072,1.081]},{"rim":1.039,"swish":[1.078,1.093,1.109,1.124,1.14]},{"rim":1.06,"swish":[1.119,1.143,1.167,1.191,1.215]},{"rim":1.099,"swish":[1.199,1.239,1.279,1.318,1.358]},{"rim":1.147,"swish":[1.295,1.354,1.413,1.472,1.531]}],[{"rim":1.005,"swish":[1.01,1.013,1.015,1.017,1.019]},{"rim":1.012,"swish":[1.025,1.03,1.034,1.039,1.044]},{"rim":1.023,"swish":[1.046,1.056,1.065,1.074,1.084]},{"rim":1.038,"swish":[1.077,1.092,1.108,1.123,1.139]},{"rim":1.066,"swish":[1.131,1.158,1.184,1.21,1.237]},{"rim":1.099,"swish":[1.198,1.237,1.277,1.317,1.356]},{"rim":1.151,"swish":[1.302,1.363,1.423,1.484,1.544]},{"rim":1.205,"swish":[1.411,1.493,1.575,1.657,1.74]}]],"AVG_CLEAR":[[0.885,0.8639,0.8311,0.7876,0.723,0.654,0.5535,0.4353],[0.8963,0.8419,0.7852,0.6983,0.592,0.4747,0.3413,0.2277],[0.8767,0.779,0.684,0.5786,0.4485,0.3295,0.2246,0.1341],[0.8132,0.6737,0.5615,0.4422,0.3274,0.2205,0.1398,0.0918]],"AVG_SWISH":[[0.6897,0.6595,0.6269,0.5908,0.5452,0.5011,0.4573,0.4133],[0.7102,0.6658,0.6232,0.568,0.5159,0.4686,0.4198,0.3753],[0.6299,0.562,0.5011,0.4497,0.4112,0.3682,0.3312,0.2915],[0.5476,0.4753,0.4241,0.3849,0.3479,0.3158,0.2829,0.2558]],"AVG_RTP":[[0.9005,0.8094,0.7153,0.6059,0.4883,0.372,0.2574,0.1597],[0.9001,0.7997,0.6811,0.5429,0.3961,0.2548,0.1431,0.0674],[0.8989,0.7489,0.5852,0.4182,0.2654,0.1442,0.0706,0.0277],[0.8573,0.6516,0.4522,0.2788,0.1564,0.0741,0.0311,0.0116]],"META":{"mode":"edge","guard":1,"guardFrom":2,"capGood":0.97,"capPro":null,"cap1Good":0.99,"cap1Pro":null,"target":0.9,"weights":{"rim":0.5,"swish":[1,1.2,1.4,1.6,1.8]},"generated":"2026-11-24","engine":11,"samples":24000}};
 });
 </script>
 <script>/*
@@ -1672,7 +1672,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   // ---------------------------------------------------------------- canvas & view
   // The client shows a 352-unit-wide window of the 400-unit world (a little zoomed in),
   // world y from -10 to 680. Physics never depends on this.
-  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 84; // the ball sits 24% in, so more of the course shows ahead
+  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 76; // the ball sits about 22% in, so more of the course shows ahead
   const RV = P.R; // drawn ball radius = collision radius
   const cv = $('game'), cx = cv.getContext('2d');
   let vw = 0, vh = 0, dpr = 1, scale = 1, offX = 0, offY = 0;
@@ -1983,9 +1983,6 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     return '';
   }
 
-  // Every ring of the run as pips (one group per level): swish, on fire, full heat, rim, and the ring that ended it.
-  const PIP = { S: 's', F: 'f', N: 'n', R: 'r', X: 'x' };
-  function recapHtml() { return (run.log || []).map((lv) => '<span class="lv">' + lv.map((o) => `<i class="${PIP[o]}"></i>`).join('') + '</span>').join(''); }
   function shareText(head) {
     const em = { S: '🏀', F: '🔥', N: '💥', R: '⚪', X: '❌' };
     const url = CFG.shareUrl || (/^https?:/.test(location.protocol) && !/claude|usercontent|localhost/.test(location.host) ? location.origin + location.pathname : 'https://nickrileyh.github.io/sol-dunk/');
@@ -2139,7 +2136,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     run.st = E.createState(def); view.st = run.st; run.taps = []; run.lvlStart = run.total;
     if (autoBot) autoBot = BOT.createBot(autoBot.p, E.makeRng('auto' + Math.random()));
     settleOffset();
-    ball.glide = { fx: ball.x, fy: ball.y, tx: view.offset, ty: def.startY, t: 0, d: 0.55 };
+    ball.glide = { fx: ball.x, fy: ball.y, tx: view.offset, ty: def.startY, t: 0, d: 0.45 };
     ball.fall = null; ball.hidden = false;
     phase = 'ready';
     run.lvlSw = 0; run.log.push([]);
@@ -2243,7 +2240,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     const L = run.level;
     bank.level(L, run.taps.slice()).then((r) => {
       if (r.status !== 'checkpoint' || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
-      setTimeout(() => showCheckpoint(), REDUCED ? 100 : CALL.busy ? 1150 : 650);
+      setTimeout(() => showCheckpoint(), REDUCED ? 100 : CALL.busy ? 900 : 450);
     }).catch(netFail);
   }
 
@@ -2264,7 +2261,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       if (r.status !== 'bust') return verifyFail();
       run.serverSeed = r.serverSeed || '';
       record(0, 'bust');
-      setTimeout(() => showResult(titles[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtSol(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 800);
+      setTimeout(() => showResult(titles[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtSol(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 650);
     }).catch(netFail);
   }
 
@@ -2349,7 +2346,6 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     const L = run.level, pot = run.bet * run.total;
     $('cpKicker').textContent = 'Checkpoint ' + L + ' of ' + (NL - 1);
     $('cpTitle').innerHTML = 'Level ' + L + ' cleared' + (run.lvlSw === NH ? '<span class="cp-badge">PERFECT</span>' : '');
-    $('cpRecap').innerHTML = recapHtml();
     countUp($('cpPot'), run.bet * (run.lvlStart || 1), pot, fmtSol, 750);
     $('cpMult').textContent = fmtMult(run.total) + ' · +' + fmtDelta(pot - run.bet) + ' SOL profit';
     // what the next level can pay (every ring swished, streak carried) and whether the streak carries over
@@ -2365,7 +2361,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     sk.innerHTML = run.streak > 1 ? ICON.flame + `Your ${run.streak}-swish streak carries over` : '';
     $('cashAmt').textContent = fmtSol(pot) + ' SOL';
     $('goSub').textContent = 'Level ' + nx;
-    show(ui.cp, true); armCard(ui.cp, 650); STK.el.classList.add('tuck');
+    show(ui.cp, true); armCard(ui.cp, 600); STK.el.classList.add('tuck');
     // focus the card, not a button: a Space meant as a flap must never press "Keep going"
     setTimeout(() => ui.cp.focus({ preventScroll: true }), 60);
   }
@@ -2389,13 +2385,12 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtSol(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
     $('resAmount').className = 'big ' + cls;
     $('resSub').textContent = sub;
-    $('resRecap').innerHTML = recapHtml();
     run.share = shareText(cls === 'win' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
     $('resStats').innerHTML = [[run.score, nb ? 'New best' : 'Score', nb], [run.hoops, 'Rings'], [run.best, 'Best streak']]
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
     $('againAmt').textContent = fmtBet(prefs.bet) + ' SOL';
     showProgress(pr);
-    show(ui.res, true); armCard(ui.res, 700);
+    show(ui.res, true); armCard(ui.res, 600);
     setTimeout(() => ui.res.focus({ preventScroll: true }), 60);
     refreshLobby();
   }
@@ -3469,6 +3464,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 
   function howHtml() {
     return `<p><b>Tap</b> to flap. Drop the ball down through every ring. Fly past one, go under it or hit the floor and the run ends.</p>
+      <h3>Rims</h3><p>Touch the rim and you can still score: if the ball comes down over the opening it drops in. It only bounces out when it comes down past the rim.</p>
       <h3>Swish</h3><p>Go through without touching the ring for a swish. Swishes pay more than rim hits, and swishes in a row pay more each time, up to 5 in a row. Your streak carries into the next level.</p>
       <h3>Fire</h3><p>Two swishes in a row and the ball starts to smoulder. Three and it's <b>on fire</b>; five and it burns at full heat (blue-white with the Fire flame). Touch a rim and the flame goes out. Flames from the locker change the colours, never the pay.</p>
       <h3>Checkpoints</h3><p>Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.</p>

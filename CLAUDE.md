@@ -56,4 +56,5 @@ Never publish a build you haven't pushed, and don't push a game change without p
 - As the ball speeds up, the rings spread out with it, so deeper levels never leave less time between rims (engine v9). Make deep levels harder in other ways.
 - The ball and rim tube are 10% larger than in v9 (engine v10). Rings widen only enough to keep the gap the ball fits through the same, so the difficulty didn't change.
 - The house keeps an edge deep into a run, against strong players too: never price a level so that good players come out ahead at any checkpoint. (The owner is weighing another way to take an edge from elite players, such as head-to-head play with a rake, rather than shrinking the prizes.)
+- Fair rims: a ball that touches the rim with its centre over the opening drops in; it only bounces out when it comes down on or past the end of the rim (engine v11, `SETTLE_*`). Keep the difficulty in the pace and the geometry, not in unlucky bounces.
 - The ball is drawn at exactly its hitbox size, and rings at exactly their collision size.

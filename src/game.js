@@ -441,7 +441,7 @@
   // ---------------------------------------------------------------- canvas & view
   // The client shows a 352-unit-wide window of the 400-unit world (a little zoomed in),
   // world y from -10 to 680. Physics never depends on this.
-  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 84; // the ball sits 24% in, so more of the course shows ahead
+  const VIEW_W = 352, VIEW_TOP = -10, VIEW_BOT = 680, VIEW_H = VIEW_BOT - VIEW_TOP, BALL_SX = 76; // the ball sits about 22% in, so more of the course shows ahead
   const RV = P.R; // drawn ball radius = collision radius
   const cv = $('game'), cx = cv.getContext('2d');
   let vw = 0, vh = 0, dpr = 1, scale = 1, offX = 0, offY = 0;
@@ -752,9 +752,6 @@
     return '';
   }
 
-  // Every ring of the run as pips (one group per level): swish, on fire, full heat, rim, and the ring that ended it.
-  const PIP = { S: 's', F: 'f', N: 'n', R: 'r', X: 'x' };
-  function recapHtml() { return (run.log || []).map((lv) => '<span class="lv">' + lv.map((o) => `<i class="${PIP[o]}"></i>`).join('') + '</span>').join(''); }
   function shareText(head) {
     const em = { S: '🏀', F: '🔥', N: '💥', R: '⚪', X: '❌' };
     const url = CFG.shareUrl || (/^https?:/.test(location.protocol) && !/claude|usercontent|localhost/.test(location.host) ? location.origin + location.pathname : 'https://nickrileyh.github.io/sol-dunk/');
@@ -908,7 +905,7 @@
     run.st = E.createState(def); view.st = run.st; run.taps = []; run.lvlStart = run.total;
     if (autoBot) autoBot = BOT.createBot(autoBot.p, E.makeRng('auto' + Math.random()));
     settleOffset();
-    ball.glide = { fx: ball.x, fy: ball.y, tx: view.offset, ty: def.startY, t: 0, d: 0.55 };
+    ball.glide = { fx: ball.x, fy: ball.y, tx: view.offset, ty: def.startY, t: 0, d: 0.45 };
     ball.fall = null; ball.hidden = false;
     phase = 'ready';
     run.lvlSw = 0; run.log.push([]);
@@ -1012,7 +1009,7 @@
     const L = run.level;
     bank.level(L, run.taps.slice()).then((r) => {
       if (r.status !== 'checkpoint' || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
-      setTimeout(() => showCheckpoint(), REDUCED ? 100 : CALL.busy ? 1150 : 650);
+      setTimeout(() => showCheckpoint(), REDUCED ? 100 : CALL.busy ? 900 : 450);
     }).catch(netFail);
   }
 
@@ -1033,7 +1030,7 @@
       if (r.status !== 'bust') return verifyFail();
       run.serverSeed = r.serverSeed || '';
       record(0, 'bust');
-      setTimeout(() => showResult(titles[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtSol(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 800);
+      setTimeout(() => showResult(titles[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtSol(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 650);
     }).catch(netFail);
   }
 
@@ -1118,7 +1115,6 @@
     const L = run.level, pot = run.bet * run.total;
     $('cpKicker').textContent = 'Checkpoint ' + L + ' of ' + (NL - 1);
     $('cpTitle').innerHTML = 'Level ' + L + ' cleared' + (run.lvlSw === NH ? '<span class="cp-badge">PERFECT</span>' : '');
-    $('cpRecap').innerHTML = recapHtml();
     countUp($('cpPot'), run.bet * (run.lvlStart || 1), pot, fmtSol, 750);
     $('cpMult').textContent = fmtMult(run.total) + ' · +' + fmtDelta(pot - run.bet) + ' SOL profit';
     // what the next level can pay (every ring swished, streak carried) and whether the streak carries over
@@ -1134,7 +1130,7 @@
     sk.innerHTML = run.streak > 1 ? ICON.flame + `Your ${run.streak}-swish streak carries over` : '';
     $('cashAmt').textContent = fmtSol(pot) + ' SOL';
     $('goSub').textContent = 'Level ' + nx;
-    show(ui.cp, true); armCard(ui.cp, 650); STK.el.classList.add('tuck');
+    show(ui.cp, true); armCard(ui.cp, 600); STK.el.classList.add('tuck');
     // focus the card, not a button: a Space meant as a flap must never press "Keep going"
     setTimeout(() => ui.cp.focus({ preventScroll: true }), 60);
   }
@@ -1158,13 +1154,12 @@
     if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtSol(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
     $('resAmount').className = 'big ' + cls;
     $('resSub').textContent = sub;
-    $('resRecap').innerHTML = recapHtml();
     run.share = shareText(cls === 'win' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
     $('resStats').innerHTML = [[run.score, nb ? 'New best' : 'Score', nb], [run.hoops, 'Rings'], [run.best, 'Best streak']]
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
     $('againAmt').textContent = fmtBet(prefs.bet) + ' SOL';
     showProgress(pr);
-    show(ui.res, true); armCard(ui.res, 700);
+    show(ui.res, true); armCard(ui.res, 600);
     setTimeout(() => ui.res.focus({ preventScroll: true }), 60);
     refreshLobby();
   }
@@ -2238,6 +2233,7 @@
 
   function howHtml() {
     return `<p><b>Tap</b> to flap. Drop the ball down through every ring. Fly past one, go under it or hit the floor and the run ends.</p>
+      <h3>Rims</h3><p>Touch the rim and you can still score: if the ball comes down over the opening it drops in. It only bounces out when it comes down past the rim.</p>
       <h3>Swish</h3><p>Go through without touching the ring for a swish. Swishes pay more than rim hits, and swishes in a row pay more each time, up to 5 in a row. Your streak carries into the next level.</p>
       <h3>Fire</h3><p>Two swishes in a row and the ball starts to smoulder. Three and it's <b>on fire</b>; five and it burns at full heat (blue-white with the Fire flame). Touch a rim and the flame goes out. Flames from the locker change the colours, never the pay.</p>
       <h3>Checkpoints</h3><p>Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.</p>

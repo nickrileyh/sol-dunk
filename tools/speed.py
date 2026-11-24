@@ -15,7 +15,7 @@ PROBE = """(() => { const d = __solDunk, v = d.view, g = d.geom(), st = d.run.st
   const S = g.scale * v.zoom, ox = (innerWidth - 352 * S) / 2, h = st.hoops[st.next];
   if (!h) return null;
   const x = ox + (v.offset + h.x - v.camX) * S, right = g.offX + 352 * g.scale;
-  return { L: d.run.level, next: st.next, edge: Math.round(right - (x + (h.w / 2 + 7) * S)), zoom: +v.zoom.toFixed(3) }; })()"""
+  return { L: d.run.level, next: st.next, edge: Math.round(right - (x + (h.w / 2 + DunkEngine.PHYS.RP) * S)), zoom: +v.zoom.toFixed(3) }; })()"""
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=CHROME)

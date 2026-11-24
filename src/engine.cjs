@@ -18,7 +18,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 10;
+  const VERSION = 11;
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -40,7 +40,12 @@
     TFRIC: 0.2,     // tangential damping on a firm rim knock (scaled down for gentle contact)
     KNOCK: 30,      // normal speed above which a contact is a knock (bounce + rim event); below it the ball rests/rolls
     VX_K: 5.0,      // how fast forward speed recovers to level speed (1/s)
-    RECOVER: 54     // ticks after a rim knock over which that push fades back in (0.45 s), so the bounce plays out
+    RECOVER: 54,    // ticks after a rim knock over which that push fades back in (0.45 s), so the bounce plays out
+    // Fair rims (v11): once the ball has touched a ring, while its centre is over the opening and not far above it,
+    // the rim's curve soaks up its forward speed instead of letting it carry on over the back rim, so a ball that
+    // lands mostly inside drops in. One that comes down on or past the end of the rim still bounces out.
+    SETTLE_H: 100,  // how far above the rim line this reaches
+    SETTLE_D: 5     // how fast forward speed fades while over the opening (1/s)
   };
 
   // the swish gap (rim to rim, less the ball) = w - 2*(R + RP); keep it at the v9 value (R 17, RP 7)
@@ -53,14 +58,16 @@
   const FIRST_HOOP_X = 250;
   const START_Y = 300;
 
-  // Difficulty tiers. Arrays are per level (1..8).
+  // Difficulty tiers. Arrays are per level (1..8). Ring widths are the v9 numbers (RING_GROW is added).
+  // v11: fair rims make rim hits drop in more often, so to keep the same clear rates (and the house edge) the
+  // ball is 20% faster than v10 and the rings 5% further apart: about 12% less time between rims.
   // Speed grows 4% per level and the rings spread out with it (spacing and the first ring's distance
   // grow 4% too), so every level gives the same time between rims. Deeper levels get harder through
   // tighter, moving and tilted rims and bigger height changes, not through less time to react.
   const DIFFS = [
     {
       id: 'rookie', name: 'Rookie', blurb: 'Wide rings, gentle pace',
-      speed: 138, spacing: 230, maxWin: 50,
+      speed: 166, spacing: 242, maxWin: 50,
       hoopW:   [93, 92, 91, 90, 89, 88, 87, 86],
       dy:      [115, 122, 129, 136, 143, 150, 157, 164],
       moveP:   [0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7, 0.8],   // a few rings bob gently from level 1
@@ -70,7 +77,7 @@
     },
     {
       id: 'pro', name: 'Pro', blurb: 'The classic feel',
-      speed: 148, spacing: 234, maxWin: 100,
+      speed: 178, spacing: 246, maxWin: 100,
       hoopW:   [91, 90, 89, 88, 87, 86, 85, 84],
       dy:      [120, 128, 136, 144, 152, 160, 168, 176],
       moveP:   [0, 0.3, 0.45, 0.55, 0.65, 0.75, 0.85, 0.95],
@@ -80,7 +87,7 @@
     },
     {
       id: 'allstar', name: 'All-Star', blurb: 'Moving rings',
-      speed: 160, spacing: 238, maxWin: 250,
+      speed: 192, spacing: 250, maxWin: 250,
       hoopW:   [87, 85, 83, 82, 81, 80, 79, 78],
       dy:      [140, 152, 164, 174, 182, 190, 198, 206],
       moveP:   [0, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
@@ -90,7 +97,7 @@
     },
     {
       id: 'legend', name: 'Legend', blurb: 'Fast and tilted',
-      speed: 170, spacing: 242, maxWin: 1000,
+      speed: 204, spacing: 254, maxWin: 1000,
       hoopW:   [85, 83, 81, 80, 79, 78, 77, 76],
       dy:      [150, 162, 174, 184, 192, 200, 208, 216],
       moveP:   [0.25, 0.5, 0.6, 0.7, 0.8, 0.9, 1, 1],
@@ -312,8 +319,16 @@
     // from zero, so a bounce keeps its own direction instead of the ball ploughing on through the rim.
     // While the ball rests on a rim the push is steady, so it can't balance on the edge.
     const since = st.tick - st.knockTick;
-    const kx = since >= P.RECOVER ? P.VX_K : P.VX_K * (since / P.RECOVER);
+    let kx = since >= P.RECOVER ? P.VX_K : P.VX_K * (since / P.RECOVER);
     const onRim = st.contact; st.contact = false;
+    // Fair rims: after a touch, while the ball is over the opening its forward speed fades and the push waits,
+    // so it drops in instead of rolling on over the back rim. A ball past the end of the rim still bounces out.
+    const hn = st.hoops[st.next];
+    if (hn && hn.touched) {
+      const dx = b.x - hn.x, dy = b.y - hoopY(hn, st.tick * DT);
+      const lx = dx * hn.c + dy * hn.s, ly = -dx * hn.s + dy * hn.c, half = hn.w * 0.5;
+      if (ly < 0 && ly > -P.SETTLE_H && lx > -half && lx < half) { kx = 0; b.vx -= b.vx * (P.SETTLE_D * DT); }
+    }
     if (onRim) { if (b.vx < st.speed) { b.vx += st.speed * (kx * DT); if (b.vx > st.speed) b.vx = st.speed; } }
     else b.vx += (st.speed - b.vx) * (kx * DT);
     b.x += b.vx * DT; b.y += b.vy * DT;
