@@ -1,6 +1,7 @@
 # Exact 60 fps frames of a bot run (held clock, stepped one frame at a time), cropped around the ball.
 # Writes shots/clip_<name>/NNN.png, a contact sheet shots/clip_<name>.png and, with ffmpeg, shots/clip_<name>.mp4.
-# python3 tools/clip.py <name> [streak=3|none] [frames=90] [sheet_every=3] [half=110, 0 = whole screen] [flame=fire] [skill=pro] [warm_ms=1500]
+# python3 tools/clip.py <name> [streak=3|none] [frames=90] [sheet_every=3] [half=110, 0 = whole screen] [unused] [skill=pro] [warm_ms=1500]
+# (the sixth argument used to pick a flame; there is one flame now, in Solana's colours)
 import asyncio, base64, io, os, shutil, subprocess, sys
 from playwright.async_api import async_playwright
 from PIL import Image
@@ -11,7 +12,6 @@ streak = a[2] if len(a) > 2 else '3'
 frames = int(a[3]) if len(a) > 3 else 90
 every = int(a[4]) if len(a) > 4 else 3
 half = int(a[5]) if len(a) > 5 else 110
-flame = a[6] if len(a) > 6 else 'fire'
 skill = a[7] if len(a) > 7 else 'pro'
 warm = int(a[8]) if len(a) > 8 else 1500
 out = f'{SHOTS}/clip_{name}'
@@ -25,7 +25,7 @@ async def main():
         await page.goto(URL); await page.wait_for_timeout(2000)
         await page.click('#playBtn'); await page.wait_for_timeout(700)
         fx = 'null' if streak == 'none' else streak
-        await page.evaluate(f"__solDunk.equip('flame', '{flame}'); __solDunk.fx({fx}); __solDunk.autoplay('{skill}'); __solDunk.tap()")
+        await page.evaluate(f"__solDunk.fx({fx}); __solDunk.autoplay('{skill}'); __solDunk.tap()")
         await page.wait_for_timeout(warm)
         await page.evaluate("__solDunk.hold(true)")
         tiles = []

@@ -29,7 +29,7 @@ async def main():
             await page.click('#pgBack'); await page.wait_for_timeout(400)
         await page.click('#tabProfile'); await page.wait_for_timeout(500); await page.screenshot(path=OUT + 'tab_profile.png')
         await page.click('#pfLocker'); await page.wait_for_timeout(900)
-        for cat in ['ball', 'wing', 'flame', 'trail', 'rim', 'court']:
+        for cat in ['ball', 'wing', 'trail']:
             await page.click(f'#lkCats [data-cat="{cat}"]'); await page.wait_for_timeout(700); await page.screenshot(path=OUT + 'locker_' + cat + '.png')
         await page.click('#lkBack'); await page.wait_for_timeout(500)
         # the pages Profile opens: trophies, stats, settings, how to play (odds & fairness is above, the wallet below)

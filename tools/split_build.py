@@ -1,11 +1,17 @@
 """Split a SOL DUNK single-file build (dist/index.html or a published artifact) back into src files: the reverse of build.cjs.
 Usage: python3 tools/split_build.py build.html out_dir"""
-import sys, os, re
+import sys, os, re, base64
 src, out = sys.argv[1], sys.argv[2]
 os.makedirs(out, exist_ok=True)
 h = open(src, encoding='utf-8').read()
 m = re.search(r'<style>(.*?)</style>', h, re.S)
 style = m.group(1)
+# inlined fonts go back to fonts/ (build.cjs leaves each one's file name in a comment before it)
+def unfont(fm):
+    os.makedirs(os.path.join(out, 'fonts'), exist_ok=True)
+    open(os.path.join(out, 'fonts', fm.group(1)), 'wb').write(base64.b64decode(fm.group(2)))
+    return 'url("fonts/' + fm.group(1) + '")'
+style = re.sub(r'/\*fonts/([\w.-]+\.woff2)\*/url\("data:font/woff2;base64,([A-Za-z0-9+/=]+)"\)', unfont, style)
 tmpl = h[:m.start(1)] + '/*@@STYLE@@*/' + h[m.end(1):]
 blocks = list(re.finditer(r'<script>(.*?)</script>', tmpl, re.S))
 # builds from before the challenge pots (src/pots.cjs) have five scripts, then six; from the SOL missions and the

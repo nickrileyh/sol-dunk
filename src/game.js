@@ -11,7 +11,7 @@
   const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const round9 = (x) => Math.round(x * 1e9) / 1e9;
   const FONT_ROUND = 'ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
-  const FONT_DISPLAY = 'ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif'; // canvas numbers and labels
+  const FONT_DISPLAY = '"SD Display", ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif'; // canvas numbers and labels: the display face (style.css)
 
   // ---------------------------------------------------------------- format
   function fmtSol(x) { const a = Math.abs(x); return x.toFixed(a >= 100 ? 2 : a >= 10 ? 3 : 4); }
@@ -105,10 +105,14 @@
     if (!Array.isArray(p.best) || p.best.length !== NT) p.best = E.DIFFS.map(() => 0);
     if (!Array.isArray(p.deep) || p.deep.length !== NT) p.deep = E.DIFFS.map(() => 0);
     if (!Array.isArray(p.owned)) p.owned = [];
-    for (const k of ['ball:classic', 'wing:angel', 'flame:fire', 'trail:classic', 'trail:none', 'rim:red', 'court:arena']) if (!p.owned.includes(k)) p.owned.push(k);
+    // flames, rims and courts are no longer things you own: the game's colours are fixed (Solana's)
+    p.owned = p.owned.filter((k) => /^(ball|wing|trail):/.test(k));
+    for (const k of ['ball:classic', 'wing:angel', 'trail:classic', 'trail:none']) if (!p.owned.includes(k)) p.owned.push(k);
     if (!Array.isArray(p.fresh)) p.fresh = [];
+    p.fresh = p.fresh.filter((k) => /^(ball|wing|trail):/.test(k));
     p.ach = p.ach || {}; p.tot = Object.assign({ swish: 0, perfect: 0 }, p.tot || {});
-    p.eq = Object.assign({ ball: 'classic', wing: 'angel', flame: 'fire', trail: 'classic', rim: 'red', court: 'arena' }, p.eq || {});
+    p.eq = Object.assign({ ball: 'classic', wing: 'angel', trail: 'classic' }, p.eq || {});
+    delete p.eq.flame; delete p.eq.rim; delete p.eq.court;
     p.card = Object.assign({ name: '', emblem: 'ball', color: 0, title: 'rookie' }, p.card || {});
     p.mNew = p.mNew | 0; // missions finished since the Missions tab was last opened
     return p;
@@ -133,7 +137,8 @@
   }
 
   // Cosmetics. The ball is always drawn at its exact hitbox size whatever the skin, and rings at their exact
-  // collision size. Six categories: ball, wings, flame, trail, rims and court. None of them changes the game.
+  // collision size. Three categories: ball, wings and trail. None of them changes the game. The game's colours are
+  // Solana's and can't be changed (the owner asked for that): one flame, one rim colour and one court (below).
   const BALLS = {
     classic: { name: 'Classic', grad: ['#ffc27a', '#ff8a2a', '#d9620f', '#a8460a'], seam: 'rgba(52,18,2,0.85)', rim: 'rgba(160,200,255,0.35)', halo: '255,140,40' },
     retro: { name: 'Retro', grad: ['#ffffff', '#f2f2f5', '#d6d8e0', '#a7abb8'], seam: 'rgba(25,25,35,0.75)', rim: 'rgba(160,200,255,0.35)', halo: '255,255,255', panels: ['#e0302a', '#1f5fd6'] },
@@ -167,28 +172,11 @@
     phoenix: { name: 'Phoenix', near: ['#fff6b8', '#ffa22e', '#e2321a'], far: ['#e07a2c', '#8a200e'], hi: 'rgba(255,255,220,0.55)', vein: 'rgba(150,34,0,0.35)', edge: 'rgba(120,24,0,0.55)', farEdge: 'rgba(70,10,0,0.5)', glow: '255,140,40' },
     gold: { name: 'Gold', near: ['#fff8d6', '#ffd84a', '#c99400'], far: ['#d6b04a', '#8a6a10'], hi: 'rgba(255,255,255,0.55)', vein: 'rgba(110,70,0,0.3)', edge: 'rgba(90,60,0,0.55)', farEdge: 'rgba(60,40,0,0.5)' }
   };
-  // Flames: a base palette and a hotter "nova" palette (5+ swishes in a row), edge to white-hot core.
-  // Prism shifts through the colours as it burns (its palettes are rewritten every frame, see prismTick).
+  // The flame: a base palette (on fire, 3-4 in a row) and a hotter "nova" palette (5+), edge to white-hot core.
+  // Solana's colours: it burns purple, then green at full heat.
   const FLAMES = {
-    fire: { name: 'Fire', base: { outer: [255, 60, 16], mid: [255, 124, 20], inner: [255, 196, 72], core: [255, 244, 212] },
-      nova: { outer: [104, 72, 255], mid: [60, 144, 255], inner: [140, 218, 255], core: [236, 248, 255] },
-      hex: ['#fff1c4', '#ffc65a', '#ff9a2a', '#ff6a1f'], novaHex: ['#bfe8ff', '#7cb8ff', '#9a7bff', '#ffffff'] },
-    ice: { name: 'Ice', base: { outer: [40, 96, 255], mid: [64, 160, 255], inner: [150, 222, 255], core: [240, 252, 255] },
-      nova: { outer: [150, 60, 255], mid: [186, 110, 255], inner: [228, 186, 255], core: [255, 246, 255] } },
-    toxic: { name: 'Toxic', base: { outer: [16, 140, 52], mid: [72, 214, 64], inner: [188, 255, 96], core: [246, 255, 224] },
-      nova: { outer: [0, 140, 170], mid: [30, 210, 214], inner: [150, 255, 236], core: [238, 255, 252] } },
-    aurora: { name: 'Aurora', base: { outer: [0, 128, 118], mid: [28, 214, 158], inner: [160, 255, 212], core: [236, 255, 248] },
-      nova: { outer: [120, 44, 220], mid: [214, 80, 214], inner: [255, 172, 232], core: [255, 244, 252] } },
-    rose: { name: 'Rose', base: { outer: [214, 20, 84], mid: [255, 72, 140], inner: [255, 160, 200], core: [255, 236, 246] },
-      nova: { outer: [130, 40, 255], mid: [184, 92, 255], inner: [228, 172, 255], core: [255, 246, 255] } },
-    eclipse: { name: 'Eclipse', dark: true, base: { outer: [30, 20, 44], mid: [78, 42, 98], inner: [255, 104, 44], core: [255, 222, 158] },
-      nova: { outer: [14, 14, 26], mid: [44, 46, 72], inner: [120, 196, 255], core: [236, 248, 255] } },
-    plasma: { name: 'Plasma', base: { outer: [196, 0, 156], mid: [255, 56, 196], inner: [255, 168, 238], core: [255, 240, 255] },
-      nova: { outer: [0, 112, 255], mid: [0, 196, 255], inner: [168, 240, 255], core: [255, 255, 255] } },
-    prism: { name: 'Prism', prism: true, base: { outer: [230, 30, 120], mid: [255, 120, 60], inner: [255, 230, 120], core: [255, 252, 240] },
-      nova: { outer: [40, 90, 255], mid: [40, 220, 200], inner: [180, 255, 200], core: [255, 255, 255] } },
-    gold: { name: 'Gold', base: { outer: [230, 110, 0], mid: [255, 170, 20], inner: [255, 222, 110], core: [255, 252, 226] },
-      nova: { outer: [255, 190, 40], mid: [255, 226, 130], inner: [255, 246, 206], core: [255, 255, 255] } }
+    sol: { name: 'Solana', base: { outer: [88, 24, 196], mid: [153, 69, 255], inner: [206, 164, 255], core: [248, 242, 255] },
+      nova: { outer: [0, 150, 98], mid: [20, 241, 149], inner: [160, 255, 214], core: [240, 255, 249] } }
   };
   // Trails follow the ball when it isn't burning. Classic is the soft streak in the flame's colour.
   const TRAILS = {
@@ -200,21 +188,12 @@
     pixel: { name: 'Pixel' },
     rainbow: { name: 'Rainbow' }
   };
-  // Rims recolour the ordinary rings only: the checkpoint ring stays gold and a missed ring grey.
+  // The rings: Solana purple steel (the checkpoint ring is green and a missed ring grey, see RING_PAL).
   const RIMS = {
-    red: { name: 'Red', pal: { edge: '#3a0805', body: '#a5261a', mid: '#dd3a22', hi: '#ff8a64', spec: '255,236,224', back: '#7c1b12', bounce: '150,175,255' } },
-    chrome: { name: 'Chrome', pal: { edge: '#1c2029', body: '#7d8596', mid: '#c4cad6', hi: '#f2f5fa', spec: '255,255,255', back: '#5a6172', bounce: '150,175,255' } },
-    cobalt: { name: 'Cobalt', pal: { edge: '#061436', body: '#1f4fb6', mid: '#3d7dff', hi: '#8fb6ff', spec: '235,244,255', back: '#173c8c', bounce: '150,175,255' } },
-    mint: { name: 'Mint', pal: { edge: '#032a20', body: '#11826a', mid: '#2cc79e', hi: '#8ff0d2', spec: '235,255,248', back: '#0d634f', bounce: '150,175,255' } },
-    violet: { name: 'Violet', pal: { edge: '#1d0838', body: '#6a2cc0', mid: '#9a55f5', hi: '#cfa8ff', spec: '246,238,255', back: '#4f2091', bounce: '150,175,255' } },
-    pink: { name: 'Pink', pal: { edge: '#3a0822', body: '#b0216a', mid: '#ec3f93', hi: '#ff9cc9', spec: '255,238,246', back: '#86184f', bounce: '150,175,255' } }
+    sol: { name: 'Solana', pal: { edge: '#1a0638', body: '#6424c8', mid: '#9945ff', hi: '#d2adff', spec: '250,244,255', back: '#45188e', bounce: '20,241,149' } }
   };
-
-  // Courts: the backdrop and floor, the same on every level (see COURT_ART for how each is painted).
-  const COURTS = {
-    arena: { name: 'Arena' }, street: { name: 'Street' }, rooftop: { name: 'Rooftop' },
-    beach: { name: 'Beach' }, neon: { name: 'Neon' }, orbit: { name: 'Orbit' }
-  };
+  // The court: the backdrop and floor, the same on every level (see COURT_ART for how it's painted).
+  const COURTS = { arena: { name: 'Arena' } };
   const hex3 = (c) => '#' + c.map((v) => v.toString(16).padStart(2, '0')).join('');
   const mix3 = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
   for (const F of Object.values(FLAMES)) {
@@ -222,10 +201,10 @@
     F.hex = F.hex || [F.base.core, F.base.inner, F.base.mid, F.base.outer].map(hex3);
     F.novaHex = F.novaHex || [F.nova.inner, F.nova.mid, F.nova.outer, F.nova.core].map(hex3);
   }
-  const COS = { ball: BALLS, wing: WINGS, flame: FLAMES, trail: TRAILS, rim: RIMS, court: COURTS };
-  const CATS = ['ball', 'wing', 'flame', 'trail', 'rim', 'court'];
-  const TNAME = { ball: 'Ball', wing: 'Wings', flame: 'Flame', trail: 'Trail', rim: 'Rims', court: 'Court' };
-  const DEF_EQ = { ball: 'classic', wing: 'angel', flame: 'fire', trail: 'classic', rim: 'red', court: 'arena' };
+  const COS = { ball: BALLS, wing: WINGS, trail: TRAILS };
+  const CATS = ['ball', 'wing', 'trail'];
+  const TNAME = { ball: 'Ball', wing: 'Wings', trail: 'Trail' };
+  const DEF_EQ = { ball: 'classic', wing: 'angel', trail: 'classic' };
   // How each item unlocks: a player level (lvl), an achievement (ach) or a finished career chapter (ch, 0-based).
   // r: rarity, 0 common, 1 rare, 2 epic, 3 legendary. Order is the locker order.
   const UNLOCKS = [
@@ -237,18 +216,11 @@
     { t: 'ball', id: 'galaxy', ach: 'nova5', r: 3 }, { t: 'ball', id: 'diamond', ch: 5, r: 3 }, { t: 'ball', id: 'gold', ach: 'champion', r: 3 },
     { t: 'wing', id: 'angel', lvl: 1, r: 0 }, { t: 'wing', id: 'shadow', lvl: 5, r: 1 }, { t: 'wing', id: 'bat', lvl: 7, r: 1 },
     { t: 'wing', id: 'aqua', lvl: 10, r: 1 }, { t: 'wing', id: 'butterfly', lvl: 13, r: 2 }, { t: 'wing', id: 'ember', lvl: 15, r: 1 },
-    { t: 'wing', id: 'mech', lvl: 17, r: 2 }, { t: 'wing', id: 'neon', lvl: 22, r: 2 }, { t: 'wing', id: 'phoenix', ch: 3, r: 3 },
+    { t: 'wing', id: 'mech', lvl: 17, r: 2 }, { t: 'wing', id: 'neon', ch: 4, r: 3 }, { t: 'wing', id: 'phoenix', ch: 3, r: 3 },
     { t: 'wing', id: 'gold', ach: 'perfect', r: 3 },
-    { t: 'flame', id: 'fire', lvl: 1, r: 0 }, { t: 'flame', id: 'ice', lvl: 3, r: 1 }, { t: 'flame', id: 'toxic', lvl: 7, r: 1 },
-    { t: 'flame', id: 'aurora', lvl: 11, r: 2 }, { t: 'flame', id: 'rose', lvl: 13, r: 1 }, { t: 'flame', id: 'eclipse', lvl: 19, r: 2 },
-    { t: 'flame', id: 'plasma', lvl: 24, r: 2 }, { t: 'flame', id: 'prism', ch: 4, r: 3 }, { t: 'flame', id: 'gold', ach: 'streak10', r: 3 },
-    { t: 'trail', id: 'classic', lvl: 1, r: 0 }, { t: 'trail', id: 'none', lvl: 1, r: 0 }, { t: 'trail', id: 'sparkle', lvl: 4, r: 1 },
+    { t: 'trail', id: 'classic', lvl: 1, r: 0 }, { t: 'trail', id: 'none', lvl: 1, r: 0 }, { t: 'trail', id: 'sparkle', ch: 0, r: 1 },
     { t: 'trail', id: 'comet', ch: 1, r: 1 }, { t: 'trail', id: 'bubbles', lvl: 9, r: 1 }, { t: 'trail', id: 'pixel', lvl: 14, r: 2 },
-    { t: 'trail', id: 'rainbow', lvl: 21, r: 2 },
-    { t: 'rim', id: 'red', lvl: 1, r: 0 }, { t: 'rim', id: 'chrome', lvl: 3, r: 0 }, { t: 'rim', id: 'cobalt', lvl: 6, r: 1 },
-    { t: 'rim', id: 'mint', lvl: 9, r: 1 }, { t: 'rim', id: 'violet', lvl: 12, r: 1 }, { t: 'rim', id: 'pink', lvl: 16, r: 2 },
-    { t: 'court', id: 'arena', lvl: 1, r: 0 }, { t: 'court', id: 'street', ch: 0, r: 1 }, { t: 'court', id: 'rooftop', lvl: 8, r: 1 },
-    { t: 'court', id: 'beach', lvl: 11, r: 2 }, { t: 'court', id: 'neon', lvl: 15, r: 2 }, { t: 'court', id: 'orbit', lvl: 20, r: 3 }
+    { t: 'trail', id: 'rainbow', lvl: 21, r: 2 }
   ];
   const RARITY = ['Common', 'Rare', 'Epic', 'Legendary'];
   const UNLOCK_BY = Object.fromEntries(UNLOCKS.map((u) => [u.t + ':' + u.id, u]));
@@ -258,36 +230,21 @@
   const wear = (t) => (nav.try && nav.try.t === t ? nav.try.id : profile.eq[t]);
   const eqBall = () => BALLS[wear('ball')] || BALLS.classic;
   const eqWing = () => WINGS[wear('wing')] || WINGS.angel;
-  const eqFlame = () => FLAMES[wear('flame')] || FLAMES.fire;
+  const eqFlame = () => FLAMES.sol;
   const eqTrail = () => (TRAILS[wear('trail')] ? wear('trail') : 'classic');
-  const eqRim = () => (RIMS[wear('rim')] ? wear('rim') : 'red');
-  const eqCourt = () => (COURTS[wear('court')] ? wear('court') : 'arena');
+  const eqRim = () => 'sol';
+  const eqCourt = () => 'arena';
   const flameHex = (nova) => (nova ? eqFlame().novaHex : eqFlame().hex);
   const heatHex = (nova, k) => hex3((nova ? eqFlame().nova : eqFlame().base)[k || 'mid']);
   const heatRgb = (nova, k) => (nova ? eqFlame().nova : eqFlame().base)[k || 'mid'].join(',');
   const heatText = (nova) => mix3((nova ? eqFlame().nova : eqFlame().base).inner, (nova ? eqFlame().nova : eqFlame().base).core, 0.45).join(',');
-  // the multiplier glow, callouts and streak meter take the equipped flame's colours
+  // the multiplier, callouts and streak meter burn in the flame's colours (fixed: Solana purple, then green)
   function applyFlameTheme() {
     const F = eqFlame(), st = document.documentElement.style, j = (a) => a.join(',');
     for (const [k, P] of [['heat', F.base], ['nova', F.nova]]) {
       st.setProperty('--' + k, j(P.mid)); st.setProperty('--' + k + '-hi', j(P.inner));
       st.setProperty('--' + k + '-edge', j(P.outer)); st.setProperty('--' + k + '-text', j(mix3(P.inner, P.core, 0.45)));
     }
-  }
-  // Prism: the palettes walk around the colour wheel as it burns (the CSS heat colours keep its starting look)
-  function hsl3(h, s, l) {
-    h = ((h % 360) + 360) % 360 / 360;
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
-    const f = (t) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
-    return [Math.round(f(h + 1 / 3) * 255), Math.round(f(h) * 255), Math.round(f(h - 1 / 3) * 255)];
-  }
-  function prismTick(t) {
-    const F = FLAMES.prism, h = t * 70;
-    const set = (P, a) => { P.outer = hsl3(a, 1, 0.46); P.mid = hsl3(a + 28, 1, 0.56); P.inner = hsl3(a + 56, 1, 0.76); P.core = [255, 252, 246]; };
-    set(F.base, h); set(F.nova, h + 150);
-    F.trail = F.base.mid.join(',');
-    F.hex = [F.base.core, F.base.inner, F.base.mid, F.base.outer].map(hex3);
-    F.novaHex = [F.nova.inner, F.nova.mid, F.nova.outer, F.nova.core].map(hex3);
   }
 
   // r = what happened in the run (see runFacts)
@@ -352,11 +309,11 @@
   const untilMonday = () => leftOf(mview().weekEnds - Date.now());
   // [key, target, XP, sum]
   const CAREER = [
-    { name: 'First bounce', reward: 'court:street', m: [['swish', 10, 30, 1], ['clears', 2, 30, 1], ['score', 15, 30, 0], ['mov', 1, 30, 1]] },
+    { name: 'First bounce', reward: 'trail:sparkle', m: [['swish', 10, 30, 1], ['clears', 2, 30, 1], ['score', 15, 30, 0], ['mov', 1, 30, 1]] },
     { name: 'Heating up', reward: 'trail:comet', m: [['fires', 3, 40, 1], ['best', 4, 40, 0], ['swish', 40, 40, 1], ['points', 120, 40, 1]] },
     { name: 'Swish city', reward: 'ball:chrome', m: [['perfect', 1, 60, 1], ['mov', 10, 50, 1], ['clears', 8, 50, 1], ['score', 30, 50, 0]] },
     { name: 'Supernova', reward: 'wing:phoenix', m: [['novas', 2, 70, 1], ['swish', 100, 60, 1], ['level', 3, 60, 0], ['points', 400, 60, 1]] },
-    { name: 'Clutch', reward: 'flame:prism', m: [['perfect', 3, 80, 1], ['best', 7, 80, 0], ['clears', 20, 70, 1], ['mov', 30, 70, 1]] },
+    { name: 'Clutch', reward: 'wing:neon', m: [['perfect', 3, 80, 1], ['best', 7, 80, 0], ['clears', 20, 70, 1], ['mov', 30, 70, 1]] },
     { name: 'Hall of fame', reward: 'ball:diamond', title: 'hof', m: [['best', 10, 100, 0], ['perfect', 2, 100, 0], ['swish', 250, 90, 1], ['score', 50, 90, 0]] }
   ];
   const careerText = (m) => MTEXT[m[0]](m[1], !!m[3]);
@@ -382,7 +339,7 @@
     moon: '<path fill="currentColor" d="M14.9 2.6A9.6 9.6 0 1 0 21.4 15 7.8 7.8 0 0 1 14.9 2.6Z"/>',
     heart: '<path fill="currentColor" d="M12 21.2s-8.6-5.1-8.6-11.2A4.9 4.9 0 0 1 12 6.9 4.9 4.9 0 0 1 20.6 10c0 6.1-8.6 11.2-8.6 11.2Z"/>'
   };
-  const CARD_COLORS = ['#ff7a1a', '#f5c542', '#2fd36b', '#3d7dff', '#a25dff', '#ff4fa3', '#5ff3ff', '#e8ecf5'];
+  const CARD_COLORS = ['#9945ff']; // one colour theme: every player card's emblem sits on Solana purple
   const TITLES = [
     { id: 'rookie', name: 'Rookie' }, { id: 'hooper', name: 'Hooper', lvl: 5 }, { id: 'fire', name: 'Fire starter', ach: 'fire3' },
     { id: 'perfect', name: 'Perfectionist', ach: 'perfect' }, { id: 'nova', name: 'Supernova', ach: 'nova5' }, { id: 'collector', name: 'Swish collector', ach: 'swish100' },
@@ -393,7 +350,7 @@
   const titleOpen = (t) => (t.lvl ? lvlOf(profile.xp).l >= t.lvl : t.ach ? !!profile.ach[t.ach] : t.ch != null ? careerState().ch > t.ch : true);
   const titleReq = (t) => (t.lvl ? 'Reach level ' + t.lvl : t.ach ? ACH_BY[t.ach].desc : t.ch != null ? 'Finish career chapter ' + (t.ch + 1) : '');
   const emblemSvg = (id) => `<svg viewBox="0 0 24 24" aria-hidden="true">${EMBLEMS[id] || EMBLEMS.ball}</svg>`;
-  const cardColor = () => CARD_COLORS[profile.card.color] || CARD_COLORS[0];
+  const cardColor = () => CARD_COLORS[0];
 
   function grantUnlocks() {
     const L = lvlOf(profile.xp).l, got = [];
@@ -851,39 +808,16 @@
   window.addEventListener('resize', resize);
   resize();
 
-  // Courts. Each is one backdrop for every level (no per-level colours), painted once and cached: a sky painted in
-  // screen space, an optional far layer that sits on the floor line and drifts at a fraction of the court's speed
-  // (parallax), and a floor drawn each frame. All of them stay dark so the rings and the ball carry the colour.
-  const EDGE = '#05070d', EDGE0 = 'rgba(5,7,13,0)';
-  const seeded = (k) => E.makeRng('art|' + k);
+  // The court: one backdrop for every level (no per-level colours), painted once and cached: a sky painted in
+  // screen space, the courtside crowd and LED board behind the court (drawArena), and a floor drawn each frame.
+  // Black and Solana purple, and dark, so the rings and the ball carry the colour.
+  const EDGE = '#06040b', EDGE0 = 'rgba(6,4,11,0)';
   function vignette(g, vw, vh, a) {
     const vg = g.createRadialGradient(vw / 2, vh * 0.45, Math.min(vw, vh) * 0.3, vw / 2, vh * 0.45, Math.max(vw, vh) * 0.78);
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,' + (a || 0.5) + ')');
     g.fillStyle = vg; g.fillRect(0, 0, vw, vh);
   }
   function vgrad(g, vh, stops) { const l = g.createLinearGradient(0, 0, 0, vh); stops.forEach(([t, c]) => l.addColorStop(t, c)); return l; }
-  function glowAt(g, x, y, r, col, a, sx, sy) {
-    g.save(); g.translate(x, y); g.scale(sx || 1, sy || 1);
-    const rg = g.createRadialGradient(0, 0, 0, 0, 0, r);
-    rg.addColorStop(0, 'rgba(' + col + ',' + a + ')'); rg.addColorStop(1, 'rgba(' + col + ',0)');
-    g.fillStyle = rg; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill(); g.restore();
-  }
-  function starField(g, vw, vh, n, top, key, big) {
-    const rng = seeded('stars' + key);
-    for (let i = 0; i < n; i++) {
-      const x = rng() * vw, y = rng() * vh * top, s = rng(), a = 0.25 + 0.6 * rng() * (1 - y / (vh * top)) ;
-      g.fillStyle = 'rgba(235,240,255,' + a.toFixed(3) + ')';
-      g.beginPath(); g.arc(x, y, (s < 0.92 ? 0.55 : big || 1.2) * (vw > 600 ? 1 : 0.9), 0, Math.PI * 2); g.fill();
-    }
-  }
-  function moon(g, x, y, r, col) {
-    glowAt(g, x, y, r * 5, col || '220,230,255', 0.12);
-    const mg = g.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.1, x, y, r);
-    mg.addColorStop(0, '#fbfaf3'); mg.addColorStop(1, '#cfd3dc');
-    g.fillStyle = mg; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
-    g.fillStyle = 'rgba(150,158,175,0.35)';
-    for (const [dx, dy, rr] of [[-0.3, 0.1, 0.22], [0.25, -0.25, 0.15], [0.2, 0.35, 0.12]]) { g.beginPath(); g.arc(x + dx * r, y + dy * r, rr * r, 0, Math.PI * 2); g.fill(); }
-  }
   // the floor: a lit edge fading into the court's colour, then into the dark
   function floorBase(c, x0, w, F, light, a, col) {
     const fg = c.createLinearGradient(0, F, 0, F + 150);
@@ -901,220 +835,42 @@
     for (let x = Math.floor(x0 / step) * step; x < x0 + w + step; x += step) { c.moveTo(x, F); c.lineTo(mid + (x - mid) * (spread || 2.4), F + 120); }
     c.stroke();
   }
-  function across(c, x0, w, F, ys, col, S) {
-    c.strokeStyle = col; c.lineWidth = 1 / S; c.beginPath();
-    for (const y of ys) { c.moveTo(x0, F + y); c.lineTo(x0 + w, F + y); }
-    c.stroke();
-  }
-  // a row of building silhouettes with a few lit windows, for the far layers
-  function skyline(g, tw, fh, key, o) {
-    const rng = seeded(key);
-    let x = -10;
-    while (x < tw + 10) {
-      const bw = o.minW + rng() * (o.maxW - o.minW), bh = o.minH + rng() * (o.maxH - o.minH);
-      g.fillStyle = o.fill; g.fillRect(x, fh - bh, bw + 1, bh);
-      if (rng() < (o.roof || 0)) { g.fillRect(x + bw * 0.4, fh - bh - 12, 2, 12); }
-      if (o.win) for (let wy = fh - bh + 8; wy < fh - 10; wy += 9) for (let wx = x + 5; wx < x + bw - 5; wx += 8) {
-        if (rng() < o.lit) { g.fillStyle = o.win + (0.18 + 0.4 * rng()).toFixed(2) + ')'; g.fillRect(wx, wy, 3, 4); }
-      }
-      x += bw + (o.gap ? rng() * o.gap : 0);
-    }
-  }
   const COURT_ART = {
     arena: {
-      light: '61,123,255', edge: 'rgba(255,255,255,0.32)',
+      light: '153,69,255', edge: 'rgba(255,255,255,0.32)',
       sky(g, vw, vh, playW) {
         const rgb = this.light;
-        g.fillStyle = vgrad(g, vh, [[0, '#0b1120'], [0.6, '#070a14'], [1, EDGE]]); g.fillRect(0, 0, vw, vh);
+        g.fillStyle = vgrad(g, vh, [[0, '#0e0a1c'], [0.6, '#08060f'], [1, EDGE]]); g.fillRect(0, 0, vw, vh);
         let rg = g.createRadialGradient(vw / 2, vh * 0.3, 0, vw / 2, vh * 0.3, Math.max(vw, vh) * 0.7);
-        rg.addColorStop(0, 'rgba(' + rgb + ',0.12)'); rg.addColorStop(1, 'rgba(' + rgb + ',0)');
+        rg.addColorStop(0, 'rgba(' + rgb + ',0.11)'); rg.addColorStop(1, 'rgba(' + rgb + ',0)');
         g.fillStyle = rg; g.fillRect(0, 0, vw, vh);
         g.save(); g.translate(vw / 2, vh * 0.92); g.scale(1, Math.min(0.4, 0.4 * vh / vw * 0.55 * 2));
         rg = g.createRadialGradient(0, 0, 0, 0, 0, vw * 0.95);
-        rg.addColorStop(0, 'rgba(' + rgb + ',0.28)'); rg.addColorStop(0.55, 'rgba(' + rgb + ',0.08)'); rg.addColorStop(1, 'rgba(' + rgb + ',0)');
+        rg.addColorStop(0, 'rgba(' + rgb + ',0.26)'); rg.addColorStop(0.55, 'rgba(' + rgb + ',0.07)'); rg.addColorStop(1, 'rgba(' + rgb + ',0)');
         g.fillStyle = rg; g.beginPath(); g.arc(0, 0, vw * 0.95, 0, Math.PI * 2); g.fill(); g.restore();
         // one spotlight from above: a long, soft elliptical beam over the play area
         const bh = vh * 1.05;
         g.save(); g.translate(vw / 2, -vh * 0.05); g.scale(Math.min(1, 0.62 * playW / bh), 1);
         const bm = g.createRadialGradient(0, 0, 0, 0, 0, bh);
-        bm.addColorStop(0, 'rgba(200,214,255,0.15)'); bm.addColorStop(0.4, 'rgba(200,214,255,0.06)'); bm.addColorStop(1, 'rgba(200,214,255,0)');
+        bm.addColorStop(0, 'rgba(226,212,255,0.15)'); bm.addColorStop(0.4, 'rgba(226,212,255,0.06)'); bm.addColorStop(1, 'rgba(226,212,255,0)');
         g.fillStyle = bm; g.beginPath(); g.arc(0, 0, bh, 0, Math.PI * 2); g.fill(); g.restore();
         const sg = g.createRadialGradient(vw / 2, 0, 0, vw / 2, 0, playW * 0.62);
-        sg.addColorStop(0, 'rgba(215,225,255,0.16)'); sg.addColorStop(1, 'rgba(215,225,255,0)');
+        sg.addColorStop(0, 'rgba(232,222,255,0.16)'); sg.addColorStop(1, 'rgba(232,222,255,0)');
         g.fillStyle = sg; g.fillRect(0, 0, vw, vh);
         vignette(g, vw, vh);
       },
       // behind the court: the courtside crowd and the LED board (drawArena)
       farDraw: (c, left, width) => drawArena(c, left, width),
       floor(c, x0, w, F, S, mid, width) {
-        floorBase(c, x0, w, F, this.light, 0.24, 'rgba(17,21,34,0.97)');
+        floorBase(c, x0, w, F, this.light, 0.24, 'rgba(22,15,36,0.97)');
         recede(c, x0, w, F, mid, 34, 'rgba(255,255,255,0.055)', S);
         floorFade(c, x0, w, F);
         // the spotlight's reflection on the polished boards, under the middle of the view
         c.save(); c.beginPath(); c.rect(x0, F, w, 200); c.clip();
         c.translate(mid, F + 16); c.scale(1, 0.12);
         const sr = width * 0.44, sheen = c.createRadialGradient(0, 0, 0, 0, 0, sr);
-        sheen.addColorStop(0, 'rgba(190,210,255,0.15)'); sheen.addColorStop(1, 'rgba(190,210,255,0)');
+        sheen.addColorStop(0, 'rgba(214,194,255,0.15)'); sheen.addColorStop(1, 'rgba(214,194,255,0)');
         c.fillStyle = sheen; c.beginPath(); c.arc(0, 0, sr, 0, Math.PI * 2); c.fill(); c.restore();
-      }
-    },
-    street: {
-      light: '255,160,80', edge: 'rgba(255,236,214,0.26)',
-      sky(g, vw, vh) {
-        g.fillStyle = vgrad(g, vh, [[0, '#0e1219'], [0.55, '#0a0d13'], [1, EDGE]]); g.fillRect(0, 0, vw, vh);
-        glowAt(g, vw * 0.16, vh * 0.04, Math.max(vw, vh) * 0.62, '255,150,60', 0.17);   // a sodium streetlight
-        glowAt(g, vw * 0.16, vh * 0.04, Math.min(vw, vh) * 0.09, '255,214,160', 0.5);
-        glowAt(g, vw * 0.88, vh * 0.3, Math.max(vw, vh) * 0.4, '90,130,210', 0.07);
-        glowAt(g, vw / 2, vh * 0.92, vw * 0.9, this.light, 0.12, 1, 0.3);
-        vignette(g, vw, vh, 0.55);
-      },
-      far: { tw: 640, h: 230, p: 0.22, paint(g, tw, fh) {
-        skyline(g, tw, fh, 'street', { minW: 50, maxW: 120, minH: 70, maxH: 190, fill: '#0b0e15', win: 'rgba(255,190,120,', lit: 0.12, gap: 18, roof: 0.3 });
-        // a chain-link fence in front
-        const top = fh - 118;
-        g.strokeStyle = 'rgba(190,200,220,0.075)'; g.lineWidth = 1;
-        g.beginPath();
-        for (let x = -top; x < tw + 130; x += 12) { g.moveTo(x, top); g.lineTo(x + 118, fh); g.moveTo(x + 118, top); g.lineTo(x, fh); }
-        g.stroke();
-        g.fillStyle = 'rgba(150,160,180,0.22)';
-        for (let x = 0; x < tw; x += 160) g.fillRect(x, top - 4, 3, 122);
-        g.fillRect(0, top - 4, tw, 2.5);
-      } },
-      floor(c, x0, w, F, S) {
-        floorBase(c, x0, w, F, this.light, 0.2, 'rgba(25,26,30,0.98)');
-        across(c, x0, w, F, [12], 'rgba(255,255,255,0.16)', S / 2.2);
-        c.save(); c.setLineDash([14, 12]); across(c, x0, w, F, [44], 'rgba(245,197,66,0.12)', S / 2); c.restore();
-        floorFade(c, x0, w, F);
-      }
-    },
-    rooftop: {
-      light: '255,128,96', edge: 'rgba(255,226,214,0.28)',
-      sky(g, vw, vh) {
-        g.fillStyle = vgrad(g, vh, [[0, '#0b0a1f'], [0.5, '#16112f'], [0.82, '#2a1838'], [1, EDGE]]); g.fillRect(0, 0, vw, vh);
-        glowAt(g, vw / 2, vh * 0.86, vw * 0.95, '255,110,90', 0.16, 1, 0.42);
-        starField(g, vw, vh, Math.round(vw * vh / 9000), 0.5, 'roof');
-        moon(g, vw * 0.78, vh * 0.15, Math.min(vw, vh) * 0.055);
-        vignette(g, vw, vh, 0.5);
-      },
-      far: { tw: 720, h: 300, p: 0.16, paint(g, tw, fh) {
-        skyline(g, tw, fh - 20, 'roof-back', { minW: 40, maxW: 90, minH: 120, maxH: 270, fill: '#141026', win: 'rgba(255,214,150,', lit: 0.16, roof: 0.5 });
-        g.save(); g.translate(0, 20);
-        skyline(g, tw, fh - 20, 'roof-front', { minW: 60, maxW: 130, minH: 60, maxH: 150, fill: '#0c0a18', win: 'rgba(255,196,130,', lit: 0.1, gap: 30, roof: 0.2 });
-        g.restore();
-        g.fillStyle = '#0a0913'; g.fillRect(0, fh - 16, tw, 16); // the roof's low wall
-        g.fillStyle = 'rgba(255,200,180,0.12)'; g.fillRect(0, fh - 16, tw, 1.5);
-      } },
-      floor(c, x0, w, F, S, mid) {
-        floorBase(c, x0, w, F, this.light, 0.2, 'rgba(30,29,40,0.97)');
-        recede(c, x0, w, F, mid, 92, 'rgba(255,255,255,0.06)', S, 2.2);
-        across(c, x0, w, F, [20, 52], 'rgba(255,255,255,0.05)', S);
-        floorFade(c, x0, w, F);
-      }
-    },
-    beach: {
-      light: '150,190,255', edge: 'rgba(230,240,255,0.28)',
-      sky(g, vw, vh) {
-        g.fillStyle = vgrad(g, vh, [[0, '#06101f'], [0.55, '#0a1d36'], [0.85, '#102a46'], [1, EDGE]]); g.fillRect(0, 0, vw, vh);
-        starField(g, vw, vh, Math.round(vw * vh / 6000), 0.62, 'beach', 1.3);
-        moon(g, vw * 0.7, vh * 0.17, Math.min(vw, vh) * 0.075, '200,220,255');
-        glowAt(g, vw / 2, vh * 0.92, vw, this.light, 0.1, 1, 0.3);
-        vignette(g, vw, vh, 0.5);
-      },
-      far: { tw: 760, h: 260, p: 0.2, paint(g, tw, fh) {
-        // the sea: a dark band with moonlight glinting on it
-        const sea = g.createLinearGradient(0, fh - 70, 0, fh);
-        sea.addColorStop(0, '#0d2340'); sea.addColorStop(1, '#081626');
-        g.fillStyle = sea; g.fillRect(0, fh - 70, tw, 70);
-        g.fillStyle = 'rgba(200,225,255,0.5)'; g.fillRect(0, fh - 70, tw, 1);
-        const rng = seeded('sea');
-        for (let i = 0; i < 70; i++) { const y = fh - 66 + rng() * 60; g.fillStyle = 'rgba(190,215,255,' + (0.05 + 0.18 * rng()).toFixed(2) + ')'; g.fillRect(rng() * tw, y, 6 + rng() * 22, 1); }
-        // palms
-        const palm = (x, h, lean) => {
-          g.strokeStyle = '#04070d'; g.lineWidth = 6; g.lineCap = 'round';
-          g.beginPath(); g.moveTo(x, fh); g.quadraticCurveTo(x + lean * 0.4, fh - h * 0.6, x + lean, fh - h); g.stroke();
-          g.fillStyle = '#04070d';
-          for (let k = 0; k < 7; k++) {
-            const a = -Math.PI / 2 + (k - 3) * 0.5, L = 46 + (k % 2) * 10, tx = x + lean, ty = fh - h;
-            g.beginPath(); g.moveTo(tx, ty);
-            g.quadraticCurveTo(tx + Math.cos(a) * L * 0.6, ty + Math.sin(a) * L * 0.6 - 14, tx + Math.cos(a) * L, ty + Math.sin(a) * L + 18);
-            g.quadraticCurveTo(tx + Math.cos(a) * L * 0.5, ty + Math.sin(a) * L * 0.5 - 4, tx, ty + 3);
-            g.fill();
-          }
-        };
-        palm(120, 200, 26); palm(168, 150, -18); palm(520, 220, -30);
-      } },
-      floor(c, x0, w, F, S) {
-        floorBase(c, x0, w, F, this.light, 0.16, 'rgba(40,36,38,0.97)');
-        across(c, x0, w, F, [14], 'rgba(255,255,255,0.08)', S / 2.5);
-        floorFade(c, x0, w, F);
-      }
-    },
-    neon: {
-      light: '255,64,200', edge: 'rgba(255,140,230,0.7)',
-      sky(g, vw, vh) {
-        g.fillStyle = vgrad(g, vh, [[0, '#08031a'], [0.45, '#170634'], [0.78, '#3a0c4c'], [1, EDGE]]); g.fillRect(0, 0, vw, vh);
-        starField(g, vw, vh, Math.round(vw * vh / 9000), 0.55, 'neon');
-        // a striped sun low on the horizon
-        const r = Math.min(vw, vh) * 0.21, cx = vw / 2, cy = vh * 0.64;
-        glowAt(g, cx, cy, r * 2.4, '255,80,170', 0.16);
-        g.globalAlpha = 0.72;
-        const sg = g.createLinearGradient(0, cy - r, 0, cy + r);
-        sg.addColorStop(0, '#ffe08a'); sg.addColorStop(0.5, '#ff8a5a'); sg.addColorStop(1, '#ff3fa3');
-        g.save(); g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.clip();
-        g.fillStyle = sg; g.fillRect(cx - r, cy - r, r * 2, r * 2);
-        g.fillStyle = '#2a0942';
-        for (let i = 0; i < 7; i++) { const y = cy + r * (0.05 + i * 0.14), hh = r * (0.02 + i * 0.012); g.fillRect(cx - r, y, r * 2, hh); }
-        g.restore(); g.globalAlpha = 1;
-        vignette(g, vw, vh, 0.5);
-      },
-      far: { tw: 680, h: 140, p: 0.14, paint(g, tw, fh) {
-        const rng = seeded('mtn'), pts = [[0, fh - 40]];
-        for (let x = 30; x < tw; x += 30 + rng() * 40) pts.push([x, fh - 20 - rng() * 90]);
-        pts.push([tw, fh - 40]);
-        g.beginPath(); g.moveTo(0, fh); pts.forEach(([x, y]) => g.lineTo(x, y)); g.lineTo(tw, fh); g.closePath();
-        g.fillStyle = '#12051f'; g.fill();
-        g.strokeStyle = 'rgba(95,243,255,0.55)'; g.lineWidth = 1.5; g.lineJoin = 'round';
-        g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke();
-      } },
-      floor(c, x0, w, F, S, mid) {
-        floorBase(c, x0, w, F, this.light, 0.34, 'rgba(22,6,34,0.97)');
-        recede(c, x0, w, F, mid, 34, 'rgba(255,70,210,0.32)', S, 2.8);
-        across(c, x0, w, F, [5, 12, 22, 36, 55, 80], 'rgba(255,70,210,0.28)', S);
-        floorFade(c, x0, w, F);
-      }
-    },
-    orbit: {
-      light: '90,220,255', edge: 'rgba(150,236,255,0.6)',
-      sky(g, vw, vh) {
-        g.fillStyle = vgrad(g, vh, [[0, '#03040b'], [0.6, '#060818'], [1, EDGE]]); g.fillRect(0, 0, vw, vh);
-        glowAt(g, vw * 0.24, vh * 0.3, Math.max(vw, vh) * 0.42, '140,70,255', 0.16, 1.3, 0.8);
-        glowAt(g, vw * 0.82, vh * 0.48, Math.max(vw, vh) * 0.36, '30,200,220', 0.1);
-        glowAt(g, vw * 0.6, vh * 0.12, Math.max(vw, vh) * 0.3, '255,60,160', 0.07, 1.4, 0.6);
-        starField(g, vw, vh, Math.round(vw * vh / 2600), 0.95, 'orbit', 1.5);
-        // a ringed planet
-        const r = Math.min(vw, vh) * 0.085, x = vw * 0.8, y = vh * 0.14;
-        g.save(); g.translate(x, y); g.rotate(-0.35);
-        g.strokeStyle = 'rgba(220,200,255,0.35)'; g.lineWidth = r * 0.12;
-        g.beginPath(); g.ellipse(0, 0, r * 1.9, r * 0.42, 0, Math.PI, Math.PI * 2); g.stroke();
-        const pg = g.createRadialGradient(-r * 0.4, -r * 0.4, r * 0.1, 0, 0, r);
-        pg.addColorStop(0, '#d8c2ff'); pg.addColorStop(0.6, '#7a55d6'); pg.addColorStop(1, '#2a1660');
-        g.fillStyle = pg; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
-        g.beginPath(); g.ellipse(0, 0, r * 1.9, r * 0.42, 0, 0, Math.PI); g.stroke();
-        g.restore();
-        vignette(g, vw, vh, 0.45);
-      },
-      far: { tw: 480, h: 70, p: 0.35, paint(g, tw, fh) {
-        // the station's railing
-        g.fillStyle = 'rgba(120,200,240,0.16)';
-        for (let x = 10; x < tw; x += 80) g.fillRect(x, fh - 40, 3, 40);
-        g.fillStyle = 'rgba(150,236,255,0.5)'; g.fillRect(0, fh - 42, tw, 2);
-        g.fillStyle = 'rgba(150,236,255,0.1)'; g.fillRect(0, fh - 22, tw, 1.5);
-      } },
-      floor(c, x0, w, F, S, mid) {
-        floorBase(c, x0, w, F, this.light, 0.26, 'rgba(18,22,34,0.97)');
-        recede(c, x0, w, F, mid, 64, 'rgba(150,230,255,0.08)', S, 2.3);
-        across(c, x0, w, F, [26], 'rgba(150,230,255,0.07)', S);
-        floorFade(c, x0, w, F);
       }
     }
   };
@@ -1122,32 +878,15 @@
   const glowRgb = () => courtArt().light;
   function backdrop() {
     if (bgEl) return bgEl;
-    const el = document.createElement('canvas'), A = courtArt(), k = A === COURT_ART.arena ? 0.5 : Math.min(1.5, Math.max(1, dpr * 0.75));
+    const el = document.createElement('canvas'), A = courtArt(), k = 0.5; // soft gradients only: half resolution is enough
     el.width = Math.max(2, Math.round(vw * k)); el.height = Math.max(2, Math.round(vh * k));
     const g = el.getContext('2d');
     g.scale(el.width / vw, el.height / vh);
     A.sky(g, vw, vh, Math.min(vw, VIEW_W * scale));
     return (bgEl = el);
   }
-  // the far layer: one tile, cached per court and pixel density, repeated across the view
-  const farC = { key: '', el: null };
-  function farStrip(A) {
-    const k = Math.max(1, Math.round(scale * dpr * 2) / 2), key = eqCourt() + '|' + k;
-    if (farC.key === key) return farC.el;
-    const el = document.createElement('canvas');
-    el.width = Math.ceil(A.far.tw * k); el.height = Math.ceil(A.far.h * k);
-    const g = el.getContext('2d'); g.setTransform(k, 0, 0, k, 0, 0);
-    A.far.paint(g, A.far.tw, A.far.h);
-    farC.key = key; farC.el = el;
-    return el;
-  }
-  function drawFar(c, left, width) {
-    const A = courtArt();
-    if (A.farDraw) { A.farDraw(c, left, width); return; }
-    if (!A.far) return;
-    const el = farStrip(A), tw = A.far.tw, base = view.camX * (1 - A.far.p);
-    for (let x = base + Math.floor((left - base) / tw) * tw; x < left + width; x += tw) c.drawImage(el, x, W.FLOOR - A.far.h, tw, A.far.h);
-  }
+  // behind the court: the courtside crowd and the LED board
+  function drawFar(c, left, width) { courtArt().farDraw(c, left, width); }
   // Text drawn on the canvas during play (ring labels, the checkpoint label, BEST, the LED board, the 8-ball) is
   // rasterised once per string, size and colour and then just stamped, so a frame never sets a canvas font:
   // setting one can make the browser recompute the page's styles in the middle of the frame, and on a phone that
@@ -1183,7 +922,7 @@
     const key = text + '|' + col + '|' + px.toFixed(1);
     if (mult.key === key) return mult;
     const el = mult.el || document.createElement('canvas');
-    const font = '700 ' + px.toFixed(1) + 'px ' + FONT_DISPLAY;
+    const font = '800 ' + px.toFixed(1) + 'px ' + FONT_DISPLAY;
     let g = el.getContext('2d');
     g.font = font;
     const w = Math.ceil(g.measureText(text).width + px * 0.25), h = Math.ceil(px * 1.35);
@@ -1194,12 +933,15 @@
     Object.assign(mult, { key, el, w: w / dpr, h: h / dpr });
     return mult;
   }
+  // The display face is inlined in style.css. Canvas text stamped before it has loaded would come out in a fallback
+  // face and stay cached, so once it's in, everything is stamped again.
+  if (document.fonts && document.fonts.load) document.fonts.load('800 16px "SD Display"').then(() => { TXT.clear(); mult.key = ''; }).catch(() => {});
 
   // ---------------------------------------------------------------- fire palette
   // Fire runs from a near-white core out to its edge colour; a 5+ swish streak burns in the flame's hotter "nova"
-  // palette (blue-white for the Fire flame). Every flame skin brings both palettes (FLAMES).
+  // palette (Solana green after purple). The flame brings both palettes (FLAMES).
   // Going from the base palette to the full-heat one, the fire burns through white-hot on the way (orange, then
-  // yellow-white, then blue-white for the Fire flame), the way heating up looks. A straight mix of the two
+  // white-hot, then green), the way heating up looks. A straight mix of the two
   // palettes passed through a muddy grey-pink halfway.
   const palMix = { outer: [0, 0, 0], mid: [0, 0, 0], inner: [0, 0, 0], core: [0, 0, 0] };
   const HOT = { outer: 0.75, mid: 0.8, inner: 0.85, core: 1 }; // how far each layer goes toward white-hot halfway
@@ -1644,13 +1386,10 @@
     return Math.min(E.DIFFS[di].maxWin, Math.floor(m));
   });
   // each mode's colour (Easy blue, Hard gold) and the ink that reads on it when its tile is picked
-  const TIER_COL = { easy: ['#0a84ff', '#ffffff'], hard: ['#ffd60a', '#05070e'] }, TIER_MORE = [['#40c8e0', '#05070e'], ['#bf5af2', '#ffffff']];
-  const tierCol = (di) => TIER_COL[(E.DIFFS[di] || {}).id] || TIER_MORE[di % TIER_MORE.length];
-  const tierC = (di) => tierCol(di)[0];
   function bumpBet() { const f = document.querySelector('.bet-field'); if (f && !REDUCED) hudAnim(f, 'bump', [{ transform: 'scale(0.9)' }, { transform: 'scale(1)' }], { duration: 300, easing: 'cubic-bezier(.34, 1.56, .64, 1)' }); }
   function buildLobby() {
     const d = $('diffs');
-    d.innerHTML = E.DIFFS.map((D, i) => `<button role="radio" id="diff${i}" data-di="${i}" aria-checked="${i === prefs.di}" aria-label="${D.name}, wins up to ${TOP[i]}×" style="--tc:${tierC(i)};--tink:${tierCol(i)[1]}"><span class="tn">${D.name}</span><span class="tx">${TOP[i]}×</span></button>`).join('');
+    d.innerHTML = E.DIFFS.map((D, i) => `<button role="radio" id="diff${i}" data-di="${i}" aria-checked="${i === prefs.di}" aria-label="${D.name}, wins up to ${TOP[i]}×"><span class="tn">${D.name}</span><span class="tx">${TOP[i]}×</span></button>`).join('');
     d.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { if (prefs.di === +b.dataset.di) return; prefs.di = +b.dataset.di; Sound.click(); buzz(6); refreshLobby(); saveAll(); }));
     $('betDown').addEventListener('click', () => { const b = prefs.bet; stepBet(-1); Sound.click(); if (prefs.bet !== b) bumpBet(); });
     $('betUp').addEventListener('click', () => { const b = prefs.bet; stepBet(1); Sound.click(); if (prefs.bet !== b) bumpBet(); });
@@ -1671,7 +1410,7 @@
     const di = prefs.di, D = E.DIFFS[di];
     document.querySelectorAll('#diffs button').forEach((b) => b.setAttribute('aria-checked', String(+b.dataset.di === di)));
     $('diffInfo').innerHTML = D.blurb + (profile.best[di] ? ` <span class="dim">· Best ${profile.best[di]}</span>` : '');
-    const wl = $('winLine'); wl.style.setProperty('--tc', tierC(di)); wl.innerHTML = `Win up to <b>${fmtBet(prefs.bet * TOP[di])} SOL</b>`;
+    const wl = $('winLine'); wl.innerHTML = `Win up to <b>${fmtBet(prefs.bet * TOP[di])} SOL</b>`;
     refreshProfileHud();
     if (!keepInput) $('betInput').value = fmtBet(prefs.bet);
     $('playAmt').textContent = fmtBet(prefs.bet) + ' SOL';
@@ -1794,7 +1533,7 @@
       </div>
       <p class="pot-rules">Clear every ring to win the prize; miss one and the entry is gone. Each special’s course is set for your level in it, and the level moves: up when you clear it, down a little when you don’t. It settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries whatever your level: the house keeps about ${100 - pct}% from beginners and pros alike. They open once you’ve played ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs, and you start at ${SP.levelName(SP.START)}, or higher if your runs show more. New specials come every day at midnight UTC, and your levels carry over. Their rings don’t count toward missions or the pot, but entries count as play for mission SOL.</p>`;
   }
-  // a sketch of a course: the rings in order, how far each one bobs, and the gold finish
+  // a sketch of a course: the rings in order, how far each one bobs, and the green finish
   function drawCourse(el, def) {
     const k = Math.min(window.devicePixelRatio || 1, 2), w = el.clientWidth || 340, ht = el.clientHeight || 118;
     el.width = Math.round(w * k); el.height = Math.round(ht * k);
@@ -1808,24 +1547,23 @@
     for (const h of hs) {
       const cx = sx(h.x), cy = sy(h.y0);
       if (h.amp) { g.strokeStyle = 'rgba(255,255,255,0.13)'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, sy(h.y0 - h.amp)); g.lineTo(cx, sy(h.y0 + h.amp)); g.stroke(); }
-      const a = h.tilt * 1.8, dx = Math.cos(a) * half, dy = Math.sin(a) * half, col = h.cp ? '#f5c542' : 'rgba(236,240,250,0.92)';
+      const a = h.tilt * 1.8, dx = Math.cos(a) * half, dy = Math.sin(a) * half, col = h.cp ? '#14f195' : 'rgba(236,240,250,0.92)';
       g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 2.2;
       g.beginPath(); g.moveTo(cx - dx, cy - dy); g.lineTo(cx + dx, cy + dy); g.stroke();
       for (const sg of [-1, 1]) { g.beginPath(); g.arc(cx + sg * dx, cy + sg * dy, 2.1, 0, Math.PI * 2); g.fill(); }
     }
-    g.fillStyle = '#ff8a2a'; g.beginPath(); g.arc(sx(0), sy(def.startY), 4.2, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(sx(0), sy(def.startY), 4.2, 0, Math.PI * 2); g.fill();
   }
   // today's three specials in one card: a row each with its prize multiple, twist, length, prize and Play; tap a row for its page
-  const SPX = (x) => (x >= 5 ? '#ffd60a' : x >= 3 ? '#bf5af2' : '#64d2ff');
   function specialCard() {
     const s = specState;
     if (!s || !s.specials) return '';
     const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked, locked = !blocked && s.me && s.me.locked;
     const act = (c) => (blocked ? '<span class="pill off">Not available</span>' : locked ? '<span class="pill off">Locked</span>'
       : `<button class="pill go" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`);
-    const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><span class="spr-x" style="--sx:${SPX(c.x)}">${c.x}×</span><span class="spr-t"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></span></button>
+    const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><span class="spr-x">${c.x}×</span><span class="spr-t"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></span></button>
       <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(c.prize)}</b> SOL</span>${act(c)}</div></div>`).join('');
-    return `<div class="cc sp sp-cc"><div class="cc-h"><span class="cc-k">${ICON.star}Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftText(left) : 'New soon'}</span></div>${locked ? unlockRow(s) : ''}${rows}</div>`;
+    return `<div class="cc sp sp-cc"><div class="cc-h"><span class="cc-k">${ICON.star}Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftOf(left) : 'New soon'}</span></div>${locked ? unlockRow(s) : ''}${rows}</div>`;
   }
   // the specials open once the player has bet SP.UNLOCK entries in regular runs: how far along they are
   function unlockRow(s) {
@@ -1838,7 +1576,7 @@
     if (!p) return '';
     const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
     const act = done ? '<span class="pill ok">Made it</span>' : inn ? '<span class="pill in">You’re in</span>' : `<button class="pill go" id="chPotEnter">Enter ${fmtBet(p.fee)} SOL</button>`;
-    return `<div class="cc pot"><button class="cc-open" data-page="pot" aria-label="Daily pot: ${fmtAmt(p.pool)} SOL, ${p.goal.text}. Details"><span class="cc-k">${ICON.trophy}Daily pot · closes in ${leftOf(p.closesAt - Date.now())}</span><span class="cc-big"><span class="num" data-count="${p.pool}">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></span><span class="cc-g">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span><span class="chev">${ICON.chev}</span></button>
+    return `<div class="cc pot"><div class="cc-h"><span class="cc-k">${ICON.trophy}Daily pot</span><span class="cc-t">Closes in ${leftOf(p.closesAt - Date.now())}</span></div><button class="cc-open" data-page="pot" aria-label="Daily pot: ${fmtAmt(p.pool)} SOL, ${p.goal.text}. Details"><span class="cc-big"><span class="num" data-count="${p.pool}">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></span><span class="cc-g">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span><span class="chev">${ICON.chev}</span></button>
       <div class="cc-act"><span class="cc-v">${p.entrants} ${p.entrants === 1 ? 'player' : 'players'} in</span>${act}</div></div>`;
   }
   let potCountAt = 0; // when the pot card's count-up started
@@ -2050,7 +1788,7 @@
     if (run.lvlSw === NH) {
       run.perfect++;
       callout('Perfect level', `${NH} of ${NH} swishes · +${PERFECT_BONUS}`, 'gold');
-      flash('255,214,10', 0.14); Sound.perfect(); Sound.applause(0.45); confetti(ball.x, ball.y - 30, 40);
+      flash('20,241,149', 0.14); Sound.perfect(); Sound.applause(0.45); confetti(ball.x, ball.y - 30, 40);
       addPoints(PERFECT_BONUS); view.pulse = 1;
     }
     if (run.level < NL) liveGoals();
@@ -2284,8 +2022,6 @@
       b.addEventListener('click', () => {
         if (!armed(ui.res)) return;
         profile.eq[t] = id; saveAll(); Sound.click(); buzz(8);
-        if (t === 'flame') applyFlameTheme();
-        if (t === 'court') bgEl = null;
         profile.fresh = profile.fresh.filter((k) => k !== t + ':' + id); syncBadges();
         document.querySelectorAll(`#resGains .gain.unlock[data-t="${t}"]`).forEach((x) => { const on = x.dataset.id === id; x.classList.toggle('on', on); x.querySelector('em').textContent = on ? 'In use' : 'Use'; });
       });
@@ -2441,11 +2177,11 @@
     Sound.douse();
   }
   function confetti(x, y, n) {
-    const cols = ['#ff7a1a', '#f5c542', '#ffffff', '#3d7bff', '#ffd9a8'];
+    const cols = ['#9945ff', '#14f195', '#ffffff', '#c39bff', '#8dffcf'];
     for (let i = 0; i < n; i++) spawn({ x: x + rnd(-30, 30), y: y + rnd(-10, 10), vx: rnd(-260, 260), vy: rnd(-520, -160), g: 900, drag: 1.2, life: rnd(1.1, 1.8), max: 1.8, size: rnd(4, 7), color: cols[i % cols.length], kind: 1, rot: rnd(0, 6), vr: rnd(-12, 12) });
   }
   // celebrations: a burst of flat confetti over the cards (wins, level-ups, special clears, pot wins)
-  const FX_COLS = ['#ff7a1a', '#ffd60a', '#40c8e0', '#0a84ff', '#bf5af2', '#30d158', '#ffffff'];
+  const FX_COLS = ['#9945ff', '#14f195', '#ffffff', '#c39bff', '#8dffcf', '#9945ff', '#14f195']; // Solana purple and green, and white
   let fxParts = [], fxRaf = 0, fxLast = 0, fxW = 0, fxH = 0;
   function celebrate(n, from) {
     const el = $('fxLayer');
@@ -2482,7 +2218,7 @@
     const big = clamp(Math.log(Math.max(1, run.total)) / Math.log(20), 0, 1); // 1× murmur, 20×+ a roar
     Sound.applause(Math.max(0.25, big, (k || 1) - 1)); if (big > 0.3 || k > 1) Sound.cheer(Math.max(big, 0.5));
     const n = Math.round(26 * (k || 1));
-    for (let i = 0; i < n; i++) spawn({ x: ball.x + rnd(-20, 20), y: ball.y + rnd(-20, 10), vx: rnd(-220, 220), vy: rnd(-560, -220), g: 1000, life: rnd(1.2, 1.9), max: 1.9, size: rnd(7, 10), color: i % 2 ? '#f5c542' : '#ffd36b', kind: 4, rot: rnd(0, 6), vr: rnd(-8, 8) });
+    for (let i = 0; i < n; i++) spawn({ x: ball.x + rnd(-20, 20), y: ball.y + rnd(-20, 10), vx: rnd(-220, 220), vy: rnd(-560, -220), g: 1000, life: rnd(1.2, 1.9), max: 1.9, size: rnd(7, 10), color: i % 2 ? '#14f195' : '#b98cff', kind: 4, rot: rnd(0, 6), vr: rnd(-8, 8) });
     confetti(ball.x, ball.y - 40, Math.round(36 * (k || 1)));
   }
 
@@ -2563,7 +2299,6 @@
     if (nav.cover && phase === 'lobby') { tickCounts(tNow); requestAnimationFrame(frame); return; } // a full page covers the arena
     readLayout();
     view.time += dt;
-    if (eqFlame().prism) prismTick(view.time);
     // a phone that can't hold about 40 fps during play for 2 s draws at a lower resolution, so the game stays smooth
     if (!dbg.hold && dt > 0 && dt < 0.1) {
       perf.avg += (dt - perf.avg) * 0.05;
@@ -2644,7 +2379,7 @@
     ball.tilt = clamp(ball.tilt, -0.6, 0.45);
     ball.rv *= Math.exp(-dt * 4.5);
     ball.rot += (ball.vx / P.R * 0.3 + ball.rv) * dt;
-    // fire: the ball smoulders on a double swish, burns from three in a row and turns blue-white from five
+    // fire: the ball smoulders on a double swish, burns purple from three in a row and green from five
     const vis = dbg.fx != null ? dbg.fx : phase === 'lobby' ? (nav.fx != null ? nav.fx : Math.min(attract.streak, 4)) : run.lost ? 0 : run.streak;
     const fireT = vis >= 5 ? 1 : vis === 4 ? 0.82 : vis === 3 ? 0.64 : vis === 2 ? 0.3 : 0;
     ball.fire = lerp(ball.fire, fireT, 1 - Math.exp(-dt * (fireT > ball.fire ? 5 : 3.5)));
@@ -2707,7 +2442,7 @@
     const lk = nav.tab === 'locker', sheet = lk ? vL : ui.lobby;
     if (phase === 'lobby' && !sheet.classList.contains('hide')) {
       if (sheetTopC < 0) measureHero(); // normally done at the frame's start (readLayout), unless the page changed since
-      const near = lk && nav.cat !== 'court', top = 130, bot = near ? 560 : 676; // courts show their floor line
+      const near = lk, top = 130, bot = near ? 560 : 676;
       zoomT = clamp((heroB - heroT - 8) / ((bot - top) * scale), 0.45, 1);
       centreY = (heroT + heroB) / 2; centreW = (top + bot) / 2;
     } else if (phase !== 'lobby' && run.st) zoomT = levelZoom(run.level);
@@ -2752,7 +2487,7 @@
       c.drawImage(m.el, vw / 2 - m.w * k / 2, cy - m.h * k / 2, m.w * k, m.h * k);
       if (best > 0) {
         c.globalAlpha = (run.newBest ? 0.55 : 0.26) * fa;
-        drawText(c, textSprite(run.newBest ? 'New best' : 'Best ' + best, 600, 15 * scale * dpr, FONT_DISPLAY, run.newBest ? '#f5c542' : '#ffffff'), vw / 2, cy + 48 * scale, dpr);
+        drawText(c, textSprite(run.newBest ? 'New best' : 'Best ' + best, 600, 15 * scale * dpr, FONT_DISPLAY, run.newBest ? '#14f195' : '#ffffff'), vw / 2, cy + 48 * scale, dpr);
       }
       c.globalAlpha = 1;
     }
@@ -2843,7 +2578,7 @@
     const rnd = E.makeRng('crowd');
     // two rows of heads and shoulders: the back row smaller and fainter
     const row = (base, rMin, rMax, gap, alpha) => {
-      g.fillStyle = 'rgba(4,7,17,' + alpha + ')';
+      g.fillStyle = 'rgba(8,5,18,' + alpha + ')';
       g.beginPath();
       for (let x = rnd() * gap; x < STANDS_W + gap; x += gap * (0.8 + rnd() * 0.45)) {
         const r = rMin + rnd() * (rMax - rMin), y = base - r * (1.5 + rnd() * 0.5);
@@ -2871,12 +2606,12 @@
       ARENA_G.glow = c.createLinearGradient(0, top - 18, 0, top); // the board lights the front row
       ARENA_G.glow.addColorStop(0, 'rgba(' + COURT_ART.arena.light + ',0)'); ARENA_G.glow.addColorStop(1, 'rgba(' + COURT_ART.arena.light + ',0.15)');
       ARENA_G.bd = c.createLinearGradient(0, top, 0, F);
-      ARENA_G.bd.addColorStop(0, '#0f1730'); ARENA_G.bd.addColorStop(1, '#070b18');
+      ARENA_G.bd.addColorStop(0, '#160c2c'); ARENA_G.bd.addColorStop(1, '#090616');
     }
     c.fillStyle = ARENA_G.glow; c.fillRect(x0, top - 18, w, 18);
     c.fillStyle = ARENA_G.bd; c.fillRect(x0, top, w, BOARD_H);
-    c.fillStyle = 'rgba(130,165,255,0.5)'; c.fillRect(x0, top, w, 0.7);
-    const sp = textSprite('SOL DUNK', 800, 6.5 * scale * dpr, FONT_DISPLAY, 'rgba(140,175,255,0.4)');
+    c.fillStyle = 'rgba(20,241,149,0.5)'; c.fillRect(x0, top, w, 0.7);
+    const sp = textSprite('SOL DUNK', 800, 6.5 * scale * dpr, FONT_DISPLAY, 'rgba(20,241,149,0.42)'); // the LED board, in Solana green
     for (let x = Math.floor((left - 60) / 160) * 160; x < left + width + 60; x += 160) drawText(c, sp, x, top + BOARD_H / 2 + 0.4, scale * dpr);
   }
   function drawCourt(c, left, width, S, bx, by, rings) {
@@ -2911,10 +2646,9 @@
   // Painted steel rims: no neon glow. A dark edge at exactly the tube's collision width, the tube shaded from
   // its underside up to a top lit by the spotlight, a narrow specular streak, and a cool bounce light off the
   // court underneath. The streak and the bounce fade toward the sides; the far side sits in shadow.
-  const RING_PAL = {
-    red: { edge: '#3a0805', body: '#a5261a', mid: '#dd3a22', hi: '#ff8a64', spec: '255,236,224', back: '#7c1b12', bounce: '150,175,255' },
-    gold: { edge: '#3e2b02', body: '#b5831a', mid: '#efb52e', hi: '#ffe08a', spec: '255,250,232', back: '#8c6512', bounce: '160,184,255' },
-    grey: { edge: '#0e121b', body: '#262c3a', mid: '#353d50', hi: '#56607a', spec: '200,210,235', back: '#1e2330', bounce: '110,140,220' }
+  const RING_PAL = { // the checkpoint ring is Solana green; a missed ring goes grey (ordinary rings: RIMS.sol)
+    cp: { edge: '#022a1a', body: '#0b9462', mid: '#14f195', hi: '#aaffdc', spec: '242,255,249', back: '#076b45', bounce: '153,69,255' },
+    grey: { edge: '#0f0c17', body: '#28233a', mid: '#38314f', hi: '#5a5277', spec: '214,206,240', back: '#1f1b2c', bounce: '120,100,200' }
   };
   const RING_RY = 0.34;
   function lerpHex(a, b, t) {
@@ -2985,14 +2719,14 @@
   function drawRing(c, o, back) {
     const h = o.h, v = hoopVis(h);
     const x = o.off + h.x, y = E.hoopY(h, o.t);
-    const sp = ringSprites(h.w, h.st === 2 ? 'grey' : h.cp ? 'gold' : eqRim());
+    const sp = ringSprites(h.w, h.st === 2 ? 'grey' : h.cp ? 'cp' : eqRim());
     const next = h === view.nextRing && h.st === 0;
     c.save();
     c.translate(x, y);
     const lf = !back && next && h.cp ? clamp((x - (view.drawX || 0) - 70) / 80, 0, 1) : 0;
-    if (lf > 0) { // the gold ring ahead says what it is, and gets out of the way as the ball arrives
+    if (lf > 0) { // the checkpoint ring ahead says what it is, and gets out of the way as the ball arrives
       c.globalAlpha = (0.62 + 0.18 * Math.sin(view.time * 5)) * lf;
-      drawText(c, textSprite('Checkpoint', 700, 12 * scale * dpr, FONT_DISPLAY, '#f5c542'), 0, -(h.w / 2) * RING_RY - P.RP - 13, scale * dpr);
+      drawText(c, textSprite('Checkpoint', 700, 12 * scale * dpr, FONT_DISPLAY, 'rgba(255,255,255,0.92)'), 0, -(h.w / 2) * RING_RY - P.RP - 13, scale * dpr);
       c.globalAlpha = 1;
     }
     c.rotate(h.tilt);
@@ -3008,10 +2742,10 @@
       c.globalCompositeOperation = 'source-over';
     }
     if (!back && h.cp && h.st === 0 && !REDUCED) {
-      // a slow glint travels along the gold checkpoint ring
+      // a slow glint travels along the green checkpoint ring
       const ph = (view.time * 0.5) % 1, ang = (0.88 - 0.76 * ph) * Math.PI;
       c.globalCompositeOperation = 'lighter';
-      c.strokeStyle = 'rgba(255,246,214,' + (0.7 * Math.sin(ph * Math.PI)).toFixed(3) + ')';
+      c.strokeStyle = 'rgba(226,255,242,' + (0.7 * Math.sin(ph * Math.PI)).toFixed(3) + ')';
       c.lineWidth = P.RP * 0.42; c.lineCap = 'round';
       c.beginPath(); c.ellipse(0, -P.RP * 0.42, rx, ry, 0, ang - 0.1, ang + 0.1); c.stroke();
       c.globalCompositeOperation = 'source-over';
@@ -3028,7 +2762,7 @@
     }
     if (!back && v.flash !== 0) {
       const a = Math.abs(v.flash), frx = rx + P.RP + 3, fry = ry + P.RP + 2;
-      c.strokeStyle = v.flash < 0 ? 'rgba(255,90,78,0.85)' : 'rgba(255,255,255,' + (0.5 * a).toFixed(3) + ')';
+      c.strokeStyle = v.flash < 0 ? 'rgba(206,190,240,0.85)' : 'rgba(255,255,255,' + (0.5 * a).toFixed(3) + ')';
       c.lineWidth = 1 + 1.5 * a;
       c.beginPath(); c.ellipse(0, 0, frx + (1 - a) * 12, fry + (1 - a) * 5, 0, 0, Math.PI * 2); c.stroke();
     }
@@ -3533,7 +3267,7 @@
       c.globalAlpha = clamp(a, 0, 1) * t.dim;
       drawText(c, sp, t.x, t.y - t.size * 0.36, 1.25 * K, s); // the sprite is centred on the text's middle, not its baseline
       if (t.sub) {
-        const ss = t.ss || (t.ss = textSprite(t.sub, 700, 12 * K, FONT_ROUND, 'rgba(47,211,107,0.95)'));
+        const ss = t.ss || (t.ss = textSprite(t.sub, 700, 12 * K, FONT_DISPLAY, 'rgba(47,211,107,0.95)'));
         drawText(c, ss, t.x, t.y + 15 - 4.3, K);
       }
     }
@@ -3661,34 +3395,21 @@
       row('tap', 'blue', 'Tap to flap', `Drop the ball down through every ring. Fly past one, go under it or hit the floor and the run ends.`) +
       row('rim', 'red', 'Rims', `Touch the rim and you can still score: if the ball comes down over the opening it drops in. It only bounces out when it comes down past the rim.`) +
       row('swish', 'green', 'Swish', `Go through without touching the ring for a swish. Swishes pay more than rim hits, and swishes in a row pay more each time, up to 5 in a row. Your streak carries into the next level.`) +
-      row('fire', 'heat', 'Fire', `Two swishes in a row and the ball starts to smoulder. Three and it's <b>on fire</b>; five and it burns at full heat (blue-white with the Fire flame). Touch a rim and the flame goes out. Flames from the locker change the colours, never the pay.`) +
-      row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.`) +
-      row('star', 'gold', 'Score and XP', `Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, missions and trophies earn XP, which unlocks balls, wings, flames, trails, rims and courts in the Locker. Score and XP never change what a run pays.`) +
+      row('fire', 'heat', 'Fire', `Two swishes in a row and the ball starts to smoulder. Three and it's <b>on fire</b> and burns purple; five and it burns at full heat, in green. Touch a rim and the flame goes out.`) +
+      row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the green ring ends the level. Cash out your pot, or keep going for more.`) +
+      row('star', 'gold', 'Score and XP', `Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, missions and trophies earn XP, which unlocks balls, wings and trails in the Locker. Score and XP never change what a run pays.`) +
       row('mission', 'purple', 'Missions', `Three new missions every day and every week (new ones at midnight UTC, and on Mondays), and a career of six chapters, each ending in an item you can only get there. They count in every run, whatever you bet. Daily and weekly missions also pay SOL once you've played ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week (bets and special level entries); rewards earned before then wait, and go when the day or week ends.`) +
       row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: three a day, each with a twist like every ring moving and a prize of 2×, 3× or 5× the entry. Pay the entry, then clear every ring of a fresh course to win. Each course is set for your level in that special: harder after a clear, a little easier after a miss. They open once you've played ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL in regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge in any regular run to share the pot.`) +
       `</div>`;
   }
   // locker thumbnails, drawn with the same code as the game
-  const FLAME_PATH = typeof Path2D === 'function' ? new Path2D('M12 23c-4.4 0-8-3.1-8-7.5 0-3.3 2-5.6 3.7-7.4.6-.6 1.6-.2 1.6.7 0 1.4.9 2.6 2.1 2.6 1.1 0 1.8-.9 1.8-2.1 0-2.3-1.2-4.2-1.2-6.6 0-.9 1-1.5 1.7-1C17 3.9 20 8.4 20 14.5 20 19.6 16.4 23 12 23Z') : null;
   function drawThumb(el, t, id) {
     const g = el.getContext('2d'), s = el.width;
     g.clearRect(0, 0, s, s); g.save();
-    if (t === 'court') { thumbCourt(g, s, id); g.restore(); return; }
     g.translate(s / 2, s / 2);
     if (t === 'ball') { drawBallBody(g, s * 0.32, 0.45, BALLS[id]); }
     else if (t === 'wing') { const r = s * 0.42; g.translate(r * 0.95, r * 0.92); drawWing(g, r, -0.1, false, WINGS[id]); }
-    else if (t === 'rim') {
-      const rx = s * 0.37, ry = rx * RING_RY, lw = s * 0.075;
-      g.translate(0, s * 0.03); ringHalf(g, rx, ry, lw, RIMS[id].pal, false); ringHalf(g, rx, ry, lw, RIMS[id].pal, true);
-    } else if (t === 'trail') thumbTrail(g, s, id);
-    else if (FLAME_PATH) {
-      const F = FLAMES[id], Pb = F.base, k = s / 30;
-      g.translate(-12 * k, -12.5 * k); g.scale(k, k);
-      const gr = g.createLinearGradient(0, 2, 0, 23);
-      if (F.prism) ['#ff3f7f', '#ffa53a', '#ffe36a', '#4fe08a', '#3f8cff', '#b06bff'].forEach((c, i) => gr.addColorStop(i / 5, c));
-      else { gr.addColorStop(0, hex3(Pb.outer)); gr.addColorStop(0.45, hex3(Pb.mid)); gr.addColorStop(0.8, hex3(Pb.inner)); gr.addColorStop(1, hex3(Pb.core)); }
-      g.shadowColor = hex3(F.prism ? [255, 120, 200] : Pb.mid); g.shadowBlur = 10; g.fillStyle = gr; g.fill(FLAME_PATH);
-    }
+    else if (t === 'trail') thumbTrail(g, s, id);
     g.restore();
   }
   // a trail: the equipped ball flying right, with the trail behind it
@@ -3713,16 +3434,6 @@
     }
     else { g.strokeStyle = 'rgba(255,255,255,0.22)'; g.lineWidth = Math.max(1, s * 0.014); g.setLineDash([s * 0.03, s * 0.04]); g.beginPath(); g.moveTo(x0 + s * 0.08, by + s * 0.05); g.quadraticCurveTo((x0 + bx) / 2, by + s * 0.1, bx - r * 1.3, by); g.stroke(); g.setLineDash([]); }
     g.save(); g.translate(bx, by); drawBallBody(g, r, 0.4, eqBall()); g.restore();
-  }
-  // a court: its sky, far layer and floor, framed like a window onto it
-  function thumbCourt(g, s, id) {
-    const A = COURT_ART[id], fy = s * 0.72, k = s / 300;
-    A.sky(g, s, s * 1.05, s);
-    if (A.far) { g.save(); g.translate(0, fy - A.far.h * k); g.scale(k, k); g.beginPath(); g.rect(0, 0, s / k, A.far.h); g.clip(); A.far.paint(g, A.far.tw, A.far.h); g.restore(); }
-    g.save(); g.translate(0, fy); g.scale(k, k); A.floor(g, 0, s / k, 0, k * 1.4, s / k / 2, s / k); g.restore();
-    const fl = g.createLinearGradient(0, 0, s, 0);
-    fl.addColorStop(0, 'rgba(255,255,255,0)'); fl.addColorStop(0.5, A.edge); fl.addColorStop(1, 'rgba(255,255,255,0)');
-    g.fillStyle = fl; g.fillRect(0, fy, s, Math.max(1, s / 90));
   }
   // Odds & fairness: what each ring pays on a tier, the total a run has after each level, and how a run can be
   // checked. Opened from the Play sheet it shows the tier you have picked.
@@ -3788,7 +3499,7 @@
     const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–', net = stats.returned - stats.wagered;
     return `<div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${Math.abs(net) < 0.00005 ? '' : net > 0 ? 'pos' : 'neg'}">${Math.abs(net) < 0.00005 ? '0' : (net > 0 ? '+' : '−') + fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
       <div class="sec-h"><h3>Best scores</h3></div>
-      <div class="bests">${E.DIFFS.map((D, i) => `<div style="--tc:${tierC(i)}"><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
+      <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
       <div class="sec-h"><h3>Recent runs</h3>${stats.history.length ? '<span>Newest first</span>' : ''}</div>
       ${runsHtml()}`;
   }
@@ -3946,12 +3657,11 @@
   document.querySelectorAll('.view > .vscroll').forEach((el) => el.addEventListener('scroll', () => el.parentElement.classList.toggle('scrolled', el.scrollTop > 6), { passive: true }));
 
   // ---------------------------------------------------------------- Missions tab
-  const MCOL = ['#ff9f0a', '#64d2ff', '#ff6482', '#30d158', '#bf5af2']; // each mission's ring colour, in order
   const ring = (p) => `<span class="mring${p > 0 ? '' : ' zero'}"><svg viewBox="0 0 36 36"><circle class="trk" cx="18" cy="18" r="15"/><circle class="val" cx="18" cy="18" r="15" pathLength="100" stroke-dasharray="${(Math.max(0.0001, p) * 100).toFixed(1)} 100"/></svg><span class="ck">${ICON.check}</span></span>`;
   function mRow(text, p, n, xp, done, sol, paid, i) {
     const right = done ? '<b>Done</b>' + (sol ? `<small class="${paid ? 'paid' : ''}">${fmtBet(sol)} SOL ${paid ? 'paid' : 'waiting'}</small>` : '')
       : `<b>+${xp} XP</b>` + (sol ? `<small>+${fmtBet(sol)} SOL</small>` : '');
-    return `<div class="mrow${done ? ' done' : ''}" style="--mc:${MCOL[(i || 0) % MCOL.length]}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? 'Done' : p + ' / ' + n}</span></span><span class="mxp">${right}</span></div>`;
+    return `<div class="mrow${done ? ' done' : ''}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? 'Done' : p + ' / ' + n}</span></span><span class="mxp">${right}</span></div>`;
   }
   // a window's SOL pays once this much has been played in it (bets on runs and special level entries)
   function needRow(mv, win) {
@@ -3981,7 +3691,7 @@
     if (C) {
       const r = rewardOf(C), n = cs.done.filter(Boolean).length;
       career = `<div class="chap">
-        <div class="chap-top"><span class="rew${r.t === 'court' ? ' court' : ''}"><canvas width="132" height="132" data-t="${r.t}" data-id="${r.id}"></canvas></span>
+        <div class="chap-top"><span class="rew"><canvas width="132" height="132" data-t="${r.t}" data-id="${r.id}"></canvas></span>
           <div><div class="chap-k">Chapter ${cs.ch + 1} of ${CAREER.length} · ${n} of 4 done</div><div class="chap-n">${C.name}</div>
           <div class="chap-r">Finish all four to unlock <b>${COS[r.t][r.id].name} ${TNAME[r.t].toLowerCase()}</b>${C.title ? ' and the <b>' + TITLE_BY[C.title].name + '</b> title' : ''}.</div></div></div>
         <div class="chap-bar"><i style="width:${(n / 4 * 100).toFixed(0)}%"></i></div>
@@ -3998,18 +3708,15 @@
   // ---------------------------------------------------------------- Locker tab
   // Tap anything to see it on the arena above; tap something you own to wear it. Locked items show how to get them.
   function lockerFx() { // what the arena shows while you browse: a flame burning for flames, none for trails
-    nav.fx = nav.tab !== 'locker' ? null : nav.cat === 'flame' ? 4 : nav.cat === 'trail' ? 0 : null;
+    nav.fx = nav.tab !== 'locker' ? null : nav.cat === 'trail' ? 0 : null; // browsing trails keeps the ball cool so the trail shows
   }
   function endTry() {
     if (!nav.try) return;
-    const t = nav.try.t; nav.try = null;
-    if (t === 'court') bgEl = null;
-    if (t === 'flame') applyFlameTheme();
+    nav.try = null;
   }
   function tryItem(t, id) {
     endTry();
     if (profile.eq[t] !== id) nav.try = { t, id };
-    if (t === 'court') bgEl = null;
   }
   function renderLocker() {
     const cats = $('lkCats');
@@ -4027,7 +3734,7 @@
     grid.innerHTML = items.map((u) => {
       const has = isOwned(t, u.id), eq = profile.eq[t] === u.id, sel = nav.try && nav.try.t === t && nav.try.id === u.id;
       const fresh = profile.fresh.includes(t + ':' + u.id), nm = COS[t][u.id].name;
-      return `<button class="item${t === 'court' ? ' court' : ''}${has ? '' : ' locked'}${eq ? ' eq' : ''}${sel ? ' sel' : ''}" data-id="${u.id}" aria-pressed="${eq}" aria-label="${nm}, ${RARITY[u.r]}${has ? (eq ? ', equipped' : '') : ', locked: ' + unlockReq(u)}">` +
+      return `<button class="item${has ? '' : ' locked'}${eq ? ' eq' : ''}${sel ? ' sel' : ''}" data-id="${u.id}" aria-pressed="${eq}" aria-label="${nm}, ${RARITY[u.r]}${has ? (eq ? ', equipped' : '') : ', locked: ' + unlockReq(u)}">` +
         `<canvas width="112" height="112"></canvas><span class="nm">${has ? nm : unlockReq(u)}</span>` +
         (has ? (fresh ? '<span class="new"></span>' : '') : `<span class="lock">${ICON.lock}</span>`) + '</button>';
     }).join('');
@@ -4057,8 +3764,6 @@
       endTry();
       const changed = profile.eq[t] !== id;
       profile.eq[t] = id; saveAll();
-      if (t === 'flame') applyFlameTheme();
-      if (t === 'court') bgEl = null;
       if (changed) { Sound.click(); buzz(10); }
     } else { tryItem(t, id); Sound.click(); }
     renderLocker(); refreshProfileHud();
@@ -4066,7 +3771,7 @@
 
   // ---------------------------------------------------------------- Profile tab
   const inkFor = (hex) => { const n = parseInt(hex.slice(1), 16), l = 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); return l > 170 ? '#0b0f1a' : '#ffffff'; };
-  const avStyle = (ci) => { const c = CARD_COLORS[ci] || CARD_COLORS[0]; return `--av:${c};--av-ink:${inkFor(c)}`; };
+  const avStyle = () => { const c = CARD_COLORS[0]; return `--av:${c};--av-ink:${inkFor(c)}`; };
   const playerName = () => profile.card.name || 'Player';
   // Profile, top to bottom: who you are (card, level), how you play (stats, with trophies and recent runs a tap
   // away), settings (wallet, sound, vibration) and help (how to play, odds & fairness).
@@ -4092,7 +3797,6 @@
     return `<div class="pe-prev"><span class="pav" id="peAv" style="${avStyle(c.color)}">${emblemSvg(c.emblem)}</span><span class="pid"><span class="pname" id="peName">${esc(playerName())}</span><span class="ptitle" id="peTitle">${ICON.medal}${(TITLE_BY[c.title] || TITLES[0]).name}</span></span></div>
       <h3>Name</h3><label class="pe-name"><input id="peIn" maxlength="16" autocomplete="off" spellcheck="false" placeholder="Player" value="${esc(c.name)}"><span>16 max</span></label>
       <h3>Emblem</h3><div class="pe-ems" style="${avStyle(c.color)}">${Object.keys(EMBLEMS).map((k) => `<button data-em="${k}" aria-pressed="${k === c.emblem}" aria-label="${k}">${emblemSvg(k)}</button>`).join('')}</div>
-      <h3>Colour</h3><div class="pe-cols">${CARD_COLORS.map((col, i) => `<button data-col="${i}" style="background:${col}" aria-pressed="${i === c.color}" aria-label="Colour ${i + 1}"></button>`).join('')}</div>
       <h3>Title</h3><div class="pe-titles">${TITLES.map((T) => { const open = titleOpen(T); return `<button data-ti="${T.id}" aria-pressed="${T.id === c.title}"${open ? '' : ` disabled title="${titleReq(T)}"`}>${open ? '' : ICON.lock}${T.name}</button>`; }).join('')}</div>
       <p class="reset-note">Locked titles come from trophies, levels and the career.</p>`;
   }
@@ -4103,7 +3807,6 @@
     inp.addEventListener('change', () => { c.name = c.name.trim(); saveAll(); renderProfileView(); });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); });
     document.querySelectorAll('#panelBody [data-em]').forEach((b) => b.addEventListener('click', () => { c.emblem = b.dataset.em; saveAll(); Sound.click(); redraw(); }));
-    document.querySelectorAll('#panelBody [data-col]').forEach((b) => b.addEventListener('click', () => { c.color = +b.dataset.col; saveAll(); Sound.click(); redraw(); }));
     document.querySelectorAll('#panelBody [data-ti]').forEach((b) => b.addEventListener('click', () => { c.title = b.dataset.ti; saveAll(); Sound.click(); redraw(); }));
   }
 
@@ -4158,7 +3861,7 @@
     bal: () => bank.balance(),
     sfx: (name, args, secs) => Sound.render(name, args, secs), // a sound's samples, rendered offline
     ballScreen: () => ({ x: view.bsx, y: view.bsy }),
-    equip: (t, id) => { if (COS[t] && COS[t][id]) { profile.eq[t] = id; if (t === 'flame') applyFlameTheme(); if (t === 'court') { bgEl = null; } } }, // test hook: try a skin without unlocking it
+    equip: (t, id) => { if (COS[t] && COS[t][id]) profile.eq[t] = id; }, // test hook: try a ball, wings or trail without unlocking it
     thumb: (el, t, id) => drawThumb(el, t, id) // test hook: draw a locker picture into a canvas
   };
 })();

@@ -15,9 +15,13 @@ if (iconFile) {
   if (!mime) throw new Error('SOL icon must be .svg, .png or .webp');
   cfg.solIconUrl = 'data:' + mime + ';base64,' + fs.readFileSync(iconFile).toString('base64');
 }
+// The display font (src/fonts, see OFL.txt there) is inlined as a data URI too. A comment keeps its file name, so
+// tools/split_build.py can turn a build back into src/fonts.
+const style = r('style.css').replace(/url\("fonts\/([\w.-]+\.woff2)"\)/g, (m, f) =>
+  '/*fonts/' + f + '*/url("data:font/woff2;base64,' + fs.readFileSync(path.join(__dirname, 'src', 'fonts', f)).toString('base64') + '")');
 let html = r('index.html');
 const parts = {
-  '/*@@STYLE@@*/': r('style.css'),
+  '/*@@STYLE@@*/': style,
   '/*@@CONFIG@@*/': 'window.SOL_DUNK_CONFIG = ' + JSON.stringify(cfg) + ';',
   '/*@@ENGINE@@*/': r('engine.cjs'),
   '/*@@PAYTABLE@@*/': r('paytable.cjs'),

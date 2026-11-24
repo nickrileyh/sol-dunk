@@ -27,9 +27,7 @@ async def main():
         await page.evaluate("__solDunk.hold(true)"); await page.screenshot(path=OUT + 'fire.png'); await canvas_crop(page, 'ball_fire'); await page.evaluate("__solDunk.hold(false)")
         await page.evaluate("__solDunk.fx(5)"); await page.wait_for_timeout(900)
         await page.evaluate("__solDunk.hold(true)"); await canvas_crop(page, 'ball_nova'); await page.evaluate("__solDunk.hold(false)")
-        await page.evaluate("__solDunk.equip('flame', 'toxic'); __solDunk.fx(3)"); await page.wait_for_timeout(900)
-        await page.evaluate("__solDunk.hold(true)"); await page.screenshot(path=OUT + 'fire_toxic.png'); await canvas_crop(page, 'ball_toxic'); await page.evaluate("__solDunk.hold(false)")
-        await page.evaluate("__solDunk.equip('flame', 'fire'); __solDunk.fx(null)")
+        await page.evaluate("__solDunk.fx(null)")
         for i in range(160):
             if await page.evaluate('__solDunk.phase()') in ('checkpoint', 'over'): break
             await page.wait_for_timeout(120)
