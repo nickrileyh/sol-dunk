@@ -1173,7 +1173,7 @@
       const label = (o === 'S' ? streakName(streak) : 'Rim') + (pts ? ' +' + pts : '');
       const col = o === 'S' ? (streak >= 5 ? heatHex(1, 'inner') : streak >= 3 ? heatHex(0, 'inner') : '#ffffff') : 'rgba(222,230,255,0.75)';
       // up and behind the ball's path, so the label never sits on the ball
-      floatText(hx - 10, hy - 70, label, fmtX(m), col, o === 'S' ? 19 + Math.min(streak, 5) * 1.1 : 17);
+      floatText(hx - 10, hy - 70, label, null, col, o === 'S' ? 19 + Math.min(streak, 5) * 1.1 : 17);
       if (o === 'S' && (streak === 3 || streak === 5 || streak === 10)) Sound.fire();
     }
   }
@@ -1405,7 +1405,7 @@
     c.drawImage(backdrop(), 0, 0, vw, vh);
 
     // the score, huge and quiet, behind everything (Flappy Dunk style); the pot sits in the HUD
-    view.scoreA = lerp(view.scoreA == null ? 1 : view.scoreA, CALL.busy ? 0.25 : 1, 0.12);
+    view.scoreA = lerp(view.scoreA == null ? 1 : view.scoreA, CALL.busy || ui.banner.classList.contains('show') ? 0.2 : 1, 0.12);
     if (phase !== 'lobby' && run.st && run.score > 0) {
       const p = view.pulse, best = profile.best[run.di], cy = offY + 205 * scale, fa = view.scoreA;
       const col = run.newBest ? '245,197,66' : run.streak >= 5 ? heatText(1) : run.streak >= 3 ? heatText(0) : '255,255,255';
@@ -1501,7 +1501,7 @@
     const lr = glowRgb(), x0 = left - 20, w = width + 40, F = W.FLOOR;
     const fg = c.createLinearGradient(0, F, 0, F + 150);
     fg.addColorStop(0, 'rgba(' + lr + ',0.24)'); fg.addColorStop(0.07, 'rgba(17,21,34,0.97)'); fg.addColorStop(1, EDGE);
-    c.fillStyle = fg; c.fillRect(x0, F, w, 420);
+    c.fillStyle = fg; c.fillRect(x0, F, w, 4000);
     const mid = left + width / 2, step = 34;
     c.strokeStyle = 'rgba(255,255,255,0.055)'; c.lineWidth = 1 / S;
     c.beginPath();
@@ -1509,7 +1509,7 @@
     c.stroke();
     const fade = c.createLinearGradient(0, F + 6, 0, F + 120);
     fade.addColorStop(0, EDGE0); fade.addColorStop(1, EDGE);
-    c.fillStyle = fade; c.fillRect(x0, F + 6, w, 420);
+    c.fillStyle = fade; c.fillRect(x0, F + 6, w, 4000);
     // each ring casts a soft shadow on the boards below it, so the rings sit in the space
     if (rings) for (const o of rings) {
       const h = o.h, x = o.off + h.x, d = clamp((F - E.hoopY(h, o.t)) / 700, 0, 1);
@@ -1985,11 +1985,11 @@
     const [t, fn] = map[kind] || map.how;
     title.textContent = t; body.innerHTML = fn();
     body.scrollTop = 0;
-    ui.scrim.classList.add('show'); show(ui.panel, true);
+    ui.scrim.classList.add('show'); show(ui.panel, true); document.body.classList.add('panel-open');
     wirePanel(kind);
     setTimeout(() => $('panelClose').focus({ preventScroll: true }), 30);
   }
-  function closePanel() { ui.scrim.classList.remove('show'); show(ui.panel, false); }
+  function closePanel() { ui.scrim.classList.remove('show'); show(ui.panel, false); document.body.classList.remove('panel-open'); }
   $('panelClose').addEventListener('click', closePanel);
   ui.scrim.addEventListener('click', closePanel);
   document.querySelectorAll('[data-panel]').forEach((b) => b.addEventListener('click', () => openPanel(b.dataset.panel)));
