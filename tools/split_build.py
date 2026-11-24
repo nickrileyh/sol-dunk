@@ -7,10 +7,12 @@ h = open(src, encoding='utf-8').read()
 m = re.search(r'<style>(.*?)</style>', h, re.S)
 style = m.group(1)
 tmpl = h[:m.start(1)] + '/*@@STYLE@@*/' + h[m.end(1):]
-names = ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'GAME']
-files = {'ENGINE': 'engine.cjs', 'PAYTABLE': 'paytable.cjs', 'BOT': 'bot.cjs', 'GAME': 'game.js'}
 blocks = list(re.finditer(r'<script>(.*?)</script>', tmpl, re.S))
-assert len(blocks) == 5, len(blocks)
+# builds from before the challenge pots (src/pots.cjs) have five scripts, later ones six
+names = ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'GAME'] if len(blocks) == 5 else ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'POTS', 'GAME']
+files = {'ENGINE': 'engine.cjs', 'PAYTABLE': 'paytable.cjs', 'BOT': 'bot.cjs', 'POTS': 'pots.cjs', 'GAME': 'game.js'}
+assert len(blocks) == len(names), len(blocks)
+files = {k: f for k, f in files.items() if k in names}
 parts = {}
 for name, bm in zip(names, blocks): parts[name] = bm.group(1)
 # rebuild the template from the end so offsets stay valid

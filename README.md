@@ -71,6 +71,16 @@ Full tables for all six skill levels, including pro and perfect bots, are in `si
 
 `node sim/calibrate.cjs --mode flat --write` gives exactly 90% for the average player at every checkpoint instead, but then a good player's return compounds into the hundreds of percent on deeper levels.
 
+## Challenge pots
+
+Alongside regular play, each UTC day has a challenge pot (`src/pots.cjs`, `server/server.mjs`):
+
+- The challenge rotates daily, for example "Swish 10 in a row" on Pro or harder, or "Clear level 4" on All-Star or harder. They're picked so an average player makes it in roughly 4–15% of runs (a strong player in 25–50%), and no challenge comes up two days running.
+- Players pay a fixed entry (0.05 SOL by default, `POT_ENTRY_LAMPORTS`), then play ordinary runs. A run counts if it started after they entered, on the challenge's tier or harder; the server judges it from the outcomes it replays, never from the client.
+- At midnight UTC everyone who made it splits the pot equally. The house keeps 10% of every entry whoever wins, so the pot earns from every player, however skilled. If nobody makes it, the pot rolls over to the next day.
+- API: `GET /api/pot` (works signed out), `POST /api/pot/enter`, and `/api/run/level` returns `pot` progress. `npm test` covers entry, the tier rule, completing once, the split, the rake and rollover.
+- The demo runs the same pot with demo SOL. It has no other players, so it simulates the other entrants (from each challenge's simulated success rate by skill) and says so, and it has a "Close this pot now" button to see a payout. `python3 tools/pot_flow.py` plays it end to end.
+
 ## Before real money
 
 1. **Skill and bots.** The tables keep an edge against average and good players at every checkpoint, but elite players (the `pro` bot) still profit deep in a run, and a bot that plays perfectly hits the max win on almost every run. The server already limits bets for accounts above 115% return after 150 runs, and for superhuman swish rates. Add tap-timing anomaly checks and manual review of large wins before launch.

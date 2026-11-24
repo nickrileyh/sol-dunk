@@ -139,6 +139,62 @@ function playTaps(seed, di, L, skill, salt) {
   check(r3.status === 400 && /real time/.test(r3.error), 'instant submission is voided: ' + JSON.stringify(r3));
   srv2.kill();
 
+  // challenge pots: entry, completion only on the challenge's tier and after entering, an equal split less the rake, rollover
+  const POTS = require(path.join(root, 'src/pots.cjs'));
+  const srv3 = await boot(8801, { POT_GOAL: 'streak10', POT_ENTRY_LAMPORTS: '50000000' });
+  const A = client_(8801), Bc = client_(8801), C = client_(8801);
+  for (const x of [A, Bc, C]) { await x.signIn(); await x.api('/api/dev/faucet', { lamports: 1e9 }); }
+  const fee = 50_000_000;
+  // play one run with a bot until it busts or clears `levels` levels, then cash out; returns the last pot note
+  async function potRun(x, di, skill, salt, levels) {
+    const s = await x.api('/api/run/start', { difficulty: di, lamports: 10_000_000, clientSeed: 'pot' + salt });
+    let L = 1, seed = s.levelSeed, note = null;
+    for (;;) {
+      const pl = playTaps(seed, di, L, skill, 'p' + salt + ':' + L);
+      const r = await x.api('/api/run/level', { runId: s.runId, level: L, taps: pl.taps });
+      note = r.pot || note;
+      if (r.status !== 'checkpoint') return note;
+      if (L >= levels) { await x.api('/api/run/cashout', { runId: s.runId }); return note; }
+      const n = await x.api('/api/run/continue', { runId: s.runId }); L = n.level; seed = n.levelSeed;
+    }
+  }
+  const before = await potRun(A, 1, 'perfect', 'pre', 2);
+  check(before === null, 'a run before entering does not count');
+  const p0 = await A.api('/api/pot');
+  check(p0.goal.id === 'streak10' && p0.entrants === 0 && p0.me && p0.me.entered === false, 'pot shows the challenge: ' + JSON.stringify(p0.goal));
+  for (const x of [A, Bc, C]) {
+    const b0 = (await x.api('/api/me')).balance, e = await x.api('/api/pot/enter', {});
+    check(e.status === 200 && e.me.entered && e.balance === b0 - fee, 'enter the pot: the entry is debited');
+  }
+  check((await A.api('/api/pot/enter', {})).status === 400, 'second entry refused');
+  const rook = await potRun(A, 0, 'perfect', 'rook', 2);
+  check(rook && rook.counts === false && !rook.done, 'a run below the challenge tier does not count');
+  const pro = await potRun(A, 1, 'perfect', 'pro', 2);
+  check(pro && pro.done && pro.just, 'a perfect run on Pro completes "swish 10 in a row"');
+  const again = await potRun(A, 1, 'perfect', 'pro2', 2);
+  check(again && again.done && !again.just, 'completing again does not count twice');
+  const bRun = await potRun(Bc, 1, 'novice', 'b', 1);
+  check(!bRun || !bRun.done, 'a weak run does not complete it');
+  const mid = await C.api('/api/pot');
+  check(mid.entrants === 3 && mid.completed === 1 && mid.poolLamports === Math.floor(3 * fee * (1 - POTS.RAKE)), 'pot totals: ' + JSON.stringify([mid.entrants, mid.completed, mid.poolLamports]));
+  const balA = (await A.api('/api/me')).balance, balB = (await Bc.api('/api/me')).balance;
+  await A.api('/api/dev/pot/advance', {});
+  const after = await A.api('/api/pot');
+  const share = 3 * fee - Math.ceil(3 * fee * POTS.RAKE);
+  check(after.last && after.last.winners === 1 && after.last.shareLamports === share && after.last.me.wonLamports === share, 'the winner takes the pot less the rake: ' + JSON.stringify(after.last));
+  check((await A.api('/api/me')).balance === balA + share, 'winnings credited');
+  check((await Bc.api('/api/me')).balance === balB, 'non-finishers get nothing');
+  check(after.entrants === 0 && after.carryInLamports === 0 && after.key !== mid.key, 'a new pot opens empty');
+  // nobody finishes: the pot rolls over into the next day's
+  await Bc.api('/api/pot/enter', {}); await C.api('/api/pot/enter', {});
+  await Bc.api('/api/dev/pot/advance', {});
+  const rolled = await Bc.api('/api/pot');
+  const pool2 = 2 * fee - Math.ceil(2 * fee * POTS.RAKE);
+  check(rolled.last.winners === 0 && rolled.last.rolledLamports === pool2 && rolled.carryInLamports === pool2 && rolled.poolLamports === pool2, 'no winners: the pot rolls over: ' + JSON.stringify([rolled.last, rolled.carryInLamports]));
+  const poor = client_(8801); await poor.signIn();
+  check((await poor.api('/api/pot/enter', {})).status === 400, 'entry without balance refused');
+  srv3.kill();
+
   console.log(failures ? `${failures} check(s) failed` : 'all checks passed');
   process.exit(failures ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

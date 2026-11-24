@@ -350,6 +350,44 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 #callout.gold .c1 { background-image: linear-gradient(180deg, #fffbe0 5%, #ffd60a 50%, #ff9f0a 95%); filter: drop-shadow(0 0 16px rgba(255, 200, 20, 0.5)); }
 #callout.green .c1 { background-image: linear-gradient(180deg, #e6ffe9 5%, #30d158 60%, #1fa347 95%); filter: drop-shadow(0 0 14px rgba(48, 209, 88, 0.45)); }
 
+/* ---------- lobby: challenge pot row ---------- */
+#potBtn {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px;
+  width: 100%; height: 44px; padding: 0 7px 0 12px; margin: 0 0 10px; border-radius: 16px; background: var(--surface); text-align: left;
+}
+#potBtn.hide { display: none; }
+#potBtn .p-ic { display: flex; color: var(--gold); }
+#potBtn .p-ic svg { width: 17px; height: 17px; }
+#potBtn .p-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 600; color: var(--label); white-space: nowrap; }
+#potBtn .p-v { font-size: 13px; font-weight: 700; color: var(--label); white-space: nowrap; }
+#potBtn .p-s { padding: 6px 10px; border-radius: 11px; background: var(--surface-2); font-size: 12px; font-weight: 700; color: var(--label); white-space: nowrap; }
+#potBtn.in .p-s { color: var(--gold); }
+#potBtn.done .p-s { background: rgba(47, 211, 107, 0.14); color: var(--green); }
+
+/* ---------- the pot sheet ---------- */
+.pot-goal { display: flex; align-items: center; gap: 12px; margin: 2px 0 6px; }
+.pot-ic { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 21px; background: rgba(245, 197, 66, 0.14); color: var(--gold); }
+.pot-ic svg { width: 22px; height: 22px; }
+.pot-goal b { display: block; font-size: 17px; font-weight: 700; color: var(--label); }
+.pot-goal span { font-size: 13px; color: var(--label-2); }
+.pot-big { margin: 14px 0 0; text-align: center; font-size: 64px; }
+.pot-big + .tiles { margin: 14px 0 14px; }
+.tiles b.sm { font-size: 22px; line-height: 1.4; }
+.pot-me { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--surface); }
+.pot-me svg { flex: none; width: 18px; height: 18px; margin-top: 1px; color: var(--gold); }
+.pot-me.done svg { color: var(--green); }
+.pot-me b { display: block; font-size: 15px; font-weight: 700; color: var(--label); }
+.pot-me span { font-size: 13px; line-height: 1.4; color: var(--label-2); }
+#potEnter { width: 100%; }
+.pot-rules { margin: 14px 2px 0; font-size: 12.5px; line-height: 1.45; color: var(--label-3); }
+.pot-last { display: flex; flex-direction: column; gap: 3px; margin-top: 14px; padding-top: 12px; box-shadow: inset 0 0.5px 0 var(--line); font-size: 13px; line-height: 1.4; color: var(--label-2); }
+.pot-last .k { font-size: 12px; font-weight: 700; color: var(--label-3); }
+.pot-last .won { color: var(--green); font-weight: 700; }
+.pot-demo { margin-top: 14px; padding: 12px 14px; border-radius: 16px; background: var(--surface); }
+.pot-demo p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.4; color: var(--label-2); }
+.pot-demo .btn { width: 100%; height: 44px; font-size: 15px; }
+.gain.pot svg { color: var(--gold); }
+
 /* ---------- lobby: daily challenge strip ---------- */
 #dailyBtn {
   position: relative; display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px;
@@ -495,6 +533,9 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   .stack { gap: 8px; }
   .stack .btn { height: 50px; }
   .next { margin: 16px 2px 12px; padding: 12px 2px 0; }
+}
+@media (max-height: 560px) {
+  #potBtn { display: none; }
 }
 @media (max-height: 600px) {
   #dailyBtn { display: none; }
