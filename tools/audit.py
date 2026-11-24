@@ -1,13 +1,15 @@
-import asyncio, sys
+import asyncio, os, sys
 from playwright.async_api import async_playwright
 from PIL import Image
 from _paths import URL, SHOTS, CHROME
-OUT = SHOTS + '/a_'
-W, H = 390, 844
+# AUDIT_SIZE=375x667 (or 1440x900 for desktop) changes the viewport; shots get the size in their names
+W, H = (int(v) for v in os.environ.get('AUDIT_SIZE', '390x844').split('x'))
+MOBILE = W < 700
+OUT = SHOTS + ('/a_' if (W, H) == (390, 844) else f'/a{W}x{H}_')
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=CHROME)
-        ctx = await b.new_context(viewport={'width': W, 'height': H}, device_scale_factor=2, is_mobile=True, has_touch=True)
+        ctx = await b.new_context(viewport={'width': W, 'height': H}, device_scale_factor=2 if MOBILE else 1, is_mobile=MOBILE, has_touch=MOBILE)
         page = await ctx.new_page(); errs = []
         page.on('pageerror', lambda e: errs.append(str(e)))
         await page.goto(URL); await page.wait_for_timeout(3000)

@@ -74,7 +74,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 
 /* ---------- HUD ---------- */
 #hud {
-  position: fixed; left: 0; right: 0; top: 0; z-index: 5;
+  position: fixed; left: 50%; top: 0; z-index: 5; transform: translateX(-50%);
+  width: min(100%, max(var(--col, 100%), 400px)); /* over the play column on wide screens */
   padding: calc(var(--safe-t) + 10px) 14px 0;
   display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: start;
   pointer-events: none;
@@ -298,6 +299,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 }
 .streak.on { opacity: 1; transform: none; }
 .streak.on.under { opacity: 0.14; transition: opacity 0.12s; } /* the ball is flying behind it */
+.streak.on.tuck { opacity: 0; transform: translateY(-6px) scale(0.96); } /* out of the way of the checkpoint card */
 .stk-top { display: flex; align-items: center; gap: 5px; height: 18px; }
 .streak .flame { width: 16px; height: 16px; fill: currentColor; color: #fff; flex: none; transition: color 0.25s; }
 .streak b { font-family: var(--font-display); font-size: 22px; font-weight: 800; line-height: 1; }

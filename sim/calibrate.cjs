@@ -24,7 +24,20 @@ const WRITE = args.includes('--write');
 // --mode house     : (default) average player gets TARGET at checkpoint 1; every later level is
 //                    priced so a GOOD player breaks even on it (GUARD), never paying less per
 //                    hoop than the level before. Level 1 is also capped at GUARD1 for good players.
+// --mode edge     : the house keeps an edge deep into a run against every realistic skill. Each level pays the
+//                    most it can while: the average player gets at most TARGET at checkpoint 1 and loses at least
+//                    1-TARGET on every later level; a GOOD player's total return stays at or under --cap-good
+//                    (default 0.97) at every checkpoint from 2 on and --cap1-good (0.99) at checkpoint 1.
+//                    Optionally a PRO player too: --cap-pro 0.99 keeps them losing at least 1% on every level after
+//                    the first and --cap1-pro 1.01 about even at checkpoint 1. Off by default: pros clear the easy
+//                    levels so reliably that capping them shrinks the top prizes to a few x on Rookie and Pro.
+//                    Deeper levels pay more per hoop only where the caps allow. Rounding never pays over a cap
+//                    (level 1 allows the average 0.05% over TARGET, so it can pay something at all).
 const MODE = args.includes('--mode') ? args[args.indexOf('--mode') + 1] : 'house';
+const CAP_GOOD = args.includes('--cap-good') ? +args[args.indexOf('--cap-good') + 1] : 0.97;
+const CAP_PRO = args.includes('--cap-pro') ? +args[args.indexOf('--cap-pro') + 1] : Infinity;
+const CAP1_GOOD = args.includes('--cap1-good') ? +args[args.indexOf('--cap1-good') + 1] : 0.99;
+const CAP1_PRO = args.includes('--cap1-pro') ? +args[args.indexOf('--cap1-pro') + 1] : Infinity;
 const GUARD = args.includes('--guard') ? +args[args.indexOf('--guard') + 1] : 1.0;
 const GUARD1 = args.includes('--guard1') ? +args[args.indexOf('--guard1') + 1] : 1.08;
 const GUARD_FROM = args.includes('--guard-from') ? +args[args.indexOf('--guard-from') + 1] : 2;
@@ -105,7 +118,48 @@ function solveFor(pats, massIn, target) {
   return (lo + hi) / 2;
 }
 
+// edge mode: per level, the largest b whose ROUNDED table keeps every constraint
+function calibrateEdge(key) {
+  const PAY = [], STATS = [];
+  for (let di = 0; di < 4; di++) {
+    let mass = [1, 0, 0, 0, 0, 0], gmass = [1, 0, 0, 0, 0, 0], pmass = [1, 0, 0, 0, 0, 0];
+    const rows = [], stats = [];
+    for (let L = 1; L <= 8; L++) {
+      const pats = patterns(key, di, L).pats, n = patterns(key, di, L).n;
+      const gp = patterns('good', di, L).pats, pp = patterns('pro', di, L).pats;
+      const sumIn = mass.reduce((a, b) => a + b, 0);
+      const tAvg = L === 1 ? TARGET + 0.0005 : sumIn * TARGET; // average: TARGET at cp1, then >= (1-TARGET) edge a level
+      const pIn = pmass.reduce((a, b) => a + b, 0);
+      const cg = L === 1 ? CAP1_GOOD : CAP_GOOD, cp = L === 1 ? CAP1_PRO : pIn * CAP_PRO; // good: total; pro: per level
+      const ok = (tab) => flow(pats, tab, mass).ev <= tAvg + 1e-9 && flow(gp, tab, gmass).ev <= cg + 1e-9 && flow(pp, tab, pmass).ev <= cp + 1e-9;
+      // the unrounded b where the first constraint binds, then the most generous rounded table that keeps all three
+      const b0 = Math.min(solveFor(pats, mass, tAvg), solveFor(gp, gmass, cg), solveFor(pp, pmass, cp));
+      let best = null;
+      for (let k = -200; k <= 60; k++) {
+        const bb = Math.max(0, b0 * (1 + k * 0.0005)), tab = roundTable(tableFor(bb));
+        if (!ok(tab)) continue;
+        const ev = flow(pats, tab, mass).ev;
+        if (!best || ev > best.ev) best = { b: bb, tab, ev };
+      }
+      if (!best) best = { b: 0, tab: roundTable(tableFor(0)), ev: flow(pats, roundTable(tableFor(0)), mass).ev }; // nothing pays: 1.000 everywhere
+      const f = flow(pats, best.tab, mass);
+      mass = f.massOut; gmass = flow(gp, best.tab, gmass).massOut; pmass = flow(pp, best.tab, pmass).massOut;
+      rows.push(best.tab);
+      let clear = 0, hoops = 0, passed = 0, sw = 0;
+      for (const pt of pats) {
+        if (pt.clear) clear += pt.p;
+        passed += pt.o.length * pt.p; hoops += (pt.o.length + (pt.clear ? 0 : 1)) * pt.p;
+        for (const ch of pt.o) if (ch === 'S') sw += pt.p;
+      }
+      stats.push({ clear: +clear.toFixed(4), pass: +(passed / hoops).toFixed(4), swish: +(sw / passed).toFixed(4), n, b: +best.b.toFixed(5), rtp: +f.ev.toFixed(4), levelEdge: +(1 - f.ev / sumIn).toFixed(4) });
+    }
+    PAY.push(rows); STATS.push(stats);
+  }
+  return { PAY, STATS };
+}
+
 function calibrate(key) {
+  if (MODE === 'edge') return calibrateEdge(key);
   const PAY = [], STATS = [];
   for (let di = 0; di < 4; di++) {
     let mass = [1, 0, 0, 0, 0, 0], gmass = [1, 0, 0, 0, 0, 0], rtpPrev = 1, prevB = 0;
@@ -193,13 +247,19 @@ for (let di = 0; di < 4; di++) {
   for (const sk of skills) if (curves[sk]) console.log('  ' + sk.padEnd(12) + curves[sk][di].map(v => (v * 100).toFixed(1).padStart(7)).join(''));
 }
 
+// the most a run can pay: every ring a swish, streak carried through all 8 levels
+console.log('\nBest possible win (every ring a swish), after each level:');
+const BEST = PAY.map((rows) => { let m = 1, st = 0; return rows.map((t) => { for (let i = 0; i < E.HOOPS_PER_LEVEL; i++) { st = Math.min(STREAK_CAP, st + 1); m *= t.swish[st - 1]; } return m; }); });
+for (let di = 0; di < 4; di++) console.log('  ' + names[di].padEnd(10) + BEST[di].map((v) => (v.toFixed(2) + 'x').padStart(9)).join(''));
+
 if (WRITE) {
-  const meta = { mode: MODE, guard: GUARD, guardFrom: GUARD_FROM, target: TARGET, weights: { rim: W_RIM, swish: W_SW }, generated: new Date().toISOString().slice(0, 10), engine: E.VERSION, samples: STATS[0][0].n };
+  const meta = { mode: MODE, guard: GUARD, guardFrom: GUARD_FROM, capGood: CAP_GOOD, capPro: CAP_PRO, cap1Good: CAP1_GOOD, cap1Pro: CAP1_PRO, target: TARGET, weights: { rim: W_RIM, swish: W_SW }, generated: new Date().toISOString().slice(0, 10), engine: E.VERSION, samples: STATS[0][0].n };
   const avgClear = STATS.map(r => r.map(s => s.clear));
   const avgSwish = STATS.map(r => r.map(s => s.swish));
   const body = `/* Generated by sim/calibrate.cjs — do not edit by hand.
- * Mode "${MODE}": an average player gets back ${TARGET * 100}% when cashing out at checkpoint 1; each later level keeps
- * at least a ${Math.round((1 - TARGET) * 100)}% edge against the average player and lets a strong player gain at most ${Math.round((GUARD - 1) * 100)}% on it.
+ * Mode "${MODE}": ${MODE === 'edge'
+    ? `the house keeps an edge deep into a run: an average player gets back at most ${TARGET * 100}% at checkpoint 1 and loses at least ${Math.round((1 - TARGET) * 100)}% on every later level; a good player gets back at most ${Math.round(CAP1_GOOD * 100)}% at checkpoint 1 and ${Math.round(CAP_GOOD * 100)}% from checkpoint 2 on${isFinite(CAP_PRO) ? `; a pro loses at least ${Math.round((1 - CAP_PRO) * 100)}% on every level after the first` : ''}.`
+    : `an average player gets back ${TARGET * 100}% when cashing out at checkpoint 1; each later level keeps at least a ${Math.round((1 - TARGET) * 100)}% edge against the average player and lets a strong player gain at most ${Math.round((GUARD - 1) * 100)}% on it.`}
  * PAYTABLE[difficulty][level-1] = { rim, swish: [streak1..5+] }. AVG_RTP = average-player return if cashing out after each level. */
 (function (root, factory) {
   const P = factory();

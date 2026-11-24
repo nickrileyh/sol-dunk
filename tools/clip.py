@@ -32,12 +32,12 @@ async def main():
         for i in range(frames):
             await page.evaluate("__solDunk.step(1)")
             await page.wait_for_function("__solDunk.stepsLeft() === 0")
-            r = await page.evaluate("""() => { const p = __solDunk.ballScreen(); return { url: document.getElementById('game').toDataURL('image/png'), x: p.x, y: p.y }; }""")
+            r = await page.evaluate("""() => { const p = __solDunk.ballScreen(); const cv = document.getElementById('game'); return { url: cv.toDataURL('image/png'), x: p.x, y: p.y, k: cv.width / innerWidth }; }""")
             im = Image.open(io.BytesIO(base64.b64decode(r['url'].split(',')[1])))
-            x, y = int(r['x'] * 2), int(r['y'] * 2)
+            k = r['k']; x, y = int(r['x'] * k), int(r['y'] * k)
             if half:  # keep the crop inside the canvas (the ball sits near the left edge)
-                x = min(max(x, half * 2), im.width - half * 2); y = min(max(y, half * 2), im.height - half * 2)
-            t = im.crop((x - half * 2, y - half * 2, x + half * 2, y + half * 2)) if half else im.resize((im.width // 3, im.height // 3))
+                hk = int(half * k); x = min(max(x, hk), im.width - hk); y = min(max(y, hk), im.height - hk)
+            t = im.crop((x - hk, y - hk, x + hk, y + hk)).resize((half * 2, half * 2)) if half else im.resize((int(im.width / k * 2 / 3), int(im.height / k * 2 / 3)))
             t.save(f'{out}/{i:03d}.png'); tiles.append(t)
         sheet = tiles[::every]; cols = 6; rows = (len(sheet) + cols - 1) // cols
         TW = 180 if half else 130; TH = 180 if half else int(130 * tiles[0].height / tiles[0].width)

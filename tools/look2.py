@@ -5,10 +5,10 @@ from PIL import Image
 from _paths import URL, SHOTS, CHROME
 OUT = SHOTS + '/r_'
 async def canvas_crop(page, name, half=110):
-    r = await page.evaluate("""() => { const d = __solDunk, p = d.ballScreen(); return { url: document.getElementById('game').toDataURL('image/png'), x: p.x, y: p.y }; }""")
+    r = await page.evaluate("""() => { const d = __solDunk, p = d.ballScreen(); const cv = document.getElementById('game'); return { url: cv.toDataURL('image/png'), x: p.x, y: p.y, k: cv.width / innerWidth }; }""")
     im = Image.open(io.BytesIO(base64.b64decode(r['url'].split(',')[1])))
-    x, y = int(r['x'] * 2), int(r['y'] * 2)
-    im.crop((x - half * 2, y - half * 2, x + half * 2, y + half * 2)).save(OUT + name + '.png')
+    k = r['k']; x, y = int(r['x'] * k), int(r['y'] * k)
+    hk = int(half * k); im.crop((x - hk, y - hk, x + hk, y + hk)).resize((half * 2, half * 2)).save(OUT + name + '.png')
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=CHROME)

@@ -258,7 +258,19 @@
       return ac;
     }
     function unlock() { const c = ctx(); if (c && c.state === 'suspended') c.resume().catch(() => {}); }
-    function on() { return settings.sound && ctx() && ac.state === 'running'; }
+    let rendering = false;
+    function on() { return rendering || (settings.sound && ctx() && ac.state === 'running'); }
+    // tests: play one sound into an offline context and resolve to its samples (mono, 44.1 kHz)
+    function render(name, args, secs) {
+      const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, keep = [ac, master, noise];
+      const off = new OAC(1, Math.ceil(44100 * (secs || 1)), 44100);
+      ac = off; master = off.createGain(); master.gain.value = 0.55; master.connect(off.destination);
+      noise = off.createBuffer(1, 44100, 44100);
+      const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      rendering = true;
+      try { api[name].apply(null, args || []); } finally { rendering = false; [ac, master, noise] = keep; }
+      return off.startRendering().then((b) => Array.from(b.getChannelData(0)));
+    }
     function env(g, t, a, d, peak) {
       g.gain.setValueAtTime(0.0001, t);
       g.gain.exponentialRampToValueAtTime(peak, t + a);
@@ -278,11 +290,14 @@
       s.connect(f); f.connect(g); g.connect(master); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
     }
     const SCALE = [523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.5, 1568, 1760];
-    return {
-      unlock,
+    const api = {
+      unlock, render,
       flap(fire) {
-        if (!on()) return; const t = ac.currentTime; hiss(t, 0.08, 800, 1600, 1.2, 0.13); tone(200, t, 0.06, 'sine', 0.05, 130);
-        if (fire > 0.2) hiss(t, 0.2, 240, 820, 0.7, 0.09 * fire, 'lowpass'); // the flame whooshes
+        // a soft wing beat: a breath of air that falls in pitch, never quite the same twice, and no tone
+        if (!on()) return; const t = ac.currentTime, v = rnd(0.85, 1.05), k = rnd(0.88, 1.12);
+        hiss(t, 0.11, 1500 * k, 520 * k, 0.5, 0.06 * v, 'lowpass');
+        hiss(t, 0.06, 380 * k, 200, 0.7, 0.035 * v, 'lowpass');
+        if (fire > 0.2) hiss(t + 0.01, 0.22, 700, 260, 0.7, 0.04 * fire, 'lowpass'); // the flame breathes with it
       },
       swish(streak) {
         if (!on()) return; const t = ac.currentTime;
@@ -309,7 +324,7 @@
         [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, t + 0.04 + i * 0.03, 0.7, 'triangle', 0.045));
       },
       levelUp() { if (!on()) return; const t = ac.currentTime; [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => { tone(f, t + i * 0.075, 0.32, 'triangle', 0.06); tone(f * 2, t + i * 0.075, 0.18, 'sine', 0.02); }); },
-      unlock() { if (!on()) return; const t = ac.currentTime; tone(1318.5, t, 0.55, 'sine', 0.07); tone(1975.5, t + 0.09, 0.7, 'sine', 0.05); tone(2637, t + 0.18, 0.5, 'sine', 0.025); },
+      unlockItem() { if (!on()) return; const t = ac.currentTime; tone(1318.5, t, 0.55, 'sine', 0.07); tone(1975.5, t + 0.09, 0.7, 'sine', 0.05); tone(2637, t + 0.18, 0.5, 'sine', 0.025); },
       goal() { if (!on()) return; const t = ac.currentTime; tone(1567.98, t, 0.2, 'sine', 0.045); tone(2093, t + 0.09, 0.34, 'sine', 0.04); },
       // the arena: k from 0 (a murmur) to 1 (a roar)
       cheer(k) {
@@ -326,6 +341,7 @@
         }
       }
     };
+    return api;
   })();
   function buzz(ms) { if (settings.haptics && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } }
 
@@ -429,10 +445,13 @@
   const RV = P.R; // drawn ball radius = collision radius
   const cv = $('game'), cx = cv.getContext('2d');
   let vw = 0, vh = 0, dpr = 1, scale = 1, offX = 0, offY = 0;
+  // canvas sharpness: up to 2x, stepped down if a phone can't keep up during play (see frame)
+  let dprCap = 2;
+  const perf = { avg: 1 / 60, slow: 0 };
   let bgEl = null;      // cached backdrop, rebuilt on resize
   let sheetTopC = -1;   // cached top of the bet sheet (layout read only when it changes)
   function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    dpr = Math.min(window.devicePixelRatio || 1, dprCap);
     bgEl = null; sheetTopC = -1;
     vw = window.innerWidth; vh = window.innerHeight;
     cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
@@ -440,6 +459,7 @@
     scale = Math.min(vw / VIEW_W, vh / VIEW_H);
     offX = (vw - VIEW_W * scale) / 2;
     offY = (vh - VIEW_H * scale) / 2 - VIEW_TOP * scale;
+    document.documentElement.style.setProperty('--col', Math.round(VIEW_W * scale) + 'px'); // the play column, for the HUD
   }
   window.addEventListener('resize', resize);
   resize();
@@ -574,7 +594,7 @@
   const ball = {
     x: 0, y: 300, px: 0, py: 300, ox: 0, oy: 0, rot: 0, rv: 0, flap: 0, flapV: 0, vy: 0, vx: 160, glide: null, fall: null, hidden: false,
     fire: 0, nova: 0, fdx: -0.3, fdy: -0.95, lickAcc: 0, emberAcc: 0, lastVis: 0, // the flame on swish streaks
-    fsp: [], tips: [], flare: 0, flick: 1, // the flame's spine and tongue tips (relative to the ball), flap flare, flicker
+    flare: 0, flick: 1, // the flame's flare (a flap or a swish fans it) and flicker
     tilt: 0, tiltV: 0,        // whole ball + wings lean: kicks back on a flap, noses down as it falls
     st: 0, stV: 0,            // takeoff stretch (springy)
     sq: 0, sqV: 0, sqX: 0, sqY: -1, // impact squash along the contact normal
@@ -675,7 +695,7 @@
     if (mode === 'pump') { el.classList.remove('pump'); void el.offsetWidth; el.classList.add('pump'); }
   }
 
-  function hideStreak() { clearTimeout(STK.timer); STK.el.classList.remove('on', 'pump', 'broke'); }
+  function hideStreak() { clearTimeout(STK.timer); STK.el.classList.remove('on', 'pump', 'broke', 'tuck'); }
 
   // big moments (streak tiers, perfect level, new best): one at a time, newest wins if they pile up
   const CALL = { el: $('callout'), t: $('callT'), s: $('callS'), q: [], busy: false };
@@ -786,10 +806,11 @@
   }
   function showPrompt(t, s) { ui.promptT.textContent = t; ui.promptS.textContent = s || ''; ui.prompt.classList.add('show'); }
   function hidePrompt() { ui.prompt.classList.remove('show'); }
-  let bannerTimer = 0;
+  let bannerTimer = 0, bannerUntil = 0;
   function banner(t, s, ms) {
     ui.bannerT.textContent = t; ui.bannerS.textContent = s || '';
     ui.banner.classList.add('show'); clearTimeout(bannerTimer);
+    bannerUntil = performance.now() + (ms || 1300) + 350; // until it has faded out
     bannerTimer = setTimeout(() => ui.banner.classList.remove('show'), ms || 1300);
   }
   let toastTimer = 0;
@@ -807,9 +828,15 @@
   // ---------------------------------------------------------------- lobby
   const CHIPS = [0.01, 0.05, 0.1, 0.5, 1];
   function avgClear(di, L) { return PAY.AVG_CLEAR[di][L - 1]; }
+  // the most a run can really pay on each tier: every ring a swish through all 8 levels, or the tier's cap if that's lower
+  const TOP = PAY.PAYTABLE.map((rows, di) => {
+    let m = 1, st = 0;
+    for (const t of rows) for (let i = 0; i < NH; i++) { st = Math.min(t.swish.length, st + 1); m *= t.swish[st - 1]; }
+    return Math.min(E.DIFFS[di].maxWin, Math.floor(m));
+  });
   function buildLobby() {
     const d = $('diffs');
-    d.innerHTML = E.DIFFS.map((D, i) => `<button role="radio" id="diff${i}" data-di="${i}" aria-checked="${i === prefs.di}" aria-label="${D.name}, wins up to ${D.maxWin}×"><span class="tn">${D.name}</span><span class="tx">${D.maxWin}×</span></button>`).join('');
+    d.innerHTML = E.DIFFS.map((D, i) => `<button role="radio" id="diff${i}" data-di="${i}" aria-checked="${i === prefs.di}" aria-label="${D.name}, wins up to ${TOP[i]}×"><span class="tn">${D.name}</span><span class="tx">${TOP[i]}×</span></button>`).join('');
     d.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { prefs.di = +b.dataset.di; Sound.click(); refreshLobby(); saveAll(); }));
     $('chips').innerHTML = CHIPS.map((c) => `<button data-chip="${c}" aria-pressed="false">${c}</button>`).join('');
     $('chips').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { setBet(+b.dataset.chip); Sound.click(); }));
@@ -833,7 +860,7 @@
     sheetTopC = -1;
     const di = prefs.di, D = E.DIFFS[di];
     document.querySelectorAll('#diffs button').forEach((b) => b.setAttribute('aria-checked', String(+b.dataset.di === di)));
-    $('diffInfo').innerHTML = `${D.blurb}. Win up to <b>${fmtBet(prefs.bet * D.maxWin)} SOL</b> on this bet` + (profile.best[di] ? ` <span class="dim">· Best score ${profile.best[di]}</span>` : '') + '.';
+    $('diffInfo').innerHTML = `${D.blurb}. Win up to <b>${fmtBet(prefs.bet * TOP[di])} SOL</b> on this bet` + (profile.best[di] ? ` <span class="dim">· Best score ${profile.best[di]}</span>` : '') + '.';
     refreshProfileHud();
     if (!keepInput) $('betInput').value = fmtBet(prefs.bet);
     $('playAmt').textContent = fmtBet(prefs.bet) + ' SOL';
@@ -1107,7 +1134,7 @@
     sk.innerHTML = run.streak > 1 ? ICON.flame + `Your ${run.streak}-swish streak carries over` : '';
     $('cashAmt').textContent = fmtSol(pot) + ' SOL';
     $('goSub').textContent = 'Level ' + nx;
-    show(ui.cp, true); armCard(ui.cp, 650);
+    show(ui.cp, true); armCard(ui.cp, 650); STK.el.classList.add('tuck');
     // focus the card, not a button: a Space meant as a flap must never press "Keep going"
     setTimeout(() => ui.cp.focus({ preventScroll: true }), 60);
   }
@@ -1120,7 +1147,7 @@
       run.levelSeed = r.levelSeed;
       run.busy = false;
     } catch (e) { run.busy = false; netFail(e); return; }
-    Sound.click(); show(ui.cp, false);
+    Sound.click(); show(ui.cp, false); STK.el.classList.remove('tuck');
     run.level++;
     beginLevel(false);
   }
@@ -1193,7 +1220,7 @@
     $('resGains').innerHTML = g.slice(0, more ? room - 1 : room).map((x, i) => (x[3] ? unlockChip(x[3], i) : gainChip(x[0], x[1], x[2], i))).join('') +
       (more ? gainChip('', ICON.spark, '+' + more + ' more', room - 1) : '');
     wireUnlockChips();
-    if (pr.achs.length || pr.unlocks.length || pr.dailies.length) xpTimers.push(setTimeout(() => Sound.unlock(), up ? 1500 : 500));
+    if (pr.achs.length || pr.unlocks.length || pr.dailies.length) xpTimers.push(setTimeout(() => Sound.unlockItem(), up ? 1500 : 500));
   }
   function backToLobby() {
     show(ui.res, false); show(ui.cp, false); hidePrompt(); clearNotices();
@@ -1230,7 +1257,7 @@
     ball.flapV = -20;
     if (REDUCED) return;
     ball.flare = 1;      // a flap fans the flame (it throws off a few more wisps)...
-    if (ball.fire > 0.1) ball.lickAcc += 2.5 * ball.fire;
+    if (ball.fire > 0.1) ball.lickAcc += 1.5 * ball.fire;
     // ...and pushes a puff of air down from the wings
     spawn({ x: ball.x - RV * 0.35, y: ball.y + RV * 0.8, vx: ball.vx * 0.25, vy: 140, life: 0.28, max: 0.28, size: RV * 0.62, kind: 8, drag: 5 });
     ball.tiltV -= 6.2;   // lean back on the push...
@@ -1357,6 +1384,14 @@
     if (dt > 0.1) dt = 0.1;
     if (dt < 0) dt = 0;
     view.time += dt;
+    // a phone that can't hold about 40 fps during play for 2 s draws at a lower resolution, so the game stays smooth
+    if (!dbg.hold && dt > 0 && dt < 0.1) {
+      perf.avg += (dt - perf.avg) * 0.05;
+      if (phase === 'play' && perf.avg > 0.025) {
+        perf.slow += dt;
+        if (perf.slow > 2 && dprCap > 1 && (window.devicePixelRatio || 1) > 1) { dprCap = Math.max(1, dprCap - 0.5); perf.slow = 0; resize(); }
+      } else perf.slow = 0;
+    }
 
     if (phase === 'play') {
       acc += dt;
@@ -1426,19 +1461,19 @@
     if (fireT > 0) ball.nova = lerp(ball.nova, vis >= 5 ? 1 : 0, 1 - Math.exp(-dt * 3));
     if (vis === 0 && ball.lastVis >= 2 && ball.fire > 0.12 && !ball.hidden) douse(dxw, dyw);
     ball.lastVis = vis;
-    // the flame streams off the ball along a spine that trails it like a streamer in the wind (see updateSpine)
+    // the flame: burning gas shed by the ball (see updateFlame)
     ball.flare *= Math.exp(-dt * 6);
     ball.flick = 0.86 + 0.14 * noise1(view.time * 9.5 + 40);
-    updateSpine(Math.min(dt, 1 / 30));
+    updateFlame(Math.min(dt, 1 / 20));
     if (ball.fire > 0.04 && !ball.hidden) {
       const f = ball.fire, n = ball.nova, dx = ball.fdx, dy = ball.fdy;
-      // the tips of the tongues break off as wisps that drift back and rise
-      ball.lickAcc += dt * (REDUCED ? 4 : 20) * f;
+      // now and then the very tip of a tongue lifts away as a wisp
+      ball.lickAcc += dt * (REDUCED ? 2 : 7) * f;
       while (ball.lickAcc >= 1) {
         ball.lickAcc -= 1;
-        const T = ball.tips[(Math.random() * ball.tips.length) | 0];
-        if (!T) break;
-        spawn({ x: dxw + T.x, y: dyw + T.y, vx: ball.vx * 0.5 + T.dx * 50, vy: ball.vy * 0.5 + T.dy * 50 - 30, g: -300, life: rnd(0.16, 0.3), max: 0.3, size: RV * rnd(0.22, 0.36) * (0.6 + 0.6 * f), kind: 6, n, drag: 2.4, rot: Math.atan2(T.dy, T.dx) });
+        const p = flame.T[(Math.random() * flame.T.length) | 0].pts[0];
+        if (!p) break;
+        spawn({ x: dxw + p.x, y: dyw + p.y, vx: p.vx * 0.5, vy: p.vy * 0.5 - 40, g: -300, life: rnd(0.14, 0.26), max: 0.26, size: RV * rnd(0.16, 0.28) * (0.6 + 0.6 * f), kind: 6, n, drag: 2.4, rot: -Math.PI / 2 + rnd(-0.5, 0.5) });
       }
       ball.emberAcc += dt * (REDUCED ? 3 : 16) * f;
       while (ball.emberAcc >= 1) {
@@ -1507,7 +1542,8 @@
     c.drawImage(backdrop(), 0, 0, vw, vh);
 
     // the score, huge and quiet, behind everything (Flappy Dunk style); the pot sits in the HUD
-    view.scoreA = lerp(view.scoreA == null ? 1 : view.scoreA, CALL.busy || ui.banner.classList.contains('show') ? 0.2 : 1, 0.12);
+    const bannerOn = performance.now() < bannerUntil;
+    view.scoreA = lerp(view.scoreA == null ? 1 : view.scoreA, bannerOn ? 0 : CALL.busy ? 0.2 : 1, bannerOn ? 0.3 : 0.12);
     if (phase !== 'lobby' && run.st && run.score > 0) {
       const p = view.pulse, best = profile.best[run.di], cy = offY + 205 * scale, fa = view.scoreA;
       const col = run.newBest ? '245,197,66' : run.streak >= 5 ? heatText(1) : run.streak >= 3 ? heatText(0) : '255,255,255';
@@ -1852,90 +1888,109 @@
 
 
   // ---------------------------------------------------------------- the flame
-  // The flame hangs off a spine of points that trails the ball like a streamer in the wind: the burning gas stays
-  // roughly where it was while the ball flies on, and rises as heat does. So the flame bends behind a flap, swings
-  // up as the ball falls, stretches when the ball is fast and stands up when it slows. Three tongues (a long middle
-  // one and two shorter sides) run along the spine, each waving and growing and shrinking on its own, and their tips
-  // break off as rising wisps. Layers run from the edge colour in to a white-hot core.
-  const FS_N = 7; // points on the spine; the first sits at the ball's centre
-  for (let k = 0; k < FS_N; k++) ball.fsp.push({ x: 0, y: -k * 6 });
-  for (let j = 0; j < 3; j++) ball.tips.push({ x: 0, y: -RV * 2, dx: 0, dy: -1 });
+  // Fire is burning gas, so the flame is drawn as gas. Five tongues leave the back of the ball, and each sheds a
+  // parcel of burning gas every few milliseconds. A parcel leaves with most of the ball's speed, slows to the
+  // still air, rises faster and faster as hot gas does, is stirred by the air and burns out. Each tongue is a
+  // ribbon drawn through its parcels, widest near the ball and burning down to a point. Because the gas stays
+  // roughly where it was while the ball flies on, the flame trails the ball's real path: it bends behind a
+  // flap, sweeps up as the ball falls and stands up when it slows. Each tongue breathes on its own, so it swells,
+  // thins and flickers, and when one thins to nothing at the ball, the part already out breaks away and burns
+  // off as a separate lick. Layers run from the edge colour in to a white-hot core.
   const NZ = new Float32Array(256);
   for (let i = 0; i < 256; i++) NZ[i] = Math.random() * 2 - 1;
   function noise1(x) { // smooth 1D noise, about -1..1
     const i = Math.floor(x), f = x - i, u = f * f * (3 - 2 * f), a = NZ[i & 255];
     return a + (NZ[(i + 1) & 255] - a) * u;
   }
-  function updateSpine(dt) {
-    const S = ball.fsp, f = Math.max(ball.fire, 0.05);
-    // the wind the flame feels: the ball's own motion, reversed (vertical motion counts a little less), plus the rise of hot gas
-    const wx = -ball.vx, wy = -0.6 * ball.vy - 240, ws = Math.hypot(wx, wy);
-    const L = RV * (1.5 + 2.9 * f) * (0.88 + 0.3 * clamp(ws / 520, 0, 1)) * (1 + 0.25 * ball.flare) * 1.15;
-    const seg = L / (FS_N - 1), stiff = 1 - Math.exp(-dt * 7.5);
-    for (let k = 1; k < FS_N; k++) {
-      const q = S[k], p0 = S[k - 1], mob = 0.42 - 0.035 * k; // older gas, further out, follows more lazily
-      q.x += wx * dt * mob; q.y += wy * dt * mob;
-      if (k > 1) { const p1 = S[k - 2]; q.x += (2 * p0.x - p1.x - q.x) * stiff * 0.9; q.y += (2 * p0.y - p1.y - q.y) * stiff * 0.9; } // curve, don't fold
-      const dx = q.x - p0.x, dy = q.y - p0.y, d = Math.hypot(dx, dy) || 1;
-      q.x = p0.x + dx / d * seg; q.y = p0.y + dy / d * seg;
-    }
-    const d1 = Math.hypot(S[1].x, S[1].y) || 1;
-    ball.fdx = S[1].x / d1; ball.fdy = S[1].y / d1;
+  // tongues: [angle from the way the flame streams, size, seed]
+  const FLAME_T = [[-1.2, 0.62, 3.1], [-0.6, 0.86, 7.7], [0, 1, 1.3], [0.6, 0.86, 5.9], [1.2, 0.62, 9.4]];
+  const flame = { T: FLAME_T.map(([ang, size, seed]) => ({ ang, size, seed, acc: 0, pts: [] })), dx: 0, dy: -1 };
+  const F_STEP = 1 / 80; // each tongue sheds a parcel every 12.5 ms
+  function breath(T, t) { // how much gas a tongue gives off right now; at 0 it pinches off
+    const calm = REDUCED ? 0.35 : 1;
+    return clamp(0.64 + calm * (0.7 * noise1(t * 4.4 + T.seed * 5) + 0.12 * noise1(t * 13 + T.seed)), 0, 1.25);
   }
-  // the spine as a smooth curve (Catmull-Rom), resampled, with arc length
-  const SP = [];
-  for (let i = 0; i <= 4 * (FS_N - 1); i++) SP.push({ x: 0, y: 0, s: 0 });
-  function buildSpine() {
-    const S = ball.fsp;
-    let j = 0;
-    for (let k = 0; k < FS_N - 1; k++) {
-      const a = S[Math.max(0, k - 1)], b = S[k], c2 = S[k + 1], d = S[Math.min(FS_N - 1, k + 2)];
-      for (let i = 0; i < 4; i++, j++) {
-        const t = i / 4, t2 = t * t, t3 = t2 * t, o = SP[j];
-        o.x = 0.5 * (2 * b.x + (c2.x - a.x) * t + (2 * a.x - 5 * b.x + 4 * c2.x - d.x) * t2 + (3 * b.x - a.x - 3 * c2.x + d.x) * t3);
-        o.y = 0.5 * (2 * b.y + (c2.y - a.y) * t + (2 * a.y - 5 * b.y + 4 * c2.y - d.y) * t2 + (3 * b.y - a.y - 3 * c2.y + d.y) * t3);
+  const EM = { x: 0, y: 0, nx: 0, ny: 0 };
+  function emitter(T) { // where a tongue leaves the ball (relative to its centre) and the way it points
+    const a = Math.atan2(ball.fdy, ball.fdx) + T.ang + (REDUCED ? 0 : 0.16 * noise1(view.time * 2.2 + T.seed * 3));
+    EM.nx = Math.cos(a); EM.ny = Math.sin(a); EM.x = EM.nx * RV * 0.8; EM.y = EM.ny * RV * 0.8;
+    return EM;
+  }
+  function updateFlame(dt) {
+    // the ball's motion as the flame feels it: vertical motion counts half, so a flap or a fall bends the flame
+    // without flinging it about. The gas is tracked relative to the ball.
+    const evx = ball.vx, evy = ball.vy * 0.5;
+    const wx = -evx, wy = -evy - 240, wl = Math.hypot(wx, wy) || 1, kd = 1 - Math.exp(-dt * 12);
+    flame.dx += (wx / wl - flame.dx) * kd; flame.dy += (wy / wl - flame.dy) * kd;
+    const dl = Math.hypot(flame.dx, flame.dy) || 1;
+    ball.fdx = flame.dx / dl; ball.fdy = flame.dy / dl;
+    const f = ball.fire, live = f > 0.02 && !ball.hidden, t = view.time, stir0 = REDUCED ? 25 : 80;
+    const Lmax2 = Math.pow(RV * (3 + 2.2 * f), 2);                  // and no tongue reaches further than this
+    const life = (0.14 + 0.11 * f) * (1 + 0.25 * ball.flare), drag = Math.exp(-dt * 10), lift = 1000 * dt;
+    for (const T of flame.T) {
+      if (ball.hidden) T.pts.length = 0;
+      for (let i = T.pts.length - 1; i >= 0; i--) {
+        const p = T.pts[i], rel = Math.hypot(p.vx - evx, p.vy - evy);
+        p.age += dt * (1 + Math.max(0, rel - 260) / 260);             // gas torn away fast burns out sooner
+        if (p.age >= p.life || p.x * p.x + p.y * p.y > Lmax2) { T.pts.splice(i, 1); continue; }
+        p.vx *= drag; p.vy = p.vy * drag - lift;                       // slows to the air and rises
+        const stir = stir0 * p.age / p.life;                           // older gas is stirred more
+        p.x += (p.vx - evx + stir * noise1(p.y * 0.05 + t * 2.3 + T.seed)) * dt;
+        p.y += (p.vy - evy + stir * 0.7 * noise1(p.x * 0.05 - t * 2.1 + T.seed * 1.7)) * dt;
       }
+      if (!live) { T.acc = 0; continue; }
+      T.acc += dt;
+      const E2 = emitter(T), push = 110 + 60 * ball.flare;
+      while (T.acc >= F_STEP) {
+        T.acc -= F_STEP;
+        const a = T.acc, vx0 = evx * 0.5 + E2.nx * push, vy0 = evy * 0.5 + E2.ny * push; // left `a` seconds ago
+        T.pts.push({ x: E2.x + (vx0 - evx) * a, y: E2.y + (vy0 - evy) * a, vx: vx0, vy: vy0, age: a, life: life * (0.9 + 0.2 * Math.random()), w: breath(T, t - a) });
+      }
+      if (T.pts.length > 48) T.pts.splice(0, T.pts.length - 48);
     }
-    SP[j].x = S[FS_N - 1].x; SP[j].y = S[FS_N - 1].y;
-    for (let i = 1; i < SP.length; i++) SP[i].s = SP[i - 1].s + Math.hypot(SP[i].x - SP[i - 1].x, SP[i].y - SP[i - 1].y);
-    return SP[SP.length - 1].s;
   }
-  const AT = { x: 0, y: 0, tx: 1, ty: 0 };
-  function spineAt(s) { // the point at arc length s (straight on past the end) and the direction there
-    let i = 1;
-    while (i < SP.length - 1 && SP[i].s < s) i++;
-    const a = SP[i - 1], b = SP[i], l = b.s - a.s || 1e-6, u = (s - a.s) / l;
-    AT.tx = (b.x - a.x) / l; AT.ty = (b.y - a.y) / l; AT.x = a.x + (b.x - a.x) * u; AT.y = a.y + (b.y - a.y) * u;
-    return AT;
-  }
-  const TONGUES = [[0, 1, 0.64, 0.3], [-1, 0.66, 0.48, 2.1], [1, 0.74, 0.48, 4.7]]; // [side, length, base half-width, seed]
-  const BODY = [0, 0.56, 0.96, 9.1]; // the flame's body: the tongues split out of it
-  const FLAME_LAYERS = [ // [front radius, half-width, length, colour, alpha, seed] in ball radii
-    [1.12, 1.3, 1, 'outer', 0.97, 0],
-    [1.02, 1.1, 0.8, 'mid', 0.97, 1.9],
-    [0.9, 0.92, 0.62, 'inner', 0.97, 3.7],
-    [0.78, 0.72, 0.42, 'core', 0.92, 5.3]
+  const FLAME_LAYERS = [ // [ribbon width, ribbon length, colour, alpha, cap front radius, cap half-width]; caps in ball radii
+    [1, 1, 'outer', 0.97, 1.12, 1.3],
+    [0.74, 0.8, 'mid', 0.97, 1.02, 1.1],
+    [0.5, 0.6, 'inner', 0.97, 0.9, 0.92],
+    [0.28, 0.4, 'core', 0.92, 0.78, 0.72]
   ];
-  const TPL = [], TPR = [];
-  for (let i = 0; i <= 9; i++) { TPL.push([0, 0]); TPR.push([0, 0]); }
-  // one tongue: from the ball along the spine, off to its side, waving as it goes and tapering to a point
-  function tongue(c, len, w, T, t, calm, tip) {
-    const N = 9, side = T[0], sd = T[3];
-    for (let i = 0; i <= N; i++) {
-      const u = i / N, A = spineAt(len * u), nx = -A.ty, ny = A.tx;
-      const off = side * w * (0.44 + 0.4 * u) + w * 0.45 * calm * Math.pow(u, 1.3) * noise1(t * 4.4 - u * 2.6 + sd * 5);
-      const h = w * T[2] * Math.pow(1 - u, 0.85), cx = A.x + nx * off, cy = A.y + ny * off;
-      TPL[i][0] = cx + nx * h; TPL[i][1] = cy + ny * h; TPR[i][0] = cx - nx * h; TPR[i][1] = cy - ny * h;
-      if (tip && i === N) { tip.x = cx; tip.y = cy; tip.dx = A.tx; tip.dy = A.ty; }
+  const RBX = [], RBY = [], RBH = [];
+  // one tongue in one layer: a ribbon through its parcels (relative to the ball), newest first
+  function ribbon(c, T, W, ws, ls) {
+    const E2 = emitter(T), pts = T.pts;
+    let m = 0, tipX = 0, tipY = 0;
+    const prof = (u) => Math.pow(1 - u, 0.62) * (1 + 0.4 * Math.sin(Math.PI * u));
+    RBX[0] = E2.x; RBY[0] = E2.y; RBH[0] = W * ws * breath(T, view.time); m = 1;
+    let lastU = 0;
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i], u = p.age / (p.life * ls), x = p.x, y = p.y;
+      if (u >= 1) { // the tip burns out between this parcel and the last one
+        const k = (1 - lastU) / Math.max(1e-6, u - lastU);
+        tipX = RBX[m - 1] + (x - RBX[m - 1]) * k; tipY = RBY[m - 1] + (y - RBY[m - 1]) * k;
+        break;
+      }
+      RBX[m] = x; RBY[m] = y; RBH[m] = W * ws * p.w * prof(u); m++; lastU = u;
+      if (i === 0) { tipX = x; tipY = y; RBH[m - 1] = 0; }
     }
-    c.beginPath(); c.moveTo(TPR[0][0], TPR[0][1]); c.lineTo(TPL[0][0], TPL[0][1]);
-    for (let i = 1; i < N; i++) { const p = TPL[i], q = TPL[i + 1]; c.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2); }
-    for (let i = N - 1; i > 0; i--) { const p = TPR[i], q = TPR[i - 1]; c.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2); }
+    if (m < 2) return;
+    c.beginPath();
+    const L = [], R = [];
+    for (let i = 0; i < m; i++) {
+      const a = Math.max(0, i - 1), b = Math.min(m - 1, i + 1);
+      let tx = RBX[b] - RBX[a], ty = RBY[b] - RBY[a];
+      const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+      L.push(RBX[i] - ty * RBH[i], RBY[i] + tx * RBH[i]); R.push(RBX[i] + ty * RBH[i], RBY[i] - tx * RBH[i]);
+    }
+    c.moveTo(R[0], R[1]); c.lineTo(L[0], L[1]);
+    for (let i = 1; i < m - 1; i++) c.quadraticCurveTo(L[2 * i], L[2 * i + 1], (L[2 * i] + L[2 * i + 2]) / 2, (L[2 * i + 1] + L[2 * i + 3]) / 2);
+    c.quadraticCurveTo(L[2 * m - 2], L[2 * m - 1], tipX, tipY);
+    c.quadraticCurveTo(R[2 * m - 2], R[2 * m - 1], (R[2 * m - 2] + R[2 * m - 4]) / 2, (R[2 * m - 1] + R[2 * m - 3]) / 2);
+    for (let i = m - 2; i > 0; i--) c.quadraticCurveTo(R[2 * i], R[2 * i + 1], (R[2 * i] + R[2 * i - 2]) / 2, (R[2 * i + 1] + R[2 * i - 1]) / 2);
     c.closePath(); c.fill();
   }
   function drawFlame(c, r, f, n, t) {
-    const P = flamePal(n), calm = REDUCED ? 0.3 : 1, dx = ball.fdx, dy = ball.fdy;
-    const L = buildSpine() / 1.15;
+    const P = flamePal(n), dx = ball.fdx, dy = ball.fdy;
     // a soft glow first, flickering with the fire
     c.globalCompositeOperation = 'lighter';
     const gr = r * (2.2 + 1.8 * f), gx = dx * r * 0.9, gy = dy * r * 0.9;
@@ -1944,17 +1999,12 @@
     c.fillStyle = gl; c.beginPath(); c.arc(gx, gy, gr, 0, Math.PI * 2); c.fill();
     c.globalCompositeOperation = 'source-over';
     const g = 0.5 + 0.5 * Math.min(1, f * 1.6), a = Math.min(1, f * 3), ang = Math.atan2(dy, dx), fan = 1 + 0.1 * ball.flare;
-    for (let li = 0; li < FLAME_LAYERS.length; li++) {
-      const Ly = FLAME_LAYERS[li];
-      const rf = r * (1 + (Ly[0] - 1) * g), w = (r * Ly[1] * g + r * 0.55 * (1 - g)) * fan;
-      c.fillStyle = rgba(P[Ly[3]], Ly[4] * a);
+    const W = r * (0.5 + 0.32 * f) * (1 + 0.22 * ball.flare);
+    for (const Ly of FLAME_LAYERS) {
+      c.fillStyle = rgba(P[Ly[2]], Ly[3] * a);
+      const rf = r * (1 + (Ly[4] - 1) * g), w = (r * Ly[5] * g + r * 0.55 * (1 - g)) * fan;
       c.beginPath(); c.ellipse(0, 0, rf, w, ang, 0, Math.PI * 2); c.fill(); // wraps the front of the ball
-      tongue(c, L * Ly[2] * BODY[1], w, BODY, t, calm * 0.6, null);
-      for (let j = 0; j < TONGUES.length; j++) {
-        const T = TONGUES[j];
-        const len = L * Ly[2] * T[1] * (1 + calm * (0.16 * noise1(t * 3.3 + T[3] * 7) + 0.07 * noise1(t * 10 + T[3] * 3 + Ly[5] * 11)));
-        tongue(c, len, w, T, t, calm, li === 0 ? ball.tips[j] : null);
-      }
+      for (const T of flame.T) ribbon(c, T, W * T.size, Ly[0], Ly[1]);
     }
   }
 
@@ -2179,7 +2229,7 @@
     }
     return `<div class="seg" id="oddsSeg">${E.DIFFS.map((d, i) => `<button data-t="${i}" aria-pressed="${i === di}">${d.name}</button>`).join('')}</div>
       <div class="tbl"><table><thead><tr><th>Level</th><th class="r">Rim</th><th class="r">Swish</th><th class="r">5+ streak</th><th class="r">Avg clears</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
-      <p>Each ring multiplies your pot. ${D.name} pays up to <b>${D.maxWin}×</b> your bet. An average player who cashes out at the first checkpoint gets back about 90% of their bet over time. Skilled players do better.</p>`;
+      <p>Each ring multiplies your pot. ${D.name} pays up to <b>${TOP[di]}×</b> your bet. An average player who cashes out at the first checkpoint gets back about ${Math.round(PAY.AVG_RTP[di][0] * 100)}% of their bet over time, and less the deeper they go. Skilled players do better.</p>`;
   }
   function statsHtml() {
     const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–';
@@ -2282,6 +2332,7 @@
     hold: (on) => { dbg.hold = !!on; },   // stop the clock with the last frame on screen
     step: (n) => { dbg.steps = n | 0; },  // while held: play n frames of 1/60 s
     stepsLeft: () => dbg.steps | 0,
+    sfx: (name, args, secs) => Sound.render(name, args, secs), // a sound's samples, rendered offline
     ballScreen: () => ({ x: view.bsx, y: view.bsy }),
     equip: (t, id) => { if (COS[t] && COS[t][id]) { profile.eq[t] = id; if (t === 'flame') applyFlameTheme(); } } // test hook: try a skin without unlocking it
   };

@@ -49,18 +49,20 @@ npm run build
 
 The bot (`src/bot.cjs`) plans each drop with a trajectory solve, then adds human-style error: tap jitter, aim error, misreading moving rings, and occasional lapses. "Average" passes about 98% of Pro level-1 rings and swishes about 74% of them.
 
-**Calibration rule (house mode):** an average player who cashes out at the first checkpoint gets back 90% (10% house edge). Every later level keeps at least a 10% edge against the average player and is priced so a good player can gain at most 5% on it. Rounding the tables to three decimals never pays over the target.
+**Calibration rule (edge mode):** the house keeps an edge at every checkpoint against average and good players. An average player who cashes out at the first checkpoint gets back at most 90% (10% house edge), and every later level keeps at least a 10% edge against them. A good player gets back at most 99% at the first checkpoint and 97% at any later one, so strong players can't profit by going deep. Rounding the tables to three decimals never pays over a cap. On All-Star and Legend the good-player cap binds at the first checkpoint, so the average player gets back less there.
 
-The bot's aim error grows with ball speed, not with how long it has between rings, so it gains less from v9's wider spacing than a person does. Level 1 didn't change, so the 90% at the first checkpoint holds; deeper levels keep 10–66% edges against the average player.
+Engine v10 made the ball and rim tube 10% larger; rings widen only enough to keep the gap the ball fits through the same, so the difficulty is unchanged.
 
-Return to player when cashing out after checkpoint 1 / 2 / 3, from the simulation (no cap):
+Return to player when cashing out after checkpoint 1 / 2 / 3 / 8, from the simulation (no cap):
 
-| Tier | Average | Good |
-|---|---|---|
-| Rookie (max 50×) | 90 / 81 / 72% | 98 / 99 / 104% |
-| Pro (max 100×) | 90 / 80 / 68% | 99 / 104 / 109% |
-| All-Star (max 250×) | 90 / 72 / 51% | 106 / 111 / 117% |
-| Legend (max 1000×) | 90 / 63 / 40% | 117 / 123 / 129% |
+| Tier | Average | Good | Pro | Best possible win |
+|---|---|---|---|---|
+| Rookie | 90 / 81 / 72 / 14% | 97 / 97 / 97 / 97% | 100 / 103 / 110 / 305% | 8× |
+| Pro | 90 / 78 / 65 / 5% | 98 / 97 / 97 / 97% | 101 / 107 / 120 / 770% | 91× |
+| All-Star | 86 / 66 / 47 / 2% | 99 / 97 / 97 / 97% | 105 / 117 / 145 / 2894% | 250× (cap) |
+| Legend | 80 / 55 / 35 / 1% | 99 / 97 / 97 / 97% | 109 / 133 / 185 / 6969% | 1000× (cap) |
+
+Pros (the bot one step below perfect play) still beat the house deep into a run. `--cap-pro 0.99 --cap1-pro 1.01` keeps them behind at every checkpoint too, but because they clear the easy levels so reliably, the best possible win drops to about 1.7× on Rookie, 4.6× on Pro, 46× on All-Star and 600× on Legend. Head-to-head play with a rake is the usual way to take an edge from everyone without that.
 
 Full tables for all six skill levels, including pro and perfect bots, are in `sim/out/calibration_final.txt`.
 
@@ -68,7 +70,7 @@ Full tables for all six skill levels, including pro and perfect bots, are in `si
 
 ## Before real money
 
-1. **Skill and bots.** In a skill game the edge only holds against players at or below the reference player. Good players profit, and a bot that plays perfectly hits the max win on almost every run. The server already limits bets for accounts above 115% return after 150 runs, and for superhuman swish rates. Add tap-timing anomaly checks and manual review of large wins before launch.
+1. **Skill and bots.** The tables keep an edge against average and good players at every checkpoint, but elite players (the `pro` bot) still profit deep in a run, and a bot that plays perfectly hits the max win on almost every run. The server already limits bets for accounts above 115% return after 150 runs, and for superhuman swish rates. Add tap-timing anomaly checks and manual review of large wins before launch.
 2. **Licensing.** Real-money skill gaming and crypto gambling are regulated, or banned, in many places. You need geo-blocking, age and KYC checks, and a license where it's required.
 3. **Production hardening.** Move from the JSON file DB to Postgres. Use HTTPS, rate limits and a hot/cold wallet split, and get a security review of the deposit and withdraw paths.
 
@@ -94,6 +96,6 @@ tools/             browser checks (Playwright + Chrome): flows.py plays every ru
 
 This repository is the source of truth for SOL DUNK. Start any new session from a fresh clone, and push when you're done, so every chat builds on the latest version.
 
-- Any change to `src/engine.cjs` (physics) needs `npm run sim` then `node sim/calibrate.cjs patterns.json --guard1 9 --guard 1.05 --write`, or the paytable no longer matches the game.
+- Any change to `src/engine.cjs` (physics) needs `npm run sim` then `npm run calibrate` (`node sim/calibrate.cjs patterns.json --mode edge --write`), or the paytable no longer matches the game.
 - After a change, run `npm run build`, `npm test` and `python3 tools/flows.py` before publishing.
 - `npm run check` confirms that `dist/` and the root `index.html` are the build of `src/` and that everything is pushed. Pass it a saved copy of the live demo (`npm run check -- live.html`) to check that too. CLAUDE.md lists the steps that keep the repo, GitHub Pages and the demo in sync.

@@ -42,8 +42,8 @@ Never publish a build you haven't pushed, and don't push a game change without p
 
 ## Rules
 
-- **Physics changes need new payouts.** Any change to `src/engine.cjs` (physics, level settings) means bumping `VERSION`, then running `node sim/run.cjs` (about 11 minutes; `node sim/run.cjs 1 <tier> merge` re-runs one tier). After that, run `node sim/calibrate.cjs patterns.json --guard1 9 --guard 1.05 --write`. Wait for "wrote sim/out/patterns.json" before calibrating.
-- **House edge:** an average player gets back about 90% when cashing out at checkpoint 1, with at least a 10% edge per level after that. Check the calibration output.
+- **Physics changes need new payouts.** Any change to `src/engine.cjs` (physics, level settings) means bumping `VERSION`, then running `node sim/run.cjs` (about 11 minutes; `node sim/run.cjs 1 <tier> merge` re-runs one tier). After that, run `node sim/calibrate.cjs patterns.json --mode edge --write` (`npm run calibrate`). Wait for "wrote sim/out/patterns.json" before calibrating.
+- **House edge (mode `edge`):** the house keeps an edge at every checkpoint against average and good players. An average player gets back at most 90% at checkpoint 1 and loses at least 10% on every later level; a good player gets back at most 99% at checkpoint 1 and 97% from checkpoint 2 on. Pros aren't capped by default: they clear the easy levels so reliably that capping them (`--cap-pro 0.99 --cap1-pro 1.01`) shrinks the top prizes to a few × on Rookie and Pro. Check the "RTP by skill" and "Best possible win" tables in the calibration output; the lobby shows each tier's real best possible win.
 - **Before publishing:** `npm run build && SERVER_URL=/ node build.cjs`, `npm test` (server), `python3 tools/flows.py`, `python3 tools/features.py`, `python3 tools/contact.py` and `npm run check`. After camera or spacing changes, `python3 tools/speed.py` reports how much of the next ring is in view deep into a run.
 
 ## What the owner has asked for (keep these)
@@ -54,4 +54,6 @@ Never publish a build you haven't pushed, and don't push a game change without p
 - Original art only: no Flappy Dunk assets.
 - Rim hits shouldn't carry the ball forward strongly: after a knock, the forward push fades back in (engine `RECOVER`).
 - As the ball speeds up, the rings spread out with it, so deeper levels never leave less time between rims (engine v9). Make deep levels harder in other ways.
+- The ball and rim tube are 10% larger than in v9 (engine v10). Rings widen only enough to keep the gap the ball fits through the same, so the difficulty didn't change.
+- The house keeps an edge deep into a run, against strong players too: never price a level so that good players come out ahead at any checkpoint. (The owner is weighing another way to take an edge from elite players, such as head-to-head play with a rake, rather than shrinking the prizes.)
 - The ball is drawn at exactly its hitbox size, and rings at exactly their collision size.

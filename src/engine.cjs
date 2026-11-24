@@ -18,26 +18,33 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 9;
+  const VERSION = 10;
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
   // World units: the playfield is 400 wide x 720 tall. Ball sits 112 from the left edge.
   const WORLD = { W: 400, H: 720, FLOOR: 652, CEIL: 0, BALL_SX: 112 };
 
+  // v10: the ball and the rim tube are 10% larger than up to v9 (the owner asked for bigger ball and rims).
+  // Each ring widens by exactly what keeps the gap the ball has to fit through the same as v9 (see RING_GROW),
+  // so the game is as hard as before and the house edge holds. Ring widths in DIFFS are the v9 numbers.
+
   // Physics. Tap sets vertical velocity (classic flap), gravity pulls down.
   const PHYS = {
     G: 1350,        // gravity, units/s^2 (floaty, forgiving)
     FLAP: 470,      // upward speed after a tap (same hop height, more hang time)
     VMAX: 640,      // terminal fall speed (no sudden plunges)
-    R: 17,          // ball radius
-    RP: 7,          // rim tube radius (collision pegs at each end of the rim)
+    R: 18.7,        // ball radius (17 up to v9)
+    RP: 7.7,        // rim tube radius: collision pegs at each end of the rim (7 up to v9)
     REST: 0.36,     // restitution off the rim (soft: rim hits often roll in)
     TFRIC: 0.2,     // tangential damping on a firm rim knock (scaled down for gentle contact)
     KNOCK: 30,      // normal speed above which a contact is a knock (bounce + rim event); below it the ball rests/rolls
     VX_K: 5.0,      // how fast forward speed recovers to level speed (1/s)
     RECOVER: 54     // ticks after a rim knock over which that push fades back in (0.45 s), so the bounce plays out
   };
+
+  // the swish gap (rim to rim, less the ball) = w - 2*(R + RP); keep it at the v9 value (R 17, RP 7)
+  const RING_GROW = Math.round(2 * (PHYS.R + PHYS.RP - 17 - 7) * 10) / 10; // 4.8
 
   const HOOPS_PER_LEVEL = 6;
   const LEVELS = 8;
@@ -159,7 +166,7 @@
       speed: D.speed * stretch,
       spacing: D.spacing * stretch,
       firstX: FIRST_HOOP_X * stretch,
-      hoopW: D.hoopW[k], dy: D.dy[k],
+      hoopW: D.hoopW[k] + RING_GROW, dy: D.dy[k],
       moveP: D.moveP[k], moveAmp: D.moveAmp[k],
       tiltP: D.tiltP[k], tiltMax: D.tiltMax[k],
       periodBase: 3.4 - 0.1 * k
