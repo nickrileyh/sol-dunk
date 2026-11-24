@@ -1397,7 +1397,7 @@
     if (run.mode === 'special') { // the special pays only for clearing every ring: count the rings, show the prize
       const st = run.st;
       ui.mult.textContent = (st ? st.outcomes.length : 0) + '/' + (st ? st.hoops.length : 0);
-      ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = fmtSol(run.prize); potShown = run.prize;
+      ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = fmtAmt(run.prize); potShown = run.prize;
       return;
     }
     const v = run.bet * run.total;
@@ -1639,12 +1639,17 @@
     for (const t of rows) for (let i = 0; i < NH; i++) { st = Math.min(t.swish.length, st + 1); m *= t.swish[st - 1]; }
     return Math.min(E.DIFFS[di].maxWin, Math.floor(m));
   });
+  // each mode's colour (Easy blue, Hard gold) and the ink that reads on it when its tile is picked
+  const TIER_COL = { easy: ['#0a84ff', '#ffffff'], hard: ['#ffd60a', '#05070e'] }, TIER_MORE = [['#40c8e0', '#05070e'], ['#bf5af2', '#ffffff']];
+  const tierCol = (di) => TIER_COL[(E.DIFFS[di] || {}).id] || TIER_MORE[di % TIER_MORE.length];
+  const tierC = (di) => tierCol(di)[0];
+  function bumpBet() { const f = document.querySelector('.bet-field'); if (f && !REDUCED) hudAnim(f, 'bump', [{ transform: 'scale(0.9)' }, { transform: 'scale(1)' }], { duration: 300, easing: 'cubic-bezier(.34, 1.56, .64, 1)' }); }
   function buildLobby() {
     const d = $('diffs');
-    d.innerHTML = E.DIFFS.map((D, i) => `<button role="radio" id="diff${i}" data-di="${i}" aria-checked="${i === prefs.di}" aria-label="${D.name}, wins up to ${TOP[i]}×">${D.name}</button>`).join('');
-    d.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { prefs.di = +b.dataset.di; Sound.click(); refreshLobby(); saveAll(); }));
-    $('betDown').addEventListener('click', () => { stepBet(-1); Sound.click(); });
-    $('betUp').addEventListener('click', () => { stepBet(1); Sound.click(); });
+    d.innerHTML = E.DIFFS.map((D, i) => `<button role="radio" id="diff${i}" data-di="${i}" aria-checked="${i === prefs.di}" aria-label="${D.name}, wins up to ${TOP[i]}×" style="--tc:${tierC(i)};--tink:${tierCol(i)[1]}"><span class="tn">${D.name}</span><span class="tx">${TOP[i]}×</span></button>`).join('');
+    d.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { if (prefs.di === +b.dataset.di) return; prefs.di = +b.dataset.di; Sound.click(); buzz(6); refreshLobby(); saveAll(); }));
+    $('betDown').addEventListener('click', () => { const b = prefs.bet; stepBet(-1); Sound.click(); if (prefs.bet !== b) bumpBet(); });
+    $('betUp').addEventListener('click', () => { const b = prefs.bet; stepBet(1); Sound.click(); if (prefs.bet !== b) bumpBet(); });
     const inp = $('betInput');
     inp.addEventListener('input', () => { const v = parseFloat(inp.value.replace(',', '.')); if (v > 0) { prefs.bet = v; refreshLobby(true); } });
     inp.addEventListener('blur', () => { setBet(prefs.bet); });
@@ -1661,7 +1666,8 @@
     sheetTopC = -1;
     const di = prefs.di, D = E.DIFFS[di];
     document.querySelectorAll('#diffs button').forEach((b) => b.setAttribute('aria-checked', String(+b.dataset.di === di)));
-    $('diffInfo').innerHTML = `${D.blurb} · Win up to <b>${fmtBet(prefs.bet * TOP[di])} SOL</b>` + (profile.best[di] ? ` <span class="dim">· Best ${profile.best[di]}</span>` : '');
+    $('diffInfo').innerHTML = D.blurb + (profile.best[di] ? ` <span class="dim">· Best ${profile.best[di]}</span>` : '');
+    const wl = $('winLine'); wl.style.setProperty('--tc', tierC(di)); wl.innerHTML = `Win up to <b>${fmtBet(prefs.bet * TOP[di])} SOL</b>`;
     refreshProfileHud();
     if (!keepInput) $('betInput').value = fmtBet(prefs.bet);
     $('playAmt').textContent = fmtBet(prefs.bet) + ' SOL';
@@ -1689,7 +1695,7 @@
     const L = potState && potState.last;
     if (L && L.me && prefs.potSeen !== L.key) {
       prefs.potSeen = L.key; saveAll();
-      if (L.me.won > 0) { toast('Pot closed: you won ' + fmtSol(L.me.won) + ' SOL'); Sound.cash(); setBalance(); }
+      if (L.me.won > 0) { toast('Pot closed: you won ' + fmtAmt(L.me.won) + ' SOL'); Sound.cash(); setBalance(); celebrate(130); }
       else toast('Pot closed: ' + L.winners + ' of ' + L.entrants + ' made it');
     }
   }
@@ -1736,7 +1742,7 @@
     const L = p.last;
     const last = L ? `<div class="pot-last"><span class="k">Last pot</span><span>${L.goal} · ${L.winners ? L.winners + ' of ' + L.entrants + ' made it · ' + fmtSol(L.share) + ' SOL each' : 'nobody made it · ' + fmtSol(L.rolled) + ' SOL rolled over'}${L.me ? (L.me.won > 0 ? ' · <b class="won">you won ' + fmtSol(L.me.won) + ' SOL</b>' : ' · you didn’t make it') : ''}</span></div>` : '';
     return `<div class="pot-goal"><span class="pot-ic">${ICON.trophy}</span><div><b>${p.goal.text}</b><span>In one run ${p.goal.sub}</span></div></div>
-      <div class="sp-prize"><span class="k">In the pot</span><div class="big"><span class="num">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></div></div>
+      <div class="sp-prize pot"><span class="k">In the pot</span><div class="big"><span class="num">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></div></div>
       ${me}
       <div class="tiles"><div><b>${p.entrants}</b><span>Entered</span></div><div><b>${p.completed}</b><span>Made it</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Closing'}</b><span>Left</span></div></div>
       <p class="pot-rules">Everyone who completes the challenge before the pot closes (midnight UTC) splits it equally. The house keeps ${Math.round(p.rake * 100)}% of each entry; if nobody makes it, the pot rolls over to the next one. Only runs you start after entering count, and your runs are bets as usual.${p.carryIn > 0 ? ' This pot includes ' + fmtSol(p.carryIn) + ' SOL rolled over.' : ''}</p>
@@ -1804,28 +1810,50 @@
     }
     g.fillStyle = '#ff8a2a'; g.beginPath(); g.arc(sx(0), sy(def.startY), 4.2, 0, Math.PI * 2); g.fill();
   }
-  // today's three specials in one card: a row each with its twist, length, prize and Play; tap a row for its page
+  // today's three specials in one card: a row each with its prize multiple, twist, length, prize and Play; tap a row for its page
+  const SPX = (x) => (x >= 5 ? '#ffd60a' : x >= 3 ? '#bf5af2' : '#64d2ff');
   function specialCard() {
     const s = specState;
     if (!s || !s.specials) return '';
     const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked;
-    const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></button>
-      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(c.prize)}</b> SOL</span>${blocked ? '<span class="pill off">Not available</span>' : `<button class="pill" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`}</div></div>`).join('');
-    return `<div class="cc sp-cc"><div class="cc-h"><span class="cc-k">Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftText(left) : 'New soon'}</span></div>${rows}</div>`;
+    const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><span class="spr-x" style="--sx:${SPX(c.x)}">${c.x}×</span><span class="spr-t"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></span></button>
+      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(c.prize)}</b> SOL</span>${blocked ? '<span class="pill off">Not available</span>' : `<button class="pill go" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`}</div></div>`).join('');
+    return `<div class="cc sp sp-cc"><div class="cc-h"><span class="cc-k">${ICON.star}Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftText(left) : 'New soon'}</span></div>${rows}</div>`;
   }
   function potCard() {
     const p = potState;
     if (!p) return '';
     const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
-    const act = done ? '<span class="pill ok">Made it</span>' : inn ? '<span class="pill in">You’re in</span>' : `<button class="pill" id="chPotEnter">Enter ${fmtBet(p.fee)}</button>`;
-    return `<div class="cc"><button class="cc-open" data-page="pot" aria-label="Daily pot: ${p.goal.text}. Details"><span class="cc-k">Daily pot</span><span class="cc-n">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span><span class="chev">${ICON.chev}</span></button>
-      <div class="cc-act"><span class="cc-v"><b class="num gold">${fmtAmt(p.pool)}</b> SOL pot · ${p.entrants} in</span>${act}</div></div>`;
+    const act = done ? '<span class="pill ok">Made it</span>' : inn ? '<span class="pill in">You’re in</span>' : `<button class="pill go" id="chPotEnter">Enter ${fmtBet(p.fee)} SOL</button>`;
+    return `<div class="cc pot"><button class="cc-open" data-page="pot" aria-label="Daily pot: ${fmtAmt(p.pool)} SOL, ${p.goal.text}. Details"><span class="cc-k">${ICON.trophy}Daily pot · closes in ${leftOf(p.closesAt - Date.now())}</span><span class="cc-big"><span class="num" data-count="${p.pool}">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></span><span class="cc-g">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span><span class="chev">${ICON.chev}</span></button>
+      <div class="cc-act"><span class="cc-v">${p.entrants} ${p.entrants === 1 ? 'player' : 'players'} in</span>${act}</div></div>`;
+  }
+  let potCountAt = 0; // when the pot card's count-up started
+  function potCount(fresh) {
+    const n = document.querySelector('#cBody .cc-big .num[data-count]');
+    if (!n || REDUCED) return;
+    const to = +n.dataset.count, now = performance.now();
+    if (fresh) potCountAt = now;
+    const k = (now - potCountAt) / 800;
+    if (k < 1) countUp(n, to * (1 - Math.pow(1 - k, 3)), to, fmtAmt, 800 * (1 - k));
+  }
+  // a tab's blocks rise in one after another when you open it; if the tab redraws while they rise (fresh data for
+  // the special or the pot), the new blocks pick the rise up where it was instead of starting it again
+  let riseAt = { el: null, t0: 0 };
+  function riseIn(view, fresh) {
+    if (REDUCED || !view || !view.animate) return;
+    const now = performance.now();
+    if (fresh) riseAt = { el: view, t0: now };
+    else if (riseAt.el !== view || now - riseAt.t0 > 760) return;
+    const off = now - riseAt.t0;
+    view.querySelectorAll('.vcol > :not(.vtitle)').forEach((c, i) => c.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }],
+      { duration: 550, delay: Math.min(i, 4) * 40 - off, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
   }
   function renderChallenges(keep) {
     const body = $('cBody'), y = body.scrollTop;
     body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2>${specialCard()}${potCard()}${missionsHtml()}</div>`;
     if (keep) body.scrollTop = y;
-    wireChallenges();
+    wireChallenges(); potCount(!keep); if (keep) riseIn($('vChallenges'), false);
     if (specState && prefs.specSeen !== specState.day) { prefs.specSeen = specState.day; saveAll(); syncBadges(); }
   }
   async function enterPot(e) {
@@ -1912,7 +1940,7 @@
     if (!sp) profile.lv[run.di][run.level - 1][0]++;
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
     if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
-    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtSol(run.prize) + ' SOL' : run.level === 1 ? (newPlayer() ? 'Drop down through each ring' : potLine()) : '');
+    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL' : run.level === 1 ? (newPlayer() ? 'Drop down through each ring' : potLine()) : '');
   }
 
   function settleOffset() { ball.x += ball.ox; ball.y += ball.oy; ball.ox = 0; ball.oy = 0; }
@@ -2175,9 +2203,9 @@
     const L = run.level, pot = run.bet * run.total;
     $('cpKicker').textContent = 'Checkpoint ' + L + ' of ' + (NL - 1);
     $('cpTitle').innerHTML = 'Level ' + L + ' cleared' + (run.lvlSw === NH ? '<span class="cp-badge">Perfect</span>' : '');
-    countUp($('cpPot'), run.bet * (run.lvlStart || 1), pot, fmtSol, 750);
+    countUp($('cpPot'), run.bet * (run.lvlStart || 1), pot, fmtAmt, 750);
     const profit = pot - run.bet;
-    $('cpMult').textContent = fmtMult(run.total) + (profit >= 0.00005 ? ' · +' + fmtDelta(profit) + ' SOL profit' : ' · your bet back');
+    $('cpMult').textContent = fmtMult(run.total) + (profit >= 0.00005 ? ' · +' + (profit >= 0.0001 ? fmtAmt(profit) : fmtDelta(profit)) + ' SOL profit' : ' · your bet back');
     $('cpMult').classList.toggle('flat', profit < 0.00005);
     // what the next level can pay (every ring swished, streak carried) and whether the streak carries over
     const nx = L + 1, di = run.di, pt = PAY.PAYTABLE[di][nx - 1];
@@ -2190,7 +2218,7 @@
     const sk = $('cpStreak');
     sk.className = 'nx-s' + (run.streak >= 5 ? ' nova' : '');
     sk.innerHTML = run.streak > 1 ? ICON.flame + `Your ${run.streak}-swish streak carries over` : '';
-    $('cashAmt').textContent = fmtSol(pot) + ' SOL';
+    $('cashAmt').textContent = fmtAmt(pot) + ' SOL';
     $('goSub').textContent = 'Level ' + nx;
     show(ui.cp, true); armCard(ui.cp, 600); STK.el.classList.add('tuck');
     // focus the card, not a button: a Space meant as a flap must never press "Keep going"
@@ -2213,7 +2241,7 @@
   function showResult(title, amount, cls, sub, rollTo) {
     const pr = run.prog, nb = !!(pr && pr.newBest && run.score > 0);
     $('resTitle').textContent = title;
-    if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtSol(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
+    if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtAmt(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
     $('resAmount').className = 'big ' + cls;
     $('resSub').textContent = sub;
     const sp = run.mode === 'special';
@@ -2225,6 +2253,8 @@
     $('lobbyBtn').textContent = sp ? 'Back' : 'Change bet';
     showProgress(pr);
     show(ui.res, true); armCard(ui.res, 600); refreshPot(); if (sp) refreshSpecial();
+    if (cls === 'win') setTimeout(() => celebrate(run.total >= 5 || sp ? 150 : 100, ui.res), 140);
+    else if (run.potJust) setTimeout(() => celebrate(60, ui.res), 140);
     setTimeout(() => ui.res.focus({ preventScroll: true }), 60);
     refreshLobby();
   }
@@ -2269,7 +2299,7 @@
       const w = (a.into / a.need * 100).toFixed(1) + '%';
       fill.style.transition = 'none'; fill.style.width = w;
       hudAnim(fill, 'fill', [{ width: '0%' }, { width: w }], { duration: REDUCED ? 1 : 600, easing: EASE_OUT });
-      Sound.levelUp(); buzz([10, 40, 10]);
+      Sound.levelUp(); buzz([10, 40, 10]); celebrate(70, box);
     }, 1100));
     const g = [];
     if (run.potJust && potState) g.push(['pot', ICON.trophy, 'Pot challenge done · in for a share']);
@@ -2400,6 +2430,39 @@
   function confetti(x, y, n) {
     const cols = ['#ff7a1a', '#f5c542', '#ffffff', '#3d7bff', '#ffd9a8'];
     for (let i = 0; i < n; i++) spawn({ x: x + rnd(-30, 30), y: y + rnd(-10, 10), vx: rnd(-260, 260), vy: rnd(-520, -160), g: 900, drag: 1.2, life: rnd(1.1, 1.8), max: 1.8, size: rnd(4, 7), color: cols[i % cols.length], kind: 1, rot: rnd(0, 6), vr: rnd(-12, 12) });
+  }
+  // celebrations: a burst of flat confetti over the cards (wins, level-ups, special clears, pot wins)
+  const FX_COLS = ['#ff7a1a', '#ffd60a', '#40c8e0', '#0a84ff', '#bf5af2', '#30d158', '#ffffff'];
+  let fxParts = [], fxRaf = 0, fxLast = 0, fxW = 0, fxH = 0;
+  function celebrate(n, from) {
+    const el = $('fxLayer');
+    if (REDUCED || !el) return;
+    const W = (fxW = innerWidth), H = (fxH = innerHeight), k = Math.min(window.devicePixelRatio || 1, 2);
+    if (el.width !== Math.round(W * k) || el.height !== Math.round(H * k)) { el.width = Math.round(W * k); el.height = Math.round(H * k); }
+    const r = from && from.getBoundingClientRect ? from.getBoundingClientRect() : { left: W / 2 - 120, right: W / 2 + 120, top: H * 0.38 };
+    for (let i = 0; i < (n || 90); i++) {
+      const side = i % 2 ? 1 : -1, ang = -Math.PI / 2 - side * (0.12 + Math.random() * 0.6), sp = 520 + Math.random() * 520; // two cannons at the card's top corners, aimed up and in
+      fxParts.push({ x: side < 0 ? r.left + 28 : r.right - 28, y: r.top + 24, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, w: 5 + Math.random() * 5, h: 8 + Math.random() * 6,
+        rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 14, flip: Math.random() * 6.28, vf: 6 + Math.random() * 8, c: FX_COLS[i % FX_COLS.length], life: 0, max: 1.7 + Math.random() * 0.9, dot: Math.random() < 0.22 });
+    }
+    if (!fxRaf) { fxLast = performance.now(); fxRaf = requestAnimationFrame(fxTick); }
+  }
+  function fxTick(t) {
+    const el = $('fxLayer'), dt = Math.min(0.05, Math.max(0, (t - fxLast) / 1000)), k = el.width / Math.max(1, fxW), g = el.getContext('2d');
+    fxLast = t;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, el.width, el.height); g.setTransform(k, 0, 0, k, 0, 0);
+    fxParts = fxParts.filter((p) => (p.life += dt) < p.max && p.y < fxH + 40);
+    for (const p of fxParts) {
+      p.vy += 1300 * dt; p.vx *= Math.exp(-2.4 * dt); p.vy *= Math.exp((p.vy > 0 ? -3.4 : -2.2) * dt); // pieces flutter down slowly
+      p.x += p.vx * dt + Math.sin(p.flip) * 14 * dt; p.y += p.vy * dt; p.rot += p.vr * dt; p.flip += p.vf * dt;
+      g.globalAlpha = Math.min(1, (p.max - p.life) / 0.45); g.fillStyle = p.c;
+      g.save(); g.translate(p.x, p.y); g.rotate(p.rot); g.scale(1, Math.cos(p.flip));
+      if (p.dot) { g.beginPath(); g.arc(0, 0, p.w * 0.55, 0, 6.2832); g.fill(); } else g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      g.restore();
+    }
+    g.globalAlpha = 1;
+    if (fxParts.length) fxRaf = requestAnimationFrame(fxTick);
+    else { fxRaf = 0; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, el.width, el.height); }
   }
   function winFx(k) {
     Sound.cash(); buzz([10, 30, 10, 30, 60]);
@@ -3712,7 +3775,7 @@
     const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–', net = stats.returned - stats.wagered;
     return `<div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${Math.abs(net) < 0.00005 ? '' : net > 0 ? 'pos' : 'neg'}">${Math.abs(net) < 0.00005 ? '0' : (net > 0 ? '+' : '−') + fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
       <div class="sec-h"><h3>Best scores</h3></div>
-      <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
+      <div class="bests">${E.DIFFS.map((D, i) => `<div style="--tc:${tierC(i)}"><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
       <div class="sec-h"><h3>Recent runs</h3>${stats.history.length ? '<span>Newest first</span>' : ''}</div>
       ${runsHtml()}`;
   }
@@ -3851,9 +3914,9 @@
     show(vP, t === 'profile'); show(vC, t === 'challenges');
     nav.cover = t === 'profile' || t === 'challenges';
     sheetTopC = -1;
-    if (t === 'challenges') { if (profile.mNew) { profile.mNew = 0; saveAll(); } renderChallenges(); $('cBody').scrollTop = 0; refreshSpecial(); refreshPot(); }
+    if (t === 'challenges') { if (profile.mNew) { profile.mNew = 0; saveAll(); } renderChallenges(); $('cBody').scrollTop = 0; if (was !== t) riseIn(vC, true); refreshSpecial(); refreshPot(); }
     if (t === 'locker') renderLocker();
-    if (t === 'profile') { renderProfileView(); if (was !== 'locker') $('pBody').scrollTop = 0; }
+    if (t === 'profile') { renderProfileView(); if (was !== 'locker') $('pBody').scrollTop = 0; if (was !== t && was !== 'locker') riseIn(vP, true); }
     lockerFx();
     syncBadges();
     if (!quiet && was !== t) { Sound.click(); buzz(6); }
@@ -3870,11 +3933,12 @@
   document.querySelectorAll('.view > .vscroll').forEach((el) => el.addEventListener('scroll', () => el.parentElement.classList.toggle('scrolled', el.scrollTop > 6), { passive: true }));
 
   // ---------------------------------------------------------------- Missions tab
+  const MCOL = ['#ff9f0a', '#64d2ff', '#ff6482', '#30d158', '#bf5af2']; // each mission's ring colour, in order
   const ring = (p) => `<span class="mring${p > 0 ? '' : ' zero'}"><svg viewBox="0 0 36 36"><circle class="trk" cx="18" cy="18" r="15"/><circle class="val" cx="18" cy="18" r="15" pathLength="100" stroke-dasharray="${(Math.max(0.0001, p) * 100).toFixed(1)} 100"/></svg><span class="ck">${ICON.check}</span></span>`;
-  function mRow(text, p, n, xp, done, sol, paid) {
+  function mRow(text, p, n, xp, done, sol, paid, i) {
     const right = done ? '<b>Done</b>' + (sol ? `<small class="${paid ? 'paid' : ''}">${fmtBet(sol)} SOL ${paid ? 'paid' : 'waiting'}</small>` : '')
       : `<b>+${xp} XP</b>` + (sol ? `<small>+${fmtBet(sol)} SOL</small>` : '');
-    return `<div class="mrow${done ? ' done' : ''}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? 'Done' : p + ' / ' + n}</span></span><span class="mxp">${right}</span></div>`;
+    return `<div class="mrow${done ? ' done' : ''}" style="--mc:${MCOL[(i || 0) % MCOL.length]}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? 'Done' : p + ' / ' + n}</span></span><span class="mxp">${right}</span></div>`;
   }
   // a window's SOL pays once this much has been played in it (bets on runs and special level entries)
   function needRow(mv, win) {
@@ -3887,15 +3951,16 @@
   function missionsHtml() {
     const mv = mview(), d = mv.daily, w = mv.weekly, cs = careerState();
     const wDone = w.filter((c) => c.done).length;
-    const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi mi-${page}">${ic}</span><span class="mn">${name}</span><span class="mv">${val}</span><span class="chev">${ICON.chev}</span></button>`;
+    const C = CAREER[cs.ch], cDone = C ? cs.done.filter(Boolean).length : 4;
+    const tile = (page, ic, name, val, f) => `<button class="ct ct-${page}" data-page="${page}"><span class="ct-ic">${ic}</span><span class="chev">${ICON.chev}</span><b>${name}</b><span class="ct-v">${val}</span><span class="ct-bar"><i style="width:${(f * 100).toFixed(1)}%"></i></span></button>`;
     return `<div class="sec-h"><h3>Daily missions</h3><span>${ICON.clock}New in ${untilMidnight()}</span></div>
-      <div class="group">${needRow(mv, 'day')}${d.map((c) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>
-      <div class="menu-list">${row('week', ICON.target, 'This week', wDone + ' of ' + w.length + ' done')}${row('career', ICON.flag, 'Career', CAREER[cs.ch] ? 'Chapter ' + (cs.ch + 1) + ' of ' + CAREER.length : 'All done')}</div>`;
+      <div class="group">${needRow(mv, 'day')}${d.map((c, i) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i)).join('')}</div>
+      <div class="ctiles">${tile('week', ICON.target, 'This week', wDone + ' of ' + w.length + ' done', w.length ? wDone / w.length : 0)}${tile('career', ICON.flag, 'Career', C ? 'Chapter ' + (cs.ch + 1) + ' of ' + CAREER.length : 'All done', cDone / 4)}</div>`;
   }
   function weekHtml() {
     const mv = mview(), w = mv.weekly;
     return `<p class="vsub">New missions in ${untilMonday()}.</p>
-      <div class="group">${needRow(mv, 'week')}${w.map((c) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>`;
+      <div class="group">${needRow(mv, 'week')}${w.map((c, i) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i + 1)).join('')}</div>`;
   }
   function careerHtml() {
     const cs = careerState(), C = CAREER[cs.ch];
@@ -3907,7 +3972,7 @@
           <div><div class="chap-k">Chapter ${cs.ch + 1} of ${CAREER.length} · ${n} of 4 done</div><div class="chap-n">${C.name}</div>
           <div class="chap-r">Finish all four to unlock <b>${COS[r.t][r.id].name} ${TNAME[r.t].toLowerCase()}</b>${C.title ? ' and the <b>' + TITLE_BY[C.title].name + '</b> title' : ''}.</div></div></div>
         <div class="chap-bar"><i style="width:${(n / 4 * 100).toFixed(0)}%"></i></div>
-        ${C.m.map((m, i) => mRow(careerText(m), cs.p[i], m[1], m[2], cs.done[i])).join('')}
+        ${C.m.map((m, i) => mRow(careerText(m), cs.p[i], m[1], m[2], cs.done[i], 0, false, i + 2)).join('')}
       </div>`;
     } else career = `<div class="empty">You've finished every chapter. All the career rewards are in your locker.</div>`;
     const chapters = CAREER.map((K, i) => {
@@ -3997,7 +4062,7 @@
     const got = ACH.filter((a) => profile.ach[a.id]).length, fresh = profile.fresh.length > 0;
     const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi mi-${page}">${ic}</span><span class="mn">${name}</span><span class="mv num">${val || ''}</span><span class="chev">${ICON.chev}</span></button>`;
     $('pBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Profile</h2>
-      <button class="pcard" id="pfCard" aria-label="Edit your player card"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
+      <button class="pcard" id="pfCard" aria-label="Edit your player card" style="${avStyle(profile.card.color)}"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
         <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span>
           <span class="plv"><span>Level ${v.l}</span><span class="num">${v.into} / ${v.need} XP</span></span><span class="pxp"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></span></span>
         <span class="chev">${ICON.chev}</span></button>
@@ -4033,7 +4098,7 @@
   function showPause(on) {
     const el = $('pauseCard');
     if (on) {
-      $('pauseSub').textContent = run.mode === 'special' ? SP.BY[run.recipe].name + ' · ring ' + Math.min(run.st.hoops.length, run.hoops + 1) + ' of ' + run.st.hoops.length + ' · ' + fmtSol(run.prize) + ' SOL to win'
+      $('pauseSub').textContent = run.mode === 'special' ? SP.BY[run.recipe].name + ' · ring ' + Math.min(run.st.hoops.length, run.hoops + 1) + ' of ' + run.st.hoops.length + ' · ' + fmtAmt(run.prize) + ' SOL to win'
         : 'Level ' + run.level + ' · ' + fmtSol(run.bet * run.total) + ' SOL pot';
       syncSettings();
     }

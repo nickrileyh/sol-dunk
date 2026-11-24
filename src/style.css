@@ -1,33 +1,35 @@
-/* VOICE   Apple-clean: quiet, precise, nothing decorative; the game is the only colourful thing on screen
-   IDEA    the app is black glass around a window onto a night arena; the ball catches fire on swish streaks
-   PICTURE the live court in a rounded window, framed by plain black and system type
-   COLOUR  iOS dark: #000 page, #1c1c1e cells, white ink, ball orange #ff7a1a as the one accent, green cash-out, yellow XP
-   TYPE    the system face (SF Pro on Apple devices): large bold titles, SF Pro Rounded for numbers; no display font
-   LAYOUT  iOS: large title under a slim top row (balance right), content below, tab bar docked at the bottom; decisions in a centred card
-   SURFACE flat fills, no glows or gradients; cells are grouped with 12px corners; separators are hairlines; orange only on the main action
-   BUTTONS orange fill starts or spends a run; green fill takes money back (cash out, deposit); every other button is the grey iOS fill
+/* VOICE   a night arcade, Apple-clean: quiet surfaces, bold rounded type, colour that means something, and play that answers back
+   IDEA    navy-black glass around a window onto a night arena; each tier and challenge has its own colour; the ball catches fire on swish streaks
+   PICTURE the live court in a rounded window, colour-coded tier tiles with their top win, challenge cards with their own art
+   COLOUR  navy-black #05070e page, navy-tinted cells, white ink; ball orange #ff7a1a for every action that starts or spends a run;
+           tiers teal, blue, purple, gold; the special indigo, the pot gold; green cash-out, yellow XP
+   TYPE    the system faces: SF Pro Rounded bold for titles and numbers, SF Pro for text; no display font
+   LAYOUT  iOS: large title with the balance on its line, content below, tab bar docked at the bottom; decisions in a centred card
+   SURFACE flat fills, no glows or gradients; cells are rounded and grouped; separators are hairlines; motion is springy and brief
+   BUTTONS orange fill starts or spends a run; green fill takes money back (cash out, deposit); every other button is the grey fill
    INK     sentence case everywhere (no caps labels); numbers at bold at most; display amounts drop trailing zeros */
 :root {
-  --bg: #000000;
-  --sheet: rgba(28, 28, 30, 0.96);          /* sheets and cards: iOS secondary grouped background */
-  --surface: rgba(255, 255, 255, 0.11);     /* cells: #1c1c1e on the black page, #2c2c2e on a sheet */
-  --surface-2: rgba(118, 118, 128, 0.24);   /* iOS fill: stepper, plain buttons, segmented controls */
-  --surface-3: #636366;                     /* the selected segment */
+  --bg: #05070e;                            /* navy-black, the arena's night */
+  --sheet: rgba(17, 21, 35, 0.97);          /* sheets and cards */
+  --surface: rgba(150, 170, 255, 0.085);    /* cells: navy-tinted on the page and on a sheet */
+  --surface-2: rgba(140, 160, 230, 0.17);   /* the grey fill: round buttons, plain buttons, segmented controls */
+  --surface-3: #3b4560;                     /* the selected segment */
   --line: rgba(255, 255, 255, 0.1);
   --label: #ffffff;
-  --label-2: rgba(235, 235, 245, 0.6);
-  --label-3: rgba(235, 235, 245, 0.3);
+  --label-2: rgba(226, 232, 255, 0.62);
+  --label-3: rgba(226, 232, 255, 0.34);
   --orange: #ff7a1a;
   --red: #ff453a;
   --green: #30d158;
   --gold: #ffd60a;
   --yellow: var(--gold);
   --sep: var(--line);
-  --glass: rgba(44, 44, 46, 0.62);          /* thin material over the game */
+  --glass: rgba(20, 26, 44, 0.66);          /* thin material over the game */
   --glass-line: rgba(255, 255, 255, 0.06);
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
   --font-round: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  --font-title: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-title: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --spring: cubic-bezier(.34, 1.56, .64, 1); /* a small overshoot for presses and pops */
   /* heat colours of the equipped flame (the game sets these; defaults are the Fire flame) */
   --heat: 255, 124, 20; --heat-hi: 255, 196, 72; --heat-edge: 255, 60, 16; --heat-text: 255, 218, 136;
   --nova: 60, 144, 255; --nova-hi: 140, 218, 255; --nova-edge: 104, 72, 255; --nova-text: 183, 230, 255;
@@ -148,36 +150,50 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   background: var(--sheet);
   -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px);
   box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 24px 60px rgba(0, 0, 0, 0.6);
-  border-radius: 24px;
+  border-radius: 28px;
   transform: translate(-50%, 0);
   transition: transform 0.45s cubic-bezier(.2, .9, .2, 1), opacity 0.25s;
   touch-action: manipulation;
 }
 .sheet { bottom: calc(var(--safe-b) + 8px); padding: 16px 16px 8px; }
 .sheet.hide { transform: translate(-50%, calc(100% + 40px)); opacity: 0; pointer-events: none; }
-.card { top: 50%; transform: translate(-50%, -50%); padding: 24px 16px 16px; text-align: center; }
+.card { top: 50%; transform: translate(-50%, -50%); padding: 26px 18px 18px; text-align: center; }
+#checkpoint .kicker { color: var(--gold); } /* the checkpoint is the gold ring */
 .card.hide { transform: translate(-50%, -46%) scale(0.97); opacity: 0; pointer-events: none; }
 .card:focus { outline: none; }
 .card .btn { transition: transform 0.12s, opacity 0.3s, filter 0.15s; }
 .card.arming .btn { pointer-events: none; opacity: 0.4; }  /* decisions arm after a beat, so a flap tap can't press them */
 
 
-/* difficulty tiers: an iOS segmented control, names only (the foot line says what the tier can win) */
-.tiers, .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; padding: 2px; border-radius: 9px; background: var(--surface-2); }
-.tiers button, .seg button {
+/* the modes: a tile each, in its own colour with the most it can win; the picked one is filled */
+.tiers { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.tiers button {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  height: 64px; padding: 0 2px; border-radius: 16px; background: var(--surface);
+  background: color-mix(in srgb, var(--tc) 13%, transparent);
+  transition: background 0.25s, transform 0.3s var(--spring), color 0.25s;
+}
+.tiers button:active { transform: scale(0.94); }
+.tiers .tn { font-size: 12.5px; font-weight: 600; color: var(--label-2); white-space: nowrap; transition: color 0.25s; }
+.tiers .tx { font-family: var(--font-round); font-size: 21px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; color: var(--tc); white-space: nowrap; font-variant-numeric: tabular-nums; transition: color 0.25s; }
+.tiers button[aria-checked="true"] { background: var(--tc); animation: tilePop 0.35s var(--spring); }
+.tiers button[aria-checked="true"] .tn, .tiers button[aria-checked="true"] .tx { color: var(--tink, #fff); }
+@keyframes tilePop { 0% { transform: scale(0.94); } 100% { transform: scale(1); } }
+/* segmented controls (odds tiers, sub-pages) */
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; padding: 2px; border-radius: 9px; background: var(--surface-2); }
+.seg button {
   position: relative; display: flex; align-items: center; justify-content: center;
   height: 32px; padding: 0 2px; border-radius: 7px;
   font-size: 13px; font-weight: 500; color: var(--label); white-space: nowrap;
   transition: background 0.2s, box-shadow 0.2s;
 }
-.tiers button + button::before, .seg button + button::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 0.5px; background: rgba(255, 255, 255, 0.16); transition: opacity 0.2s; }
-.tiers button[aria-checked="true"], .seg button[aria-checked="true"], .seg button[aria-pressed="true"] { background: var(--surface-3); font-weight: 600; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04); }
-.tiers button[aria-checked="true"]::before, .tiers button[aria-checked="true"] + button::before,
+.seg button + button::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 0.5px; background: rgba(255, 255, 255, 0.16); transition: opacity 0.2s; }
+.seg button[aria-checked="true"], .seg button[aria-pressed="true"] { background: var(--surface-3); font-weight: 600; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04); }
 .seg button[aria-checked="true"]::before, .seg button[aria-checked="true"] + button::before,
 .seg button[aria-pressed="true"]::before, .seg button[aria-pressed="true"] + button::before { opacity: 0; }
 
 .foot { margin: 8px 4px 0; font-size: 13px; color: var(--label-2); font-variant-numeric: tabular-nums; }
-.foot-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 8px 2px 0 4px; }
+.foot-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 10px 2px 0 4px; }
 .foot-row .foot { margin: 0; min-width: 0; }
 .foot-link { flex: none; display: inline-flex; align-items: center; gap: 1px; padding: 4px 0 4px 8px; margin: -4px 0; font-size: 13px; font-weight: 500; color: var(--orange); }
 .foot-link svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -186,32 +202,32 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .foot .dim { color: var(--label-3); }
 
 /* grouped rows */
-.group { background: var(--surface); border-radius: 12px; overflow: hidden; }
+.group { background: var(--surface); border-radius: 18px; overflow: hidden; }
 .sheet .group { margin-bottom: 10px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 50px; padding: 0 10px 0 16px; }
 .row + .row { box-shadow: inset 0 1px 0 var(--line); }
 .row .k { color: var(--label); font-size: 17px; font-weight: 400; }
 .row .v { color: var(--label-2); text-align: right; font-variant-numeric: tabular-nums; }
-/* the bet: its value, then an iOS stepper (minus | plus) that walks a 1-2-5 ladder */
-.betctl { display: flex; align-items: center; gap: 12px; }
-.stepper { display: flex; flex: none; border-radius: 8px; background: var(--surface-2); overflow: hidden; }
-.stepper button { position: relative; display: grid; place-items: center; width: 47px; height: 32px; color: var(--label); transition: background 0.15s, color 0.15s; }
-.stepper button + button::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 0.5px; background: rgba(255, 255, 255, 0.2); }
-.stepper button:active { background: rgba(255, 255, 255, 0.12); }
-.stepper button[disabled] { color: var(--label-3); pointer-events: none; }
-.stepper svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.bet-field { display: flex; align-items: baseline; justify-content: flex-end; min-width: 0; cursor: text; }
-.bet-field .unit { margin-left: 4px; }
-.bet-input { width: 76px; height: 34px; border: 0; padding: 0; background: transparent; text-align: right; color: var(--label); font-family: var(--font-round); font-weight: 600; font-size: 20px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+/* the bet: a pill with round minus and plus (a 1-2-5 ladder) and the amount big in the middle; what it can win under it */
+.bet { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 6px; border-radius: 30px; background: var(--surface); }
+.round { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 23px; background: var(--surface-2); color: var(--label); transition: transform 0.25s var(--spring), background 0.15s, color 0.15s; }
+.round:active { transform: scale(0.88); background: rgba(140, 160, 230, 0.3); }
+.round[disabled] { color: var(--label-3); pointer-events: none; }
+.round svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.bet-field { flex: 1; display: flex; align-items: baseline; justify-content: center; min-width: 0; cursor: text; }
+.bet-field .unit { margin-left: 5px; font-size: 15px; }
+.bet-input { width: 5.2ch; height: 40px; border: 0; padding: 0; background: transparent; text-align: right; color: var(--label); font-family: var(--font-round); font-weight: 700; font-size: 28px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .bet-input:focus { outline: none; }
+.win { margin: 10px 0 12px; text-align: center; font-size: 15px; color: var(--label-2); }
+.win b { font-family: var(--font-round); font-weight: 700; color: var(--tc, var(--label)); }
 
 .btn {
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; height: 50px; border-radius: 14px;
-  font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
-  transition: transform 0.12s, opacity 0.15s, filter 0.15s;
+  width: 100%; height: 54px; border-radius: 27px;
+  font-family: var(--font-round); font-size: 18px; font-weight: 700; letter-spacing: -0.01em;
+  transition: transform 0.3s var(--spring), opacity 0.15s, filter 0.15s;
 }
-.btn:active { transform: scale(0.98); filter: brightness(0.88); }
+.btn:active { transform: scale(0.96); filter: brightness(0.9); transition-duration: 0.08s; }
 .btn-primary { background: var(--orange); color: #1a0b00; }
 .btn-green { background: var(--green); color: #00230d; }
 .btn-plain { background: var(--surface-2); color: var(--label); }
@@ -240,7 +256,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .stack { display: grid; gap: 10px; }
 .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .btn svg { width: 18px; height: 18px; flex: none; margin-top: -2px; }
-.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 20px 0 16px; padding: 12px 0 11px; border-radius: 12px; background: var(--surface); }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 20px 0 16px; padding: 12px 0 11px; border-radius: 18px; background: var(--surface); }
 .tiles div { padding: 0 4px; }
 .tiles div + div { box-shadow: inset 0.5px 0 0 var(--line); }
 .tiles b { display: block; font-family: var(--font-round); font-weight: 700; font-size: 22px; line-height: 1.15; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
@@ -265,7 +281,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .panel .body p { margin: 8px 2px; }
 .panel .body b { color: var(--label); font-weight: 650; }
 /* How to play: one quiet row per idea, each with a glyph tile */
-.how { display: grid; margin-top: 2px; border-radius: 12px; background: var(--surface); overflow: hidden; }
+.how { display: grid; margin-top: 2px; border-radius: 18px; background: var(--surface); overflow: hidden; }
 .how .hrow { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: start; padding: 13px 16px 14px 12px; }
 .how .hrow + .hrow::before { content: ""; position: absolute; left: 56px; right: 0; top: 0; height: 0.5px; background: var(--sep); }
 .how .hic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--surface-2); color: var(--label); }
@@ -279,7 +295,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .how h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--label); }
 .how p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--label-2); }
 .how b { color: var(--label); font-weight: 600; }
-.tbl { background: var(--surface); border-radius: 12px; padding: 2px 12px; overflow-x: auto; }
+.tbl { background: var(--surface); border-radius: 18px; padding: 2px 12px; overflow-x: auto; }
 .tbl table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
 .tbl th { text-align: left; font-size: 13px; font-weight: 500; color: var(--label-2); padding: 10px 4px 6px; white-space: nowrap; }
 .tbl td { padding: 10px 4px; color: var(--label); box-shadow: inset 0 0.5px 0 var(--line); white-space: nowrap; }
@@ -369,37 +385,63 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 #callout.gold .c1 { color: var(--gold); }
 #callout.green .c1 { color: var(--green); }
 
-/* ---------- the Challenges tab: cards for today's specials and the daily pot, each opening its page ---------- */
-.cc { margin-top: 12px; border-radius: 12px; background: var(--surface); overflow: hidden; }
+/* ---------- the Challenges tab: today's specials and the daily pot, each card in its own colour (a flat tint of it); details on their pages ---------- */
+.cc { --cc: #8e9bd0; margin-top: 12px; border-radius: 24px; background: var(--surface); background: color-mix(in srgb, var(--cc) 15%, var(--bg)); overflow: hidden; }
+.cc.sp { --cc: #6e6cf0; }
+.cc.pot { --cc: #ffd60a; background: var(--surface); background: color-mix(in srgb, var(--cc) 7%, #0b1020); }
 .vtitle + .cc { margin-top: 16px; }
-.cc-open { display: grid; grid-template-columns: minmax(0, 1fr) 14px; column-gap: 10px; width: 100%; padding: 13px 14px 0 16px; text-align: left; }
+.cc-open { display: grid; grid-template-columns: minmax(0, 1fr) 14px; column-gap: 10px; width: 100%; padding: 16px 16px 0 18px; text-align: left; transition: transform 0.3s var(--spring); }
+.cc-open:active { transform: scale(0.98); transition-duration: 0.08s; }
 .cc-open > span:not(.chev) { grid-column: 1; min-width: 0; }
-.cc-open .chev { grid-column: 2; grid-row: 1 / 4; align-self: center; width: 14px; height: 14px; color: var(--label-3); }
-.cc-k { font-size: 13px; font-weight: 500; color: var(--label-2); }
-.cc-n { margin-top: 2px; font-family: var(--font-title); font-size: 22px; font-weight: 700; line-height: 1.2; letter-spacing: 0.005em; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cc-s { margin-top: 1px; font-size: 14px; line-height: 1.35; color: var(--label-2); }
-.cc-act { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 0 16px; padding: 11px 14px 12px 0; box-shadow: inset 0 0.5px 0 var(--sep); }
+.cc-open .chev { grid-column: 2; grid-row: 1; align-self: center; width: 14px; height: 14px; color: var(--label-3); }
+.cc-k { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--cc); color: color-mix(in srgb, var(--cc) 70%, #fff); }
+.cc-k svg { flex: none; width: 15px; height: 15px; }
+.cc-n { margin-top: 4px; font-family: var(--font-title); font-size: 28px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-s { margin-top: 2px; font-size: 14px; line-height: 1.35; color: var(--label-2); }
+.cc-art { grid-column: 1 / -1; display: block; width: 100%; height: 58px; margin-top: 10px; }
+.cc-big { display: flex; align-items: baseline; margin-top: 6px; font-family: var(--font-round); font-size: 40px; font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; color: var(--gold); font-variant-numeric: tabular-nums; }
+.cc-big .unit { margin-left: 6px; font-family: var(--font); font-size: 17px; font-weight: 600; letter-spacing: 0; color: var(--label-2); }
+.cc-g { margin-top: 10px; font-size: 17px; font-weight: 600; line-height: 1.25; color: var(--label); }
+.cc-act { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 0 0 18px; padding: 12px 14px 14px 0; box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.1); }
 .cc-v { min-width: 0; font-size: 15px; color: var(--label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cc-v b { font-weight: 600; color: var(--label); }
-.cc-v b.gold { color: var(--gold); }
-/* the App Store's Get button: a grey capsule with the action in the tint colour */
-.pill { flex: none; display: inline-flex; align-items: center; height: 30px; padding: 0 16px; border-radius: 15px; background: var(--surface-2); font-size: 15px; font-weight: 700; color: var(--orange); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.pill:active { background: rgba(118, 118, 128, 0.4); }
+.cc-v b { font-family: var(--font-round); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--label); }
+/* pills: a grey capsule for a state; the orange one starts or spends a run */
+.pill { flex: none; display: inline-flex; align-items: center; height: 36px; padding: 0 16px; border-radius: 18px; background: var(--surface-2); font-size: 15px; font-weight: 700; color: var(--label); white-space: nowrap; font-variant-numeric: tabular-nums; transition: transform 0.3s var(--spring), filter 0.15s; }
+.pill:active { transform: scale(0.93); transition-duration: 0.08s; }
+.pill.go { background: var(--orange); color: #1a0b00; font-family: var(--font-round); }
+.pill.go:active { filter: brightness(0.9); }
 .pill[disabled] { opacity: 0.5; }
 .pill.in, .pill.ok, .pill.off { font-weight: 600; color: var(--label-2); }
 .pill.ok { color: var(--green); }
-/* today's specials: one card, a row for each with its twist and length, its prize and Play; a row opens its page */
-.cc-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 13px 14px 4px 16px; }
-.cc-t { font-size: 13px; color: var(--label-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.spr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; margin-left: 16px; padding: 10px 14px 11px 0; }
-.spr + .spr { box-shadow: inset 0 0.5px 0 var(--sep); }
-.spr-open { min-width: 0; padding: 2px 0; text-align: left; }
-.spr-open b { display: block; font-family: var(--font-title); font-size: 18px; font-weight: 700; line-height: 1.2; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.spr-open span { display: block; margin-top: 2px; font-size: 13px; color: var(--label-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* today's specials: one card, a row for each with its prize multiple, twist and length, its prize and Play; a row opens its page */
+.cc-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 16px 6px 18px; }
+.cc-h .cc-k { margin: 0; }
+.cc-t { font-size: 13px; color: var(--label-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.spr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; margin-left: 18px; padding: 11px 16px 12px 0; }
+.spr + .spr { box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.1); }
+.spr:last-child { padding-bottom: 16px; }
+.spr-open { display: grid; grid-template-columns: 46px minmax(0, 1fr); column-gap: 12px; align-items: center; min-width: 0; padding: 2px 0; text-align: left; transition: transform 0.3s var(--spring); }
+.spr-open:active { transform: scale(0.97); transition-duration: 0.08s; }
+.spr-x { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: var(--sx); color: #05070e; font-family: var(--font-round); font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
+.spr-t { min-width: 0; }
+.spr-t b { display: block; font-family: var(--font-title); font-size: 18px; font-weight: 700; line-height: 1.2; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spr-t span { display: block; margin-top: 2px; font-size: 13px; color: var(--label-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spr-act { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .spr-win { font-size: 13px; color: var(--label-2); white-space: nowrap; }
-.spr-win b { font-weight: 600; color: var(--gold); font-variant-numeric: tabular-nums; }
-.sp-card { border-radius: 12px; background: var(--surface); overflow: hidden; }
+.spr-win b { font-family: var(--font-round); font-size: 15px; font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }
+/* This week and Career: two tiles under the daily missions */
+.ctiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.ct { --cc: #30b0c7; position: relative; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 14px 14px 15px 16px; border-radius: 20px; background: var(--surface); text-align: left; transition: transform 0.3s var(--spring); }
+.ct:active { transform: scale(0.96); transition-duration: 0.08s; }
+.ct-career { --cc: #5e5ce6; }
+.ct-ic { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--cc); color: #fff; }
+.ct-ic svg { width: 19px; height: 19px; }
+.ct .chev { position: absolute; top: 24px; right: 14px; width: 13px; height: 13px; color: var(--label-3); }
+.ct b { margin-top: 12px; font-size: 17px; font-weight: 600; color: var(--label); }
+.ct-v { margin-top: 1px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--label-2); white-space: nowrap; }
+.ct-bar { align-self: stretch; height: 4px; margin-top: 10px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.ct-bar i { display: block; height: 100%; border-radius: 2px; background: var(--cc); }
+.sp-card { border-radius: 24px; background: var(--surface); background: color-mix(in srgb, #6e6cf0 15%, var(--bg)); overflow: hidden; }
 .sp-head { padding: 14px 16px 4px; }
 .sp-k { font-size: 13px; color: var(--label-2); }
 .sp-name { margin-top: 2px; font-family: var(--font-title); font-weight: 700; font-size: 28px; line-height: 1.1; letter-spacing: 0.005em; color: var(--label); }
@@ -409,6 +451,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .sp-prize { margin: 22px 0 4px; text-align: center; }
 .sp-prize .k { display: block; font-size: 13px; color: var(--label-2); }
 .sp-prize .big { margin: 6px 0 0; font-size: 46px; }
+.sp-prize.pot .big { color: var(--gold); }
 .sp-prize .x { display: block; margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--gold); }
 .vcol > .tiles { margin: 16px 0 0; text-align: center; }
 .vtitle + .sp-card, .vtitle + .pot-goal { margin-top: 18px; }
@@ -436,7 +479,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .pot-goal b { display: block; font-size: 17px; font-weight: 700; color: var(--label); }
 .pot-goal span { font-size: 13px; color: var(--label-2); }
 .tiles b.sm { font-size: 17px; line-height: 1.55; white-space: nowrap; } /* a time left, in words */
-.pot-me { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface); }
+.pot-me { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 18px; background: var(--surface); }
 .pot-me svg { flex: none; width: 18px; height: 18px; margin-top: 1px; color: var(--gold); }
 .pot-me.done svg { color: var(--green); }
 .pot-me b { display: block; font-size: 15px; font-weight: 700; color: var(--label); }
@@ -446,7 +489,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .pot-last { display: flex; flex-direction: column; gap: 3px; margin-top: 14px; padding-top: 12px; box-shadow: inset 0 0.5px 0 var(--line); font-size: 13px; line-height: 1.4; color: var(--label-2); }
 .pot-last .k { font-size: 12px; font-weight: 700; color: var(--label-3); }
 .pot-last .won { color: var(--green); font-weight: 700; }
-.pot-demo { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--surface); }
+.pot-demo { margin-top: 14px; padding: 12px 14px; border-radius: 18px; background: var(--surface); }
 .pot-demo p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.4; color: var(--label-2); }
 .pot-demo .btn { width: 100%; height: 44px; font-size: 15px; }
 .gain.pot svg { color: var(--gold); }
@@ -510,11 +553,11 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .item .lock { position: absolute; top: 7px; right: 7px; width: 12px; height: 12px; color: var(--label-3); }
 .item .new { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 4px; background: var(--red); }
 .reset-note { margin: 8px 4px 0; font-size: 12px; color: var(--label-3); }
-.bests { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 11px 0 10px; border-radius: 12px; background: var(--surface); }
+.bests { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 11px 0 10px; border-radius: 18px; background: var(--surface); }
 .bests div { padding: 0 4px; text-align: center; }
 .bests div + div { box-shadow: inset 0.5px 0 0 var(--line); }
-.bests b { display: block; font-family: var(--font-round); font-size: 20px; font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }
-.bests span { display: block; font-size: 11px; font-weight: 600; color: var(--label-3); }
+.bests b { display: block; font-family: var(--font-round); font-size: 20px; font-weight: 700; color: var(--tc, var(--label)); font-variant-numeric: tabular-nums; }
+.bests span { display: block; font-size: 11px; font-weight: 600; color: var(--label-2); }
 .bests em { display: block; font-style: normal; font-size: 11px; color: var(--label-2); margin-top: 1px; }
 
 /* ---------- navigation: an iOS tab bar docked to the bottom edge ---------- */
@@ -559,10 +602,10 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .ltitle { position: relative; z-index: 1; flex: none; padding-right: 150px; overflow: hidden; } /* the balance sits at the end of this line; positioned so it paints over the window's black */
 .controls, .home > .lk-cats, .home > .lk-info, .home > .lk-grid { position: relative; z-index: 1; }
 /* the window: a transparent rounded box whose spread shadow paints the page black around it */
-.hero { flex: 1 1 auto; min-height: 120px; margin: 12px 0 16px; border-radius: 22px; pointer-events: none;
+.hero { flex: 1 1 auto; min-height: 120px; margin: 12px 0 14px; border-radius: 26px; pointer-events: none;
   box-shadow: 0 0 0 100vmax var(--bg), inset 0 0 0 0.5px rgba(255, 255, 255, 0.12); }
 .controls { flex: none; }
-.controls .group { margin: 14px 0 12px; }
+
 .instant .home, .instant .home > *, .instant .view { transition: none !important; }
 
 /* ---------- full-page tabs: Missions and Profile ---------- */
@@ -597,8 +640,8 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .mring { position: relative; width: 36px; height: 36px; }
 .mring svg { width: 36px; height: 36px; transform: rotate(-90deg); }
 .mring circle { fill: none; stroke-width: 3.4; }
-.mring .trk { stroke: rgba(255, 255, 255, 0.1); }
-.mring .val { stroke: var(--gold); stroke-linecap: round; transition: stroke-dasharray 0.6s cubic-bezier(.2, .9, .2, 1); }
+.mring .trk { stroke: rgba(255, 255, 255, 0.1); stroke: color-mix(in srgb, var(--mc, #fff) 20%, transparent); }
+.mring .val { stroke: var(--mc, var(--gold)); stroke-linecap: round; transition: stroke-dasharray 0.6s cubic-bezier(.2, .9, .2, 1); }
 .mring.zero .val { display: none; }
 .mring .ck { position: absolute; inset: 0; display: none; place-items: center; border-radius: 50%; background: var(--green); color: #04150b; }
 .mring .ck svg { width: 18px; height: 18px; transform: none; }
@@ -611,7 +654,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .mrow.done .mxp { color: var(--green); }
 
 /* career: the chapter you're on, its reward, then the others */
-.chap { border-radius: 12px; background: var(--surface); overflow: hidden; }
+.chap { border-radius: 18px; background: var(--surface); overflow: hidden; }
 .chap-top { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 14px; align-items: center; padding: 16px 16px 12px; }
 .rew { position: relative; width: 84px; height: 84px; border-radius: 14px; overflow: hidden; display: grid; place-items: center;
   background: var(--surface-2); }
@@ -624,7 +667,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .chap-bar { height: 6px; margin: 0 16px 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .chap-bar i { display: block; height: 100%; border-radius: 3px; background: var(--gold); transition: width 0.6s cubic-bezier(.2, .9, .2, 1); }
 .chap .mrow:first-of-type { box-shadow: inset 0 0.5px 0 var(--sep); }
-.chlist { margin-top: 10px; border-radius: 12px; background: var(--surface); }
+.chlist { margin-top: 10px; border-radius: 18px; background: var(--surface); }
 .chli { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 50px; padding: 6px 14px 6px 12px; }
 .chli + .chli { box-shadow: inset 0 0.5px 0 var(--sep); }
 .chli .cs { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: var(--surface-2); color: var(--label-3); }
@@ -683,13 +726,14 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 .lk-grid .item .lock { z-index: 1; }
 
 /* ---------- Profile ---------- */
-.pcard { display: grid; grid-template-columns: 64px minmax(0, 1fr) 14px; gap: 14px; align-items: center; margin-top: 16px; padding: 14px 14px 14px 16px; border-radius: 12px; background: var(--surface); text-align: left; width: 100%; }
-.pcard:active { background: rgba(255, 255, 255, 0.14); }
+.pcard { display: grid; grid-template-columns: 68px minmax(0, 1fr) 14px; gap: 14px; align-items: center; margin-top: 16px; padding: 16px 14px 16px 16px; border-radius: 24px; text-align: left; width: 100%;
+  background: var(--surface); background: color-mix(in srgb, var(--av, var(--orange)) 16%, var(--bg)); transition: transform 0.3s var(--spring); }
+.pcard:active { transform: scale(0.98); transition-duration: 0.08s; }
 .pcard .chev { width: 14px; height: 14px; color: var(--label-3); }
 .pav { position: relative; width: 76px; height: 76px; border-radius: 38px; display: grid; place-items: center; color: var(--av-ink, #fff);
   background: var(--av, var(--orange)); }
 .pav svg { width: 40px; height: 40px; }
-.pcard .pav { width: 64px; height: 64px; border-radius: 32px; }
+.pcard .pav { width: 68px; height: 68px; border-radius: 34px; }
 .pcard .pav svg { width: 34px; height: 34px; }
 .pid { min-width: 0; }
 .pname { display: block; font-family: var(--font-title); font-weight: 700; font-size: 22px; line-height: 1.15; letter-spacing: -0.01em; color: var(--label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -698,19 +742,19 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 /* the level and its XP, under the name */
 .plv { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px; font-size: 13px; font-weight: 600; color: var(--label); }
 .plv .num { font-weight: 400; color: var(--label-2); }
-.pxp { display: block; height: 4px; margin-top: 5px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.pxp { display: block; height: 5px; margin-top: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
 .pxp i { display: block; height: 100%; border-radius: 2px; background: var(--gold); }
 .vscroll .bests { margin-top: 10px; }
 .trophies { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.tro { padding: 14px 8px 12px; border-radius: 12px; background: var(--surface); text-align: center; }
+.tro { padding: 14px 8px 12px; border-radius: 16px; background: var(--surface); text-align: center; }
 .tro .ti { width: 42px; height: 42px; margin: 0 auto 8px; border-radius: 21px; display: grid; place-items: center; background: var(--surface-2); color: var(--label-3); }
 .tro .ti svg { width: 21px; height: 21px; }
 .tro.got .ti { background: var(--gold); color: #000; }
 .tro b { display: block; font-size: 12.5px; font-weight: 650; line-height: 1.2; color: var(--label); }
 .tro span { display: block; margin-top: 3px; font-size: 11px; line-height: 1.3; color: var(--label-3); }
 .tro:not(.got) b { color: var(--label-2); }
-.vscroll .list { border-radius: 12px; background: var(--surface); }
-.menu-list { border-radius: 12px; background: var(--surface); overflow: hidden; }
+.vscroll .list { border-radius: 18px; background: var(--surface); }
+.menu-list { border-radius: 18px; background: var(--surface); overflow: hidden; }
 .vcol > .menu-list, .vcol > .group + .menu-list { margin-top: 22px; }
 .vcol > .pcard + .menu-list { margin-top: 22px; }
 .menu-list .mv .dot { display: inline-block; width: 9px; height: 9px; border-radius: 5px; background: var(--red); vertical-align: middle; }
@@ -729,7 +773,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 .menu-list .mi-week { background: #30b0c7; } .menu-list .mi-career { background: #5e5ce6; }
 .menu-list .mi svg { width: 17px; height: 17px; }
 .menu-list .chev { width: 14px; height: 14px; color: var(--label-3); }
-.empty { padding: 16px; border-radius: 12px; background: var(--surface); font-size: 14px; color: var(--label-2); }
+.empty { padding: 16px; border-radius: 18px; background: var(--surface); font-size: 14px; color: var(--label-2); }
 
 /* ---------- pages: pushed over the current tab, a back button in the top bar and the large title under it ---------- */
 .view.page { z-index: 8; }
@@ -759,7 +803,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 .vsub + .trophies, .vsub + .runs, .vsub + .empty, .vsub + .group, .vsub + .chap { margin-top: 16px; }
 .vtitle + .empty { margin-top: 20px; }
 /* recent runs: how it ended, tier, bet and when, then what it made */
-.runs { border-radius: 12px; background: var(--surface); overflow: hidden; }
+.runs { border-radius: 18px; background: var(--surface); overflow: hidden; }
 .rr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 62px; padding: 10px 16px; }
 .rr + .rr { box-shadow: inset 0 0.5px 0 var(--sep); }
 .rr-t { min-width: 0; }
@@ -804,7 +848,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   .stack { gap: 8px; }
   .next { margin: 14px 2px 12px; padding: 12px 2px 0; }
   .hero { margin: 10px 0 12px; }
-  .controls .group { margin: 10px 0 10px; }
+  .tiers button { height: 56px; border-radius: 14px; } /* short phones: the arena keeps its share of the screen */
+  .tiers .tx { font-size: 19px; }
+  .bet { margin-top: 10px; padding: 4px; }
+  .round { width: 42px; height: 42px; }
+  .bet-input { font-size: 26px; height: 38px; }
+  .win { margin: 8px 0 10px; }
   #callout .c1 { font-size: 40px; }
 }
 @media (max-width: 389px) { /* phones narrower than 390 px: a smaller large title, so "Challenges" clears the balance */
@@ -819,13 +868,23 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   .ltitle, .vtitle { font-size: 26px; padding-right: 112px; }
   .hud-lobby .cap { padding: 0 12px; }
   .hud-lobby .cap .tag { display: none; }
+  .tiers { gap: 6px; }
+  .tiers .tn { font-size: 11.5px; }
+  .tiers .tx { font-size: 17px; }
 }
 @media (max-height: 600px) {
   .ltitle, .vtitle { font-size: 28px; height: 36px; line-height: 36px; }
   .btn { height: 46px; }
+  .tiers button { height: 52px; }
+  .tiers .tx { font-size: 17px; }
   .tiles b { font-size: 20px; }
 }
+/* a tab's blocks rise in when you open it: played by riseIn() in game.js */
+#fxLayer { position: fixed; inset: 0; z-index: 19; width: 100%; height: 100%; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
+  .tiers button[aria-checked="true"] { animation: none; }
+  .btn, .pill, .round, .tiers button, .cc-open, .ct, .pcard { transition: none; }
+  #fxLayer { display: none; }
   #prompt .ring::before, #prompt .ring::after { animation: none; }
   #prompt .ring::after { transform: scale(1); opacity: 0.45; }
   .streak.broke, .gain { animation: none; }

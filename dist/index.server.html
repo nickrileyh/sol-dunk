@@ -3,40 +3,42 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#05070e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>SOL DUNK</title>
-<style>/* VOICE   Apple-clean: quiet, precise, nothing decorative; the game is the only colourful thing on screen
-   IDEA    the app is black glass around a window onto a night arena; the ball catches fire on swish streaks
-   PICTURE the live court in a rounded window, framed by plain black and system type
-   COLOUR  iOS dark: #000 page, #1c1c1e cells, white ink, ball orange #ff7a1a as the one accent, green cash-out, yellow XP
-   TYPE    the system face (SF Pro on Apple devices): large bold titles, SF Pro Rounded for numbers; no display font
-   LAYOUT  iOS: large title under a slim top row (balance right), content below, tab bar docked at the bottom; decisions in a centred card
-   SURFACE flat fills, no glows or gradients; cells are grouped with 12px corners; separators are hairlines; orange only on the main action
-   BUTTONS orange fill starts or spends a run; green fill takes money back (cash out, deposit); every other button is the grey iOS fill
+<style>/* VOICE   a night arcade, Apple-clean: quiet surfaces, bold rounded type, colour that means something, and play that answers back
+   IDEA    navy-black glass around a window onto a night arena; each tier and challenge has its own colour; the ball catches fire on swish streaks
+   PICTURE the live court in a rounded window, colour-coded tier tiles with their top win, challenge cards with their own art
+   COLOUR  navy-black #05070e page, navy-tinted cells, white ink; ball orange #ff7a1a for every action that starts or spends a run;
+           tiers teal, blue, purple, gold; the special indigo, the pot gold; green cash-out, yellow XP
+   TYPE    the system faces: SF Pro Rounded bold for titles and numbers, SF Pro for text; no display font
+   LAYOUT  iOS: large title with the balance on its line, content below, tab bar docked at the bottom; decisions in a centred card
+   SURFACE flat fills, no glows or gradients; cells are rounded and grouped; separators are hairlines; motion is springy and brief
+   BUTTONS orange fill starts or spends a run; green fill takes money back (cash out, deposit); every other button is the grey fill
    INK     sentence case everywhere (no caps labels); numbers at bold at most; display amounts drop trailing zeros */
 :root {
-  --bg: #000000;
-  --sheet: rgba(28, 28, 30, 0.96);          /* sheets and cards: iOS secondary grouped background */
-  --surface: rgba(255, 255, 255, 0.11);     /* cells: #1c1c1e on the black page, #2c2c2e on a sheet */
-  --surface-2: rgba(118, 118, 128, 0.24);   /* iOS fill: stepper, plain buttons, segmented controls */
-  --surface-3: #636366;                     /* the selected segment */
+  --bg: #05070e;                            /* navy-black, the arena's night */
+  --sheet: rgba(17, 21, 35, 0.97);          /* sheets and cards */
+  --surface: rgba(150, 170, 255, 0.085);    /* cells: navy-tinted on the page and on a sheet */
+  --surface-2: rgba(140, 160, 230, 0.17);   /* the grey fill: round buttons, plain buttons, segmented controls */
+  --surface-3: #3b4560;                     /* the selected segment */
   --line: rgba(255, 255, 255, 0.1);
   --label: #ffffff;
-  --label-2: rgba(235, 235, 245, 0.6);
-  --label-3: rgba(235, 235, 245, 0.3);
+  --label-2: rgba(226, 232, 255, 0.62);
+  --label-3: rgba(226, 232, 255, 0.34);
   --orange: #ff7a1a;
   --red: #ff453a;
   --green: #30d158;
   --gold: #ffd60a;
   --yellow: var(--gold);
   --sep: var(--line);
-  --glass: rgba(44, 44, 46, 0.62);          /* thin material over the game */
+  --glass: rgba(20, 26, 44, 0.66);          /* thin material over the game */
   --glass-line: rgba(255, 255, 255, 0.06);
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
   --font-round: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-  --font-title: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, Arial, sans-serif;
+  --font-title: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --spring: cubic-bezier(.34, 1.56, .64, 1); /* a small overshoot for presses and pops */
   /* heat colours of the equipped flame (the game sets these; defaults are the Fire flame) */
   --heat: 255, 124, 20; --heat-hi: 255, 196, 72; --heat-edge: 255, 60, 16; --heat-text: 255, 218, 136;
   --nova: 60, 144, 255; --nova-hi: 140, 218, 255; --nova-edge: 104, 72, 255; --nova-text: 183, 230, 255;
@@ -157,36 +159,50 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   background: var(--sheet);
   -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px);
   box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 24px 60px rgba(0, 0, 0, 0.6);
-  border-radius: 24px;
+  border-radius: 28px;
   transform: translate(-50%, 0);
   transition: transform 0.45s cubic-bezier(.2, .9, .2, 1), opacity 0.25s;
   touch-action: manipulation;
 }
 .sheet { bottom: calc(var(--safe-b) + 8px); padding: 16px 16px 8px; }
 .sheet.hide { transform: translate(-50%, calc(100% + 40px)); opacity: 0; pointer-events: none; }
-.card { top: 50%; transform: translate(-50%, -50%); padding: 24px 16px 16px; text-align: center; }
+.card { top: 50%; transform: translate(-50%, -50%); padding: 26px 18px 18px; text-align: center; }
+#checkpoint .kicker { color: var(--gold); } /* the checkpoint is the gold ring */
 .card.hide { transform: translate(-50%, -46%) scale(0.97); opacity: 0; pointer-events: none; }
 .card:focus { outline: none; }
 .card .btn { transition: transform 0.12s, opacity 0.3s, filter 0.15s; }
 .card.arming .btn { pointer-events: none; opacity: 0.4; }  /* decisions arm after a beat, so a flap tap can't press them */
 
 
-/* difficulty tiers: an iOS segmented control, names only (the foot line says what the tier can win) */
-.tiers, .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; padding: 2px; border-radius: 9px; background: var(--surface-2); }
-.tiers button, .seg button {
+/* the modes: a tile each, in its own colour with the most it can win; the picked one is filled */
+.tiers { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+.tiers button {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  height: 64px; padding: 0 2px; border-radius: 16px; background: var(--surface);
+  background: color-mix(in srgb, var(--tc) 13%, transparent);
+  transition: background 0.25s, transform 0.3s var(--spring), color 0.25s;
+}
+.tiers button:active { transform: scale(0.94); }
+.tiers .tn { font-size: 12.5px; font-weight: 600; color: var(--label-2); white-space: nowrap; transition: color 0.25s; }
+.tiers .tx { font-family: var(--font-round); font-size: 21px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; color: var(--tc); white-space: nowrap; font-variant-numeric: tabular-nums; transition: color 0.25s; }
+.tiers button[aria-checked="true"] { background: var(--tc); animation: tilePop 0.35s var(--spring); }
+.tiers button[aria-checked="true"] .tn, .tiers button[aria-checked="true"] .tx { color: var(--tink, #fff); }
+@keyframes tilePop { 0% { transform: scale(0.94); } 100% { transform: scale(1); } }
+/* segmented controls (odds tiers, sub-pages) */
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; padding: 2px; border-radius: 9px; background: var(--surface-2); }
+.seg button {
   position: relative; display: flex; align-items: center; justify-content: center;
   height: 32px; padding: 0 2px; border-radius: 7px;
   font-size: 13px; font-weight: 500; color: var(--label); white-space: nowrap;
   transition: background 0.2s, box-shadow 0.2s;
 }
-.tiers button + button::before, .seg button + button::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 0.5px; background: rgba(255, 255, 255, 0.16); transition: opacity 0.2s; }
-.tiers button[aria-checked="true"], .seg button[aria-checked="true"], .seg button[aria-pressed="true"] { background: var(--surface-3); font-weight: 600; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04); }
-.tiers button[aria-checked="true"]::before, .tiers button[aria-checked="true"] + button::before,
+.seg button + button::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 0.5px; background: rgba(255, 255, 255, 0.16); transition: opacity 0.2s; }
+.seg button[aria-checked="true"], .seg button[aria-pressed="true"] { background: var(--surface-3); font-weight: 600; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04); }
 .seg button[aria-checked="true"]::before, .seg button[aria-checked="true"] + button::before,
 .seg button[aria-pressed="true"]::before, .seg button[aria-pressed="true"] + button::before { opacity: 0; }
 
 .foot { margin: 8px 4px 0; font-size: 13px; color: var(--label-2); font-variant-numeric: tabular-nums; }
-.foot-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 8px 2px 0 4px; }
+.foot-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 10px 2px 0 4px; }
 .foot-row .foot { margin: 0; min-width: 0; }
 .foot-link { flex: none; display: inline-flex; align-items: center; gap: 1px; padding: 4px 0 4px 8px; margin: -4px 0; font-size: 13px; font-weight: 500; color: var(--orange); }
 .foot-link svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -195,32 +211,32 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .foot .dim { color: var(--label-3); }
 
 /* grouped rows */
-.group { background: var(--surface); border-radius: 12px; overflow: hidden; }
+.group { background: var(--surface); border-radius: 18px; overflow: hidden; }
 .sheet .group { margin-bottom: 10px; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 50px; padding: 0 10px 0 16px; }
 .row + .row { box-shadow: inset 0 1px 0 var(--line); }
 .row .k { color: var(--label); font-size: 17px; font-weight: 400; }
 .row .v { color: var(--label-2); text-align: right; font-variant-numeric: tabular-nums; }
-/* the bet: its value, then an iOS stepper (minus | plus) that walks a 1-2-5 ladder */
-.betctl { display: flex; align-items: center; gap: 12px; }
-.stepper { display: flex; flex: none; border-radius: 8px; background: var(--surface-2); overflow: hidden; }
-.stepper button { position: relative; display: grid; place-items: center; width: 47px; height: 32px; color: var(--label); transition: background 0.15s, color 0.15s; }
-.stepper button + button::before { content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 0.5px; background: rgba(255, 255, 255, 0.2); }
-.stepper button:active { background: rgba(255, 255, 255, 0.12); }
-.stepper button[disabled] { color: var(--label-3); pointer-events: none; }
-.stepper svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.bet-field { display: flex; align-items: baseline; justify-content: flex-end; min-width: 0; cursor: text; }
-.bet-field .unit { margin-left: 4px; }
-.bet-input { width: 76px; height: 34px; border: 0; padding: 0; background: transparent; text-align: right; color: var(--label); font-family: var(--font-round); font-weight: 600; font-size: 20px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+/* the bet: a pill with round minus and plus (a 1-2-5 ladder) and the amount big in the middle; what it can win under it */
+.bet { display: flex; align-items: center; gap: 8px; margin-top: 14px; padding: 6px; border-radius: 30px; background: var(--surface); }
+.round { flex: none; display: grid; place-items: center; width: 46px; height: 46px; border-radius: 23px; background: var(--surface-2); color: var(--label); transition: transform 0.25s var(--spring), background 0.15s, color 0.15s; }
+.round:active { transform: scale(0.88); background: rgba(140, 160, 230, 0.3); }
+.round[disabled] { color: var(--label-3); pointer-events: none; }
+.round svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.bet-field { flex: 1; display: flex; align-items: baseline; justify-content: center; min-width: 0; cursor: text; }
+.bet-field .unit { margin-left: 5px; font-size: 15px; }
+.bet-input { width: 5.2ch; height: 40px; border: 0; padding: 0; background: transparent; text-align: right; color: var(--label); font-family: var(--font-round); font-weight: 700; font-size: 28px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .bet-input:focus { outline: none; }
+.win { margin: 10px 0 12px; text-align: center; font-size: 15px; color: var(--label-2); }
+.win b { font-family: var(--font-round); font-weight: 700; color: var(--tc, var(--label)); }
 
 .btn {
   display: flex; align-items: center; justify-content: center; gap: 6px;
-  width: 100%; height: 50px; border-radius: 14px;
-  font-size: 17px; font-weight: 600; letter-spacing: -0.01em;
-  transition: transform 0.12s, opacity 0.15s, filter 0.15s;
+  width: 100%; height: 54px; border-radius: 27px;
+  font-family: var(--font-round); font-size: 18px; font-weight: 700; letter-spacing: -0.01em;
+  transition: transform 0.3s var(--spring), opacity 0.15s, filter 0.15s;
 }
-.btn:active { transform: scale(0.98); filter: brightness(0.88); }
+.btn:active { transform: scale(0.96); filter: brightness(0.9); transition-duration: 0.08s; }
 .btn-primary { background: var(--orange); color: #1a0b00; }
 .btn-green { background: var(--green); color: #00230d; }
 .btn-plain { background: var(--surface-2); color: var(--label); }
@@ -249,7 +265,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .stack { display: grid; gap: 10px; }
 .pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .btn svg { width: 18px; height: 18px; flex: none; margin-top: -2px; }
-.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 20px 0 16px; padding: 12px 0 11px; border-radius: 12px; background: var(--surface); }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 20px 0 16px; padding: 12px 0 11px; border-radius: 18px; background: var(--surface); }
 .tiles div { padding: 0 4px; }
 .tiles div + div { box-shadow: inset 0.5px 0 0 var(--line); }
 .tiles b { display: block; font-family: var(--font-round); font-weight: 700; font-size: 22px; line-height: 1.15; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
@@ -274,7 +290,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .panel .body p { margin: 8px 2px; }
 .panel .body b { color: var(--label); font-weight: 650; }
 /* How to play: one quiet row per idea, each with a glyph tile */
-.how { display: grid; margin-top: 2px; border-radius: 12px; background: var(--surface); overflow: hidden; }
+.how { display: grid; margin-top: 2px; border-radius: 18px; background: var(--surface); overflow: hidden; }
 .how .hrow { position: relative; display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: start; padding: 13px 16px 14px 12px; }
 .how .hrow + .hrow::before { content: ""; position: absolute; left: 56px; right: 0; top: 0; height: 0.5px; background: var(--sep); }
 .how .hic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--surface-2); color: var(--label); }
@@ -288,7 +304,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .how h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--label); }
 .how p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--label-2); }
 .how b { color: var(--label); font-weight: 600; }
-.tbl { background: var(--surface); border-radius: 12px; padding: 2px 12px; overflow-x: auto; }
+.tbl { background: var(--surface); border-radius: 18px; padding: 2px 12px; overflow-x: auto; }
 .tbl table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
 .tbl th { text-align: left; font-size: 13px; font-weight: 500; color: var(--label-2); padding: 10px 4px 6px; white-space: nowrap; }
 .tbl td { padding: 10px 4px; color: var(--label); box-shadow: inset 0 0.5px 0 var(--line); white-space: nowrap; }
@@ -378,37 +394,63 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 #callout.gold .c1 { color: var(--gold); }
 #callout.green .c1 { color: var(--green); }
 
-/* ---------- the Challenges tab: cards for today's specials and the daily pot, each opening its page ---------- */
-.cc { margin-top: 12px; border-radius: 12px; background: var(--surface); overflow: hidden; }
+/* ---------- the Challenges tab: today's specials and the daily pot, each card in its own colour (a flat tint of it); details on their pages ---------- */
+.cc { --cc: #8e9bd0; margin-top: 12px; border-radius: 24px; background: var(--surface); background: color-mix(in srgb, var(--cc) 15%, var(--bg)); overflow: hidden; }
+.cc.sp { --cc: #6e6cf0; }
+.cc.pot { --cc: #ffd60a; background: var(--surface); background: color-mix(in srgb, var(--cc) 7%, #0b1020); }
 .vtitle + .cc { margin-top: 16px; }
-.cc-open { display: grid; grid-template-columns: minmax(0, 1fr) 14px; column-gap: 10px; width: 100%; padding: 13px 14px 0 16px; text-align: left; }
+.cc-open { display: grid; grid-template-columns: minmax(0, 1fr) 14px; column-gap: 10px; width: 100%; padding: 16px 16px 0 18px; text-align: left; transition: transform 0.3s var(--spring); }
+.cc-open:active { transform: scale(0.98); transition-duration: 0.08s; }
 .cc-open > span:not(.chev) { grid-column: 1; min-width: 0; }
-.cc-open .chev { grid-column: 2; grid-row: 1 / 4; align-self: center; width: 14px; height: 14px; color: var(--label-3); }
-.cc-k { font-size: 13px; font-weight: 500; color: var(--label-2); }
-.cc-n { margin-top: 2px; font-family: var(--font-title); font-size: 22px; font-weight: 700; line-height: 1.2; letter-spacing: 0.005em; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cc-s { margin-top: 1px; font-size: 14px; line-height: 1.35; color: var(--label-2); }
-.cc-act { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 0 16px; padding: 11px 14px 12px 0; box-shadow: inset 0 0.5px 0 var(--sep); }
+.cc-open .chev { grid-column: 2; grid-row: 1; align-self: center; width: 14px; height: 14px; color: var(--label-3); }
+.cc-k { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--cc); color: color-mix(in srgb, var(--cc) 70%, #fff); }
+.cc-k svg { flex: none; width: 15px; height: 15px; }
+.cc-n { margin-top: 4px; font-family: var(--font-title); font-size: 28px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-s { margin-top: 2px; font-size: 14px; line-height: 1.35; color: var(--label-2); }
+.cc-art { grid-column: 1 / -1; display: block; width: 100%; height: 58px; margin-top: 10px; }
+.cc-big { display: flex; align-items: baseline; margin-top: 6px; font-family: var(--font-round); font-size: 40px; font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; color: var(--gold); font-variant-numeric: tabular-nums; }
+.cc-big .unit { margin-left: 6px; font-family: var(--font); font-size: 17px; font-weight: 600; letter-spacing: 0; color: var(--label-2); }
+.cc-g { margin-top: 10px; font-size: 17px; font-weight: 600; line-height: 1.25; color: var(--label); }
+.cc-act { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 14px 0 0 18px; padding: 12px 14px 14px 0; box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.1); }
 .cc-v { min-width: 0; font-size: 15px; color: var(--label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cc-v b { font-weight: 600; color: var(--label); }
-.cc-v b.gold { color: var(--gold); }
-/* the App Store's Get button: a grey capsule with the action in the tint colour */
-.pill { flex: none; display: inline-flex; align-items: center; height: 30px; padding: 0 16px; border-radius: 15px; background: var(--surface-2); font-size: 15px; font-weight: 700; color: var(--orange); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.pill:active { background: rgba(118, 118, 128, 0.4); }
+.cc-v b { font-family: var(--font-round); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--label); }
+/* pills: a grey capsule for a state; the orange one starts or spends a run */
+.pill { flex: none; display: inline-flex; align-items: center; height: 36px; padding: 0 16px; border-radius: 18px; background: var(--surface-2); font-size: 15px; font-weight: 700; color: var(--label); white-space: nowrap; font-variant-numeric: tabular-nums; transition: transform 0.3s var(--spring), filter 0.15s; }
+.pill:active { transform: scale(0.93); transition-duration: 0.08s; }
+.pill.go { background: var(--orange); color: #1a0b00; font-family: var(--font-round); }
+.pill.go:active { filter: brightness(0.9); }
 .pill[disabled] { opacity: 0.5; }
 .pill.in, .pill.ok, .pill.off { font-weight: 600; color: var(--label-2); }
 .pill.ok { color: var(--green); }
-/* today's specials: one card, a row for each with its twist and length, its prize and Play; a row opens its page */
-.cc-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 13px 14px 4px 16px; }
-.cc-t { font-size: 13px; color: var(--label-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
-.spr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; margin-left: 16px; padding: 10px 14px 11px 0; }
-.spr + .spr { box-shadow: inset 0 0.5px 0 var(--sep); }
-.spr-open { min-width: 0; padding: 2px 0; text-align: left; }
-.spr-open b { display: block; font-family: var(--font-title); font-size: 18px; font-weight: 700; line-height: 1.2; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.spr-open span { display: block; margin-top: 2px; font-size: 13px; color: var(--label-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* today's specials: one card, a row for each with its prize multiple, twist and length, its prize and Play; a row opens its page */
+.cc-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 16px 6px 18px; }
+.cc-h .cc-k { margin: 0; }
+.cc-t { font-size: 13px; color: var(--label-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.spr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; margin-left: 18px; padding: 11px 16px 12px 0; }
+.spr + .spr { box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.1); }
+.spr:last-child { padding-bottom: 16px; }
+.spr-open { display: grid; grid-template-columns: 46px minmax(0, 1fr); column-gap: 12px; align-items: center; min-width: 0; padding: 2px 0; text-align: left; transition: transform 0.3s var(--spring); }
+.spr-open:active { transform: scale(0.97); transition-duration: 0.08s; }
+.spr-x { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: var(--sx); color: #05070e; font-family: var(--font-round); font-size: 19px; font-weight: 700; letter-spacing: -0.02em; }
+.spr-t { min-width: 0; }
+.spr-t b { display: block; font-family: var(--font-title); font-size: 18px; font-weight: 700; line-height: 1.2; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spr-t span { display: block; margin-top: 2px; font-size: 13px; color: var(--label-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spr-act { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .spr-win { font-size: 13px; color: var(--label-2); white-space: nowrap; }
-.spr-win b { font-weight: 600; color: var(--gold); font-variant-numeric: tabular-nums; }
-.sp-card { border-radius: 12px; background: var(--surface); overflow: hidden; }
+.spr-win b { font-family: var(--font-round); font-size: 15px; font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }
+/* This week and Career: two tiles under the daily missions */
+.ctiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.ct { --cc: #30b0c7; position: relative; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 14px 14px 15px 16px; border-radius: 20px; background: var(--surface); text-align: left; transition: transform 0.3s var(--spring); }
+.ct:active { transform: scale(0.96); transition-duration: 0.08s; }
+.ct-career { --cc: #5e5ce6; }
+.ct-ic { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--cc); color: #fff; }
+.ct-ic svg { width: 19px; height: 19px; }
+.ct .chev { position: absolute; top: 24px; right: 14px; width: 13px; height: 13px; color: var(--label-3); }
+.ct b { margin-top: 12px; font-size: 17px; font-weight: 600; color: var(--label); }
+.ct-v { margin-top: 1px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--label-2); white-space: nowrap; }
+.ct-bar { align-self: stretch; height: 4px; margin-top: 10px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.ct-bar i { display: block; height: 100%; border-radius: 2px; background: var(--cc); }
+.sp-card { border-radius: 24px; background: var(--surface); background: color-mix(in srgb, #6e6cf0 15%, var(--bg)); overflow: hidden; }
 .sp-head { padding: 14px 16px 4px; }
 .sp-k { font-size: 13px; color: var(--label-2); }
 .sp-name { margin-top: 2px; font-family: var(--font-title); font-weight: 700; font-size: 28px; line-height: 1.1; letter-spacing: 0.005em; color: var(--label); }
@@ -418,6 +460,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .sp-prize { margin: 22px 0 4px; text-align: center; }
 .sp-prize .k { display: block; font-size: 13px; color: var(--label-2); }
 .sp-prize .big { margin: 6px 0 0; font-size: 46px; }
+.sp-prize.pot .big { color: var(--gold); }
 .sp-prize .x { display: block; margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--gold); }
 .vcol > .tiles { margin: 16px 0 0; text-align: center; }
 .vtitle + .sp-card, .vtitle + .pot-goal { margin-top: 18px; }
@@ -445,7 +488,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .pot-goal b { display: block; font-size: 17px; font-weight: 700; color: var(--label); }
 .pot-goal span { font-size: 13px; color: var(--label-2); }
 .tiles b.sm { font-size: 17px; line-height: 1.55; white-space: nowrap; } /* a time left, in words */
-.pot-me { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--surface); }
+.pot-me { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 18px; background: var(--surface); }
 .pot-me svg { flex: none; width: 18px; height: 18px; margin-top: 1px; color: var(--gold); }
 .pot-me.done svg { color: var(--green); }
 .pot-me b { display: block; font-size: 15px; font-weight: 700; color: var(--label); }
@@ -455,7 +498,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .pot-last { display: flex; flex-direction: column; gap: 3px; margin-top: 14px; padding-top: 12px; box-shadow: inset 0 0.5px 0 var(--line); font-size: 13px; line-height: 1.4; color: var(--label-2); }
 .pot-last .k { font-size: 12px; font-weight: 700; color: var(--label-3); }
 .pot-last .won { color: var(--green); font-weight: 700; }
-.pot-demo { margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--surface); }
+.pot-demo { margin-top: 14px; padding: 12px 14px; border-radius: 18px; background: var(--surface); }
 .pot-demo p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.4; color: var(--label-2); }
 .pot-demo .btn { width: 100%; height: 44px; font-size: 15px; }
 .gain.pot svg { color: var(--gold); }
@@ -519,11 +562,11 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .item .lock { position: absolute; top: 7px; right: 7px; width: 12px; height: 12px; color: var(--label-3); }
 .item .new { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 4px; background: var(--red); }
 .reset-note { margin: 8px 4px 0; font-size: 12px; color: var(--label-3); }
-.bests { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 11px 0 10px; border-radius: 12px; background: var(--surface); }
+.bests { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 11px 0 10px; border-radius: 18px; background: var(--surface); }
 .bests div { padding: 0 4px; text-align: center; }
 .bests div + div { box-shadow: inset 0.5px 0 0 var(--line); }
-.bests b { display: block; font-family: var(--font-round); font-size: 20px; font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }
-.bests span { display: block; font-size: 11px; font-weight: 600; color: var(--label-3); }
+.bests b { display: block; font-family: var(--font-round); font-size: 20px; font-weight: 700; color: var(--tc, var(--label)); font-variant-numeric: tabular-nums; }
+.bests span { display: block; font-size: 11px; font-weight: 600; color: var(--label-2); }
 .bests em { display: block; font-style: normal; font-size: 11px; color: var(--label-2); margin-top: 1px; }
 
 /* ---------- navigation: an iOS tab bar docked to the bottom edge ---------- */
@@ -568,10 +611,10 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .ltitle { position: relative; z-index: 1; flex: none; padding-right: 150px; overflow: hidden; } /* the balance sits at the end of this line; positioned so it paints over the window's black */
 .controls, .home > .lk-cats, .home > .lk-info, .home > .lk-grid { position: relative; z-index: 1; }
 /* the window: a transparent rounded box whose spread shadow paints the page black around it */
-.hero { flex: 1 1 auto; min-height: 120px; margin: 12px 0 16px; border-radius: 22px; pointer-events: none;
+.hero { flex: 1 1 auto; min-height: 120px; margin: 12px 0 14px; border-radius: 26px; pointer-events: none;
   box-shadow: 0 0 0 100vmax var(--bg), inset 0 0 0 0.5px rgba(255, 255, 255, 0.12); }
 .controls { flex: none; }
-.controls .group { margin: 14px 0 12px; }
+
 .instant .home, .instant .home > *, .instant .view { transition: none !important; }
 
 /* ---------- full-page tabs: Missions and Profile ---------- */
@@ -606,8 +649,8 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .mring { position: relative; width: 36px; height: 36px; }
 .mring svg { width: 36px; height: 36px; transform: rotate(-90deg); }
 .mring circle { fill: none; stroke-width: 3.4; }
-.mring .trk { stroke: rgba(255, 255, 255, 0.1); }
-.mring .val { stroke: var(--gold); stroke-linecap: round; transition: stroke-dasharray 0.6s cubic-bezier(.2, .9, .2, 1); }
+.mring .trk { stroke: rgba(255, 255, 255, 0.1); stroke: color-mix(in srgb, var(--mc, #fff) 20%, transparent); }
+.mring .val { stroke: var(--mc, var(--gold)); stroke-linecap: round; transition: stroke-dasharray 0.6s cubic-bezier(.2, .9, .2, 1); }
 .mring.zero .val { display: none; }
 .mring .ck { position: absolute; inset: 0; display: none; place-items: center; border-radius: 50%; background: var(--green); color: #04150b; }
 .mring .ck svg { width: 18px; height: 18px; transform: none; }
@@ -620,7 +663,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .mrow.done .mxp { color: var(--green); }
 
 /* career: the chapter you're on, its reward, then the others */
-.chap { border-radius: 12px; background: var(--surface); overflow: hidden; }
+.chap { border-radius: 18px; background: var(--surface); overflow: hidden; }
 .chap-top { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 14px; align-items: center; padding: 16px 16px 12px; }
 .rew { position: relative; width: 84px; height: 84px; border-radius: 14px; overflow: hidden; display: grid; place-items: center;
   background: var(--surface-2); }
@@ -633,7 +676,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .chap-bar { height: 6px; margin: 0 16px 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .chap-bar i { display: block; height: 100%; border-radius: 3px; background: var(--gold); transition: width 0.6s cubic-bezier(.2, .9, .2, 1); }
 .chap .mrow:first-of-type { box-shadow: inset 0 0.5px 0 var(--sep); }
-.chlist { margin-top: 10px; border-radius: 12px; background: var(--surface); }
+.chlist { margin-top: 10px; border-radius: 18px; background: var(--surface); }
 .chli { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 50px; padding: 6px 14px 6px 12px; }
 .chli + .chli { box-shadow: inset 0 0.5px 0 var(--sep); }
 .chli .cs { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; background: var(--surface-2); color: var(--label-3); }
@@ -692,13 +735,14 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 .lk-grid .item .lock { z-index: 1; }
 
 /* ---------- Profile ---------- */
-.pcard { display: grid; grid-template-columns: 64px minmax(0, 1fr) 14px; gap: 14px; align-items: center; margin-top: 16px; padding: 14px 14px 14px 16px; border-radius: 12px; background: var(--surface); text-align: left; width: 100%; }
-.pcard:active { background: rgba(255, 255, 255, 0.14); }
+.pcard { display: grid; grid-template-columns: 68px minmax(0, 1fr) 14px; gap: 14px; align-items: center; margin-top: 16px; padding: 16px 14px 16px 16px; border-radius: 24px; text-align: left; width: 100%;
+  background: var(--surface); background: color-mix(in srgb, var(--av, var(--orange)) 16%, var(--bg)); transition: transform 0.3s var(--spring); }
+.pcard:active { transform: scale(0.98); transition-duration: 0.08s; }
 .pcard .chev { width: 14px; height: 14px; color: var(--label-3); }
 .pav { position: relative; width: 76px; height: 76px; border-radius: 38px; display: grid; place-items: center; color: var(--av-ink, #fff);
   background: var(--av, var(--orange)); }
 .pav svg { width: 40px; height: 40px; }
-.pcard .pav { width: 64px; height: 64px; border-radius: 32px; }
+.pcard .pav { width: 68px; height: 68px; border-radius: 34px; }
 .pcard .pav svg { width: 34px; height: 34px; }
 .pid { min-width: 0; }
 .pname { display: block; font-family: var(--font-title); font-weight: 700; font-size: 22px; line-height: 1.15; letter-spacing: -0.01em; color: var(--label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -707,19 +751,19 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 /* the level and its XP, under the name */
 .plv { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px; font-size: 13px; font-weight: 600; color: var(--label); }
 .plv .num { font-weight: 400; color: var(--label-2); }
-.pxp { display: block; height: 4px; margin-top: 5px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.pxp { display: block; height: 5px; margin-top: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
 .pxp i { display: block; height: 100%; border-radius: 2px; background: var(--gold); }
 .vscroll .bests { margin-top: 10px; }
 .trophies { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.tro { padding: 14px 8px 12px; border-radius: 12px; background: var(--surface); text-align: center; }
+.tro { padding: 14px 8px 12px; border-radius: 16px; background: var(--surface); text-align: center; }
 .tro .ti { width: 42px; height: 42px; margin: 0 auto 8px; border-radius: 21px; display: grid; place-items: center; background: var(--surface-2); color: var(--label-3); }
 .tro .ti svg { width: 21px; height: 21px; }
 .tro.got .ti { background: var(--gold); color: #000; }
 .tro b { display: block; font-size: 12.5px; font-weight: 650; line-height: 1.2; color: var(--label); }
 .tro span { display: block; margin-top: 3px; font-size: 11px; line-height: 1.3; color: var(--label-3); }
 .tro:not(.got) b { color: var(--label-2); }
-.vscroll .list { border-radius: 12px; background: var(--surface); }
-.menu-list { border-radius: 12px; background: var(--surface); overflow: hidden; }
+.vscroll .list { border-radius: 18px; background: var(--surface); }
+.menu-list { border-radius: 18px; background: var(--surface); overflow: hidden; }
 .vcol > .menu-list, .vcol > .group + .menu-list { margin-top: 22px; }
 .vcol > .pcard + .menu-list { margin-top: 22px; }
 .menu-list .mv .dot { display: inline-block; width: 9px; height: 9px; border-radius: 5px; background: var(--red); vertical-align: middle; }
@@ -738,7 +782,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 .menu-list .mi-week { background: #30b0c7; } .menu-list .mi-career { background: #5e5ce6; }
 .menu-list .mi svg { width: 17px; height: 17px; }
 .menu-list .chev { width: 14px; height: 14px; color: var(--label-3); }
-.empty { padding: 16px; border-radius: 12px; background: var(--surface); font-size: 14px; color: var(--label-2); }
+.empty { padding: 16px; border-radius: 18px; background: var(--surface); font-size: 14px; color: var(--label-2); }
 
 /* ---------- pages: pushed over the current tab, a back button in the top bar and the large title under it ---------- */
 .view.page { z-index: 8; }
@@ -768,7 +812,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 .vsub + .trophies, .vsub + .runs, .vsub + .empty, .vsub + .group, .vsub + .chap { margin-top: 16px; }
 .vtitle + .empty { margin-top: 20px; }
 /* recent runs: how it ended, tier, bet and when, then what it made */
-.runs { border-radius: 12px; background: var(--surface); overflow: hidden; }
+.runs { border-radius: 18px; background: var(--surface); overflow: hidden; }
 .rr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 62px; padding: 10px 16px; }
 .rr + .rr { box-shadow: inset 0 0.5px 0 var(--sep); }
 .rr-t { min-width: 0; }
@@ -813,7 +857,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   .stack { gap: 8px; }
   .next { margin: 14px 2px 12px; padding: 12px 2px 0; }
   .hero { margin: 10px 0 12px; }
-  .controls .group { margin: 10px 0 10px; }
+  .tiers button { height: 56px; border-radius: 14px; } /* short phones: the arena keeps its share of the screen */
+  .tiers .tx { font-size: 19px; }
+  .bet { margin-top: 10px; padding: 4px; }
+  .round { width: 42px; height: 42px; }
+  .bet-input { font-size: 26px; height: 38px; }
+  .win { margin: 8px 0 10px; }
   #callout .c1 { font-size: 40px; }
 }
 @media (max-width: 389px) { /* phones narrower than 390 px: a smaller large title, so "Challenges" clears the balance */
@@ -828,13 +877,23 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   .ltitle, .vtitle { font-size: 26px; padding-right: 112px; }
   .hud-lobby .cap { padding: 0 12px; }
   .hud-lobby .cap .tag { display: none; }
+  .tiers { gap: 6px; }
+  .tiers .tn { font-size: 11.5px; }
+  .tiers .tx { font-size: 17px; }
 }
 @media (max-height: 600px) {
   .ltitle, .vtitle { font-size: 28px; height: 36px; line-height: 36px; }
   .btn { height: 46px; }
+  .tiers button { height: 52px; }
+  .tiers .tx { font-size: 17px; }
   .tiles b { font-size: 20px; }
 }
+/* a tab's blocks rise in when you open it: played by riseIn() in game.js */
+#fxLayer { position: fixed; inset: 0; z-index: 19; width: 100%; height: 100%; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
+  .tiers button[aria-checked="true"] { animation: none; }
+  .btn, .pill, .round, .tiers button, .cc-open, .ct, .pcard { transition: none; }
+  #fxLayer { display: none; }
   #prompt .ring::before, #prompt .ring::after { animation: none; }
   #prompt .ring::after { transform: scale(1); opacity: 0.45; }
   .streak.broke, .gain { animation: none; }
@@ -891,18 +950,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       <p class="foot" id="diffInfo"></p>
       <button class="foot-link" data-page="odds" aria-label="Odds for this tier">Odds<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5.5 6.5 6.5L9 18.5"/></svg></button>
     </div>
-    <div class="group">
-      <div class="row">
-        <label class="k" for="betInput">Bet</label>
-        <div class="betctl">
-          <label class="bet-field"><input id="betInput" class="bet-input" type="text" inputmode="decimal" autocomplete="off" aria-label="Bet in SOL"><span class="unit">SOL</span></label>
-          <div class="stepper" role="group" aria-label="Change bet">
-            <button id="betDown" aria-label="Lower bet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
-            <button id="betUp" aria-label="Raise bet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button>
-          </div>
-        </div>
-      </div>
+    <div class="bet" role="group" aria-label="Bet">
+      <button class="round" id="betDown" aria-label="Lower bet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+      <label class="bet-field"><input id="betInput" class="bet-input" type="text" inputmode="decimal" autocomplete="off" aria-label="Bet in SOL"><span class="unit">SOL</span></label>
+      <button class="round" id="betUp" aria-label="Raise bet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button>
     </div>
+    <p class="win" id="winLine"></p>
     <button class="btn btn-primary" id="playBtn">Play <span class="num" id="playAmt">0.1 SOL</span></button>
     <div class="err" id="lobbyErr" role="alert"></div>
   </div>
@@ -980,6 +1033,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   <div class="body" id="panelBody"></div>
 </section>
 <div id="toast" class="glass" role="status"></div>
+<canvas id="fxLayer" aria-hidden="true"></canvas>
 
 <script>window.SOL_DUNK_CONFIG = {"serverUrl":"/","network":"devnet","demoStart":10,"minBet":0.001,"maxBet":100};</script>
 <script>/*
@@ -3546,7 +3600,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (run.mode === 'special') { // the special pays only for clearing every ring: count the rings, show the prize
       const st = run.st;
       ui.mult.textContent = (st ? st.outcomes.length : 0) + '/' + (st ? st.hoops.length : 0);
-      ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = fmtSol(run.prize); potShown = run.prize;
+      ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = fmtAmt(run.prize); potShown = run.prize;
       return;
     }
     const v = run.bet * run.total;
@@ -3788,12 +3842,17 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     for (const t of rows) for (let i = 0; i < NH; i++) { st = Math.min(t.swish.length, st + 1); m *= t.swish[st - 1]; }
     return Math.min(E.DIFFS[di].maxWin, Math.floor(m));
   });
+  // each mode's colour (Easy blue, Hard gold) and the ink that reads on it when its tile is picked
+  const TIER_COL = { easy: ['#0a84ff', '#ffffff'], hard: ['#ffd60a', '#05070e'] }, TIER_MORE = [['#40c8e0', '#05070e'], ['#bf5af2', '#ffffff']];
+  const tierCol = (di) => TIER_COL[(E.DIFFS[di] || {}).id] || TIER_MORE[di % TIER_MORE.length];
+  const tierC = (di) => tierCol(di)[0];
+  function bumpBet() { const f = document.querySelector('.bet-field'); if (f && !REDUCED) hudAnim(f, 'bump', [{ transform: 'scale(0.9)' }, { transform: 'scale(1)' }], { duration: 300, easing: 'cubic-bezier(.34, 1.56, .64, 1)' }); }
   function buildLobby() {
     const d = $('diffs');
-    d.innerHTML = E.DIFFS.map((D, i) => `<button role="radio" id="diff${i}" data-di="${i}" aria-checked="${i === prefs.di}" aria-label="${D.name}, wins up to ${TOP[i]}×">${D.name}</button>`).join('');
-    d.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { prefs.di = +b.dataset.di; Sound.click(); refreshLobby(); saveAll(); }));
-    $('betDown').addEventListener('click', () => { stepBet(-1); Sound.click(); });
-    $('betUp').addEventListener('click', () => { stepBet(1); Sound.click(); });
+    d.innerHTML = E.DIFFS.map((D, i) => `<button role="radio" id="diff${i}" data-di="${i}" aria-checked="${i === prefs.di}" aria-label="${D.name}, wins up to ${TOP[i]}×" style="--tc:${tierC(i)};--tink:${tierCol(i)[1]}"><span class="tn">${D.name}</span><span class="tx">${TOP[i]}×</span></button>`).join('');
+    d.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { if (prefs.di === +b.dataset.di) return; prefs.di = +b.dataset.di; Sound.click(); buzz(6); refreshLobby(); saveAll(); }));
+    $('betDown').addEventListener('click', () => { const b = prefs.bet; stepBet(-1); Sound.click(); if (prefs.bet !== b) bumpBet(); });
+    $('betUp').addEventListener('click', () => { const b = prefs.bet; stepBet(1); Sound.click(); if (prefs.bet !== b) bumpBet(); });
     const inp = $('betInput');
     inp.addEventListener('input', () => { const v = parseFloat(inp.value.replace(',', '.')); if (v > 0) { prefs.bet = v; refreshLobby(true); } });
     inp.addEventListener('blur', () => { setBet(prefs.bet); });
@@ -3810,7 +3869,8 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     sheetTopC = -1;
     const di = prefs.di, D = E.DIFFS[di];
     document.querySelectorAll('#diffs button').forEach((b) => b.setAttribute('aria-checked', String(+b.dataset.di === di)));
-    $('diffInfo').innerHTML = `${D.blurb} · Win up to <b>${fmtBet(prefs.bet * TOP[di])} SOL</b>` + (profile.best[di] ? ` <span class="dim">· Best ${profile.best[di]}</span>` : '');
+    $('diffInfo').innerHTML = D.blurb + (profile.best[di] ? ` <span class="dim">· Best ${profile.best[di]}</span>` : '');
+    const wl = $('winLine'); wl.style.setProperty('--tc', tierC(di)); wl.innerHTML = `Win up to <b>${fmtBet(prefs.bet * TOP[di])} SOL</b>`;
     refreshProfileHud();
     if (!keepInput) $('betInput').value = fmtBet(prefs.bet);
     $('playAmt').textContent = fmtBet(prefs.bet) + ' SOL';
@@ -3838,7 +3898,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const L = potState && potState.last;
     if (L && L.me && prefs.potSeen !== L.key) {
       prefs.potSeen = L.key; saveAll();
-      if (L.me.won > 0) { toast('Pot closed: you won ' + fmtSol(L.me.won) + ' SOL'); Sound.cash(); setBalance(); }
+      if (L.me.won > 0) { toast('Pot closed: you won ' + fmtAmt(L.me.won) + ' SOL'); Sound.cash(); setBalance(); celebrate(130); }
       else toast('Pot closed: ' + L.winners + ' of ' + L.entrants + ' made it');
     }
   }
@@ -3885,7 +3945,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const L = p.last;
     const last = L ? `<div class="pot-last"><span class="k">Last pot</span><span>${L.goal} · ${L.winners ? L.winners + ' of ' + L.entrants + ' made it · ' + fmtSol(L.share) + ' SOL each' : 'nobody made it · ' + fmtSol(L.rolled) + ' SOL rolled over'}${L.me ? (L.me.won > 0 ? ' · <b class="won">you won ' + fmtSol(L.me.won) + ' SOL</b>' : ' · you didn’t make it') : ''}</span></div>` : '';
     return `<div class="pot-goal"><span class="pot-ic">${ICON.trophy}</span><div><b>${p.goal.text}</b><span>In one run ${p.goal.sub}</span></div></div>
-      <div class="sp-prize"><span class="k">In the pot</span><div class="big"><span class="num">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></div></div>
+      <div class="sp-prize pot"><span class="k">In the pot</span><div class="big"><span class="num">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></div></div>
       ${me}
       <div class="tiles"><div><b>${p.entrants}</b><span>Entered</span></div><div><b>${p.completed}</b><span>Made it</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Closing'}</b><span>Left</span></div></div>
       <p class="pot-rules">Everyone who completes the challenge before the pot closes (midnight UTC) splits it equally. The house keeps ${Math.round(p.rake * 100)}% of each entry; if nobody makes it, the pot rolls over to the next one. Only runs you start after entering count, and your runs are bets as usual.${p.carryIn > 0 ? ' This pot includes ' + fmtSol(p.carryIn) + ' SOL rolled over.' : ''}</p>
@@ -3953,28 +4013,50 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     }
     g.fillStyle = '#ff8a2a'; g.beginPath(); g.arc(sx(0), sy(def.startY), 4.2, 0, Math.PI * 2); g.fill();
   }
-  // today's three specials in one card: a row each with its twist, length, prize and Play; tap a row for its page
+  // today's three specials in one card: a row each with its prize multiple, twist, length, prize and Play; tap a row for its page
+  const SPX = (x) => (x >= 5 ? '#ffd60a' : x >= 3 ? '#bf5af2' : '#64d2ff');
   function specialCard() {
     const s = specState;
     if (!s || !s.specials) return '';
     const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked;
-    const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></button>
-      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(c.prize)}</b> SOL</span>${blocked ? '<span class="pill off">Not available</span>' : `<button class="pill" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`}</div></div>`).join('');
-    return `<div class="cc sp-cc"><div class="cc-h"><span class="cc-k">Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftText(left) : 'New soon'}</span></div>${rows}</div>`;
+    const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><span class="spr-x" style="--sx:${SPX(c.x)}">${c.x}×</span><span class="spr-t"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></span></button>
+      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(c.prize)}</b> SOL</span>${blocked ? '<span class="pill off">Not available</span>' : `<button class="pill go" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`}</div></div>`).join('');
+    return `<div class="cc sp sp-cc"><div class="cc-h"><span class="cc-k">${ICON.star}Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftText(left) : 'New soon'}</span></div>${rows}</div>`;
   }
   function potCard() {
     const p = potState;
     if (!p) return '';
     const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
-    const act = done ? '<span class="pill ok">Made it</span>' : inn ? '<span class="pill in">You’re in</span>' : `<button class="pill" id="chPotEnter">Enter ${fmtBet(p.fee)}</button>`;
-    return `<div class="cc"><button class="cc-open" data-page="pot" aria-label="Daily pot: ${p.goal.text}. Details"><span class="cc-k">Daily pot</span><span class="cc-n">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span><span class="chev">${ICON.chev}</span></button>
-      <div class="cc-act"><span class="cc-v"><b class="num gold">${fmtAmt(p.pool)}</b> SOL pot · ${p.entrants} in</span>${act}</div></div>`;
+    const act = done ? '<span class="pill ok">Made it</span>' : inn ? '<span class="pill in">You’re in</span>' : `<button class="pill go" id="chPotEnter">Enter ${fmtBet(p.fee)} SOL</button>`;
+    return `<div class="cc pot"><button class="cc-open" data-page="pot" aria-label="Daily pot: ${fmtAmt(p.pool)} SOL, ${p.goal.text}. Details"><span class="cc-k">${ICON.trophy}Daily pot · closes in ${leftOf(p.closesAt - Date.now())}</span><span class="cc-big"><span class="num" data-count="${p.pool}">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></span><span class="cc-g">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span><span class="chev">${ICON.chev}</span></button>
+      <div class="cc-act"><span class="cc-v">${p.entrants} ${p.entrants === 1 ? 'player' : 'players'} in</span>${act}</div></div>`;
+  }
+  let potCountAt = 0; // when the pot card's count-up started
+  function potCount(fresh) {
+    const n = document.querySelector('#cBody .cc-big .num[data-count]');
+    if (!n || REDUCED) return;
+    const to = +n.dataset.count, now = performance.now();
+    if (fresh) potCountAt = now;
+    const k = (now - potCountAt) / 800;
+    if (k < 1) countUp(n, to * (1 - Math.pow(1 - k, 3)), to, fmtAmt, 800 * (1 - k));
+  }
+  // a tab's blocks rise in one after another when you open it; if the tab redraws while they rise (fresh data for
+  // the special or the pot), the new blocks pick the rise up where it was instead of starting it again
+  let riseAt = { el: null, t0: 0 };
+  function riseIn(view, fresh) {
+    if (REDUCED || !view || !view.animate) return;
+    const now = performance.now();
+    if (fresh) riseAt = { el: view, t0: now };
+    else if (riseAt.el !== view || now - riseAt.t0 > 760) return;
+    const off = now - riseAt.t0;
+    view.querySelectorAll('.vcol > :not(.vtitle)').forEach((c, i) => c.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }],
+      { duration: 550, delay: Math.min(i, 4) * 40 - off, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
   }
   function renderChallenges(keep) {
     const body = $('cBody'), y = body.scrollTop;
     body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2>${specialCard()}${potCard()}${missionsHtml()}</div>`;
     if (keep) body.scrollTop = y;
-    wireChallenges();
+    wireChallenges(); potCount(!keep); if (keep) riseIn($('vChallenges'), false);
     if (specState && prefs.specSeen !== specState.day) { prefs.specSeen = specState.day; saveAll(); syncBadges(); }
   }
   async function enterPot(e) {
@@ -4061,7 +4143,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (!sp) profile.lv[run.di][run.level - 1][0]++;
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
     if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
-    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtSol(run.prize) + ' SOL' : run.level === 1 ? (newPlayer() ? 'Drop down through each ring' : potLine()) : '');
+    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL' : run.level === 1 ? (newPlayer() ? 'Drop down through each ring' : potLine()) : '');
   }
 
   function settleOffset() { ball.x += ball.ox; ball.y += ball.oy; ball.ox = 0; ball.oy = 0; }
@@ -4324,9 +4406,9 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const L = run.level, pot = run.bet * run.total;
     $('cpKicker').textContent = 'Checkpoint ' + L + ' of ' + (NL - 1);
     $('cpTitle').innerHTML = 'Level ' + L + ' cleared' + (run.lvlSw === NH ? '<span class="cp-badge">Perfect</span>' : '');
-    countUp($('cpPot'), run.bet * (run.lvlStart || 1), pot, fmtSol, 750);
+    countUp($('cpPot'), run.bet * (run.lvlStart || 1), pot, fmtAmt, 750);
     const profit = pot - run.bet;
-    $('cpMult').textContent = fmtMult(run.total) + (profit >= 0.00005 ? ' · +' + fmtDelta(profit) + ' SOL profit' : ' · your bet back');
+    $('cpMult').textContent = fmtMult(run.total) + (profit >= 0.00005 ? ' · +' + (profit >= 0.0001 ? fmtAmt(profit) : fmtDelta(profit)) + ' SOL profit' : ' · your bet back');
     $('cpMult').classList.toggle('flat', profit < 0.00005);
     // what the next level can pay (every ring swished, streak carried) and whether the streak carries over
     const nx = L + 1, di = run.di, pt = PAY.PAYTABLE[di][nx - 1];
@@ -4339,7 +4421,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const sk = $('cpStreak');
     sk.className = 'nx-s' + (run.streak >= 5 ? ' nova' : '');
     sk.innerHTML = run.streak > 1 ? ICON.flame + `Your ${run.streak}-swish streak carries over` : '';
-    $('cashAmt').textContent = fmtSol(pot) + ' SOL';
+    $('cashAmt').textContent = fmtAmt(pot) + ' SOL';
     $('goSub').textContent = 'Level ' + nx;
     show(ui.cp, true); armCard(ui.cp, 600); STK.el.classList.add('tuck');
     // focus the card, not a button: a Space meant as a flap must never press "Keep going"
@@ -4362,7 +4444,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   function showResult(title, amount, cls, sub, rollTo) {
     const pr = run.prog, nb = !!(pr && pr.newBest && run.score > 0);
     $('resTitle').textContent = title;
-    if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtSol(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
+    if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtAmt(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
     $('resAmount').className = 'big ' + cls;
     $('resSub').textContent = sub;
     const sp = run.mode === 'special';
@@ -4374,6 +4456,8 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     $('lobbyBtn').textContent = sp ? 'Back' : 'Change bet';
     showProgress(pr);
     show(ui.res, true); armCard(ui.res, 600); refreshPot(); if (sp) refreshSpecial();
+    if (cls === 'win') setTimeout(() => celebrate(run.total >= 5 || sp ? 150 : 100, ui.res), 140);
+    else if (run.potJust) setTimeout(() => celebrate(60, ui.res), 140);
     setTimeout(() => ui.res.focus({ preventScroll: true }), 60);
     refreshLobby();
   }
@@ -4418,7 +4502,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       const w = (a.into / a.need * 100).toFixed(1) + '%';
       fill.style.transition = 'none'; fill.style.width = w;
       hudAnim(fill, 'fill', [{ width: '0%' }, { width: w }], { duration: REDUCED ? 1 : 600, easing: EASE_OUT });
-      Sound.levelUp(); buzz([10, 40, 10]);
+      Sound.levelUp(); buzz([10, 40, 10]); celebrate(70, box);
     }, 1100));
     const g = [];
     if (run.potJust && potState) g.push(['pot', ICON.trophy, 'Pot challenge done · in for a share']);
@@ -4549,6 +4633,39 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   function confetti(x, y, n) {
     const cols = ['#ff7a1a', '#f5c542', '#ffffff', '#3d7bff', '#ffd9a8'];
     for (let i = 0; i < n; i++) spawn({ x: x + rnd(-30, 30), y: y + rnd(-10, 10), vx: rnd(-260, 260), vy: rnd(-520, -160), g: 900, drag: 1.2, life: rnd(1.1, 1.8), max: 1.8, size: rnd(4, 7), color: cols[i % cols.length], kind: 1, rot: rnd(0, 6), vr: rnd(-12, 12) });
+  }
+  // celebrations: a burst of flat confetti over the cards (wins, level-ups, special clears, pot wins)
+  const FX_COLS = ['#ff7a1a', '#ffd60a', '#40c8e0', '#0a84ff', '#bf5af2', '#30d158', '#ffffff'];
+  let fxParts = [], fxRaf = 0, fxLast = 0, fxW = 0, fxH = 0;
+  function celebrate(n, from) {
+    const el = $('fxLayer');
+    if (REDUCED || !el) return;
+    const W = (fxW = innerWidth), H = (fxH = innerHeight), k = Math.min(window.devicePixelRatio || 1, 2);
+    if (el.width !== Math.round(W * k) || el.height !== Math.round(H * k)) { el.width = Math.round(W * k); el.height = Math.round(H * k); }
+    const r = from && from.getBoundingClientRect ? from.getBoundingClientRect() : { left: W / 2 - 120, right: W / 2 + 120, top: H * 0.38 };
+    for (let i = 0; i < (n || 90); i++) {
+      const side = i % 2 ? 1 : -1, ang = -Math.PI / 2 - side * (0.12 + Math.random() * 0.6), sp = 520 + Math.random() * 520; // two cannons at the card's top corners, aimed up and in
+      fxParts.push({ x: side < 0 ? r.left + 28 : r.right - 28, y: r.top + 24, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, w: 5 + Math.random() * 5, h: 8 + Math.random() * 6,
+        rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 14, flip: Math.random() * 6.28, vf: 6 + Math.random() * 8, c: FX_COLS[i % FX_COLS.length], life: 0, max: 1.7 + Math.random() * 0.9, dot: Math.random() < 0.22 });
+    }
+    if (!fxRaf) { fxLast = performance.now(); fxRaf = requestAnimationFrame(fxTick); }
+  }
+  function fxTick(t) {
+    const el = $('fxLayer'), dt = Math.min(0.05, Math.max(0, (t - fxLast) / 1000)), k = el.width / Math.max(1, fxW), g = el.getContext('2d');
+    fxLast = t;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, el.width, el.height); g.setTransform(k, 0, 0, k, 0, 0);
+    fxParts = fxParts.filter((p) => (p.life += dt) < p.max && p.y < fxH + 40);
+    for (const p of fxParts) {
+      p.vy += 1300 * dt; p.vx *= Math.exp(-2.4 * dt); p.vy *= Math.exp((p.vy > 0 ? -3.4 : -2.2) * dt); // pieces flutter down slowly
+      p.x += p.vx * dt + Math.sin(p.flip) * 14 * dt; p.y += p.vy * dt; p.rot += p.vr * dt; p.flip += p.vf * dt;
+      g.globalAlpha = Math.min(1, (p.max - p.life) / 0.45); g.fillStyle = p.c;
+      g.save(); g.translate(p.x, p.y); g.rotate(p.rot); g.scale(1, Math.cos(p.flip));
+      if (p.dot) { g.beginPath(); g.arc(0, 0, p.w * 0.55, 0, 6.2832); g.fill(); } else g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      g.restore();
+    }
+    g.globalAlpha = 1;
+    if (fxParts.length) fxRaf = requestAnimationFrame(fxTick);
+    else { fxRaf = 0; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, el.width, el.height); }
   }
   function winFx(k) {
     Sound.cash(); buzz([10, 30, 10, 30, 60]);
@@ -5861,7 +5978,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–', net = stats.returned - stats.wagered;
     return `<div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${Math.abs(net) < 0.00005 ? '' : net > 0 ? 'pos' : 'neg'}">${Math.abs(net) < 0.00005 ? '0' : (net > 0 ? '+' : '−') + fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
       <div class="sec-h"><h3>Best scores</h3></div>
-      <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
+      <div class="bests">${E.DIFFS.map((D, i) => `<div style="--tc:${tierC(i)}"><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
       <div class="sec-h"><h3>Recent runs</h3>${stats.history.length ? '<span>Newest first</span>' : ''}</div>
       ${runsHtml()}`;
   }
@@ -6000,9 +6117,9 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     show(vP, t === 'profile'); show(vC, t === 'challenges');
     nav.cover = t === 'profile' || t === 'challenges';
     sheetTopC = -1;
-    if (t === 'challenges') { if (profile.mNew) { profile.mNew = 0; saveAll(); } renderChallenges(); $('cBody').scrollTop = 0; refreshSpecial(); refreshPot(); }
+    if (t === 'challenges') { if (profile.mNew) { profile.mNew = 0; saveAll(); } renderChallenges(); $('cBody').scrollTop = 0; if (was !== t) riseIn(vC, true); refreshSpecial(); refreshPot(); }
     if (t === 'locker') renderLocker();
-    if (t === 'profile') { renderProfileView(); if (was !== 'locker') $('pBody').scrollTop = 0; }
+    if (t === 'profile') { renderProfileView(); if (was !== 'locker') $('pBody').scrollTop = 0; if (was !== t && was !== 'locker') riseIn(vP, true); }
     lockerFx();
     syncBadges();
     if (!quiet && was !== t) { Sound.click(); buzz(6); }
@@ -6019,11 +6136,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   document.querySelectorAll('.view > .vscroll').forEach((el) => el.addEventListener('scroll', () => el.parentElement.classList.toggle('scrolled', el.scrollTop > 6), { passive: true }));
 
   // ---------------------------------------------------------------- Missions tab
+  const MCOL = ['#ff9f0a', '#64d2ff', '#ff6482', '#30d158', '#bf5af2']; // each mission's ring colour, in order
   const ring = (p) => `<span class="mring${p > 0 ? '' : ' zero'}"><svg viewBox="0 0 36 36"><circle class="trk" cx="18" cy="18" r="15"/><circle class="val" cx="18" cy="18" r="15" pathLength="100" stroke-dasharray="${(Math.max(0.0001, p) * 100).toFixed(1)} 100"/></svg><span class="ck">${ICON.check}</span></span>`;
-  function mRow(text, p, n, xp, done, sol, paid) {
+  function mRow(text, p, n, xp, done, sol, paid, i) {
     const right = done ? '<b>Done</b>' + (sol ? `<small class="${paid ? 'paid' : ''}">${fmtBet(sol)} SOL ${paid ? 'paid' : 'waiting'}</small>` : '')
       : `<b>+${xp} XP</b>` + (sol ? `<small>+${fmtBet(sol)} SOL</small>` : '');
-    return `<div class="mrow${done ? ' done' : ''}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? 'Done' : p + ' / ' + n}</span></span><span class="mxp">${right}</span></div>`;
+    return `<div class="mrow${done ? ' done' : ''}" style="--mc:${MCOL[(i || 0) % MCOL.length]}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? 'Done' : p + ' / ' + n}</span></span><span class="mxp">${right}</span></div>`;
   }
   // a window's SOL pays once this much has been played in it (bets on runs and special level entries)
   function needRow(mv, win) {
@@ -6036,15 +6154,16 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   function missionsHtml() {
     const mv = mview(), d = mv.daily, w = mv.weekly, cs = careerState();
     const wDone = w.filter((c) => c.done).length;
-    const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi mi-${page}">${ic}</span><span class="mn">${name}</span><span class="mv">${val}</span><span class="chev">${ICON.chev}</span></button>`;
+    const C = CAREER[cs.ch], cDone = C ? cs.done.filter(Boolean).length : 4;
+    const tile = (page, ic, name, val, f) => `<button class="ct ct-${page}" data-page="${page}"><span class="ct-ic">${ic}</span><span class="chev">${ICON.chev}</span><b>${name}</b><span class="ct-v">${val}</span><span class="ct-bar"><i style="width:${(f * 100).toFixed(1)}%"></i></span></button>`;
     return `<div class="sec-h"><h3>Daily missions</h3><span>${ICON.clock}New in ${untilMidnight()}</span></div>
-      <div class="group">${needRow(mv, 'day')}${d.map((c) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>
-      <div class="menu-list">${row('week', ICON.target, 'This week', wDone + ' of ' + w.length + ' done')}${row('career', ICON.flag, 'Career', CAREER[cs.ch] ? 'Chapter ' + (cs.ch + 1) + ' of ' + CAREER.length : 'All done')}</div>`;
+      <div class="group">${needRow(mv, 'day')}${d.map((c, i) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i)).join('')}</div>
+      <div class="ctiles">${tile('week', ICON.target, 'This week', wDone + ' of ' + w.length + ' done', w.length ? wDone / w.length : 0)}${tile('career', ICON.flag, 'Career', C ? 'Chapter ' + (cs.ch + 1) + ' of ' + CAREER.length : 'All done', cDone / 4)}</div>`;
   }
   function weekHtml() {
     const mv = mview(), w = mv.weekly;
     return `<p class="vsub">New missions in ${untilMonday()}.</p>
-      <div class="group">${needRow(mv, 'week')}${w.map((c) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>`;
+      <div class="group">${needRow(mv, 'week')}${w.map((c, i) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i + 1)).join('')}</div>`;
   }
   function careerHtml() {
     const cs = careerState(), C = CAREER[cs.ch];
@@ -6056,7 +6175,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
           <div><div class="chap-k">Chapter ${cs.ch + 1} of ${CAREER.length} · ${n} of 4 done</div><div class="chap-n">${C.name}</div>
           <div class="chap-r">Finish all four to unlock <b>${COS[r.t][r.id].name} ${TNAME[r.t].toLowerCase()}</b>${C.title ? ' and the <b>' + TITLE_BY[C.title].name + '</b> title' : ''}.</div></div></div>
         <div class="chap-bar"><i style="width:${(n / 4 * 100).toFixed(0)}%"></i></div>
-        ${C.m.map((m, i) => mRow(careerText(m), cs.p[i], m[1], m[2], cs.done[i])).join('')}
+        ${C.m.map((m, i) => mRow(careerText(m), cs.p[i], m[1], m[2], cs.done[i], 0, false, i + 2)).join('')}
       </div>`;
     } else career = `<div class="empty">You've finished every chapter. All the career rewards are in your locker.</div>`;
     const chapters = CAREER.map((K, i) => {
@@ -6146,7 +6265,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const got = ACH.filter((a) => profile.ach[a.id]).length, fresh = profile.fresh.length > 0;
     const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi mi-${page}">${ic}</span><span class="mn">${name}</span><span class="mv num">${val || ''}</span><span class="chev">${ICON.chev}</span></button>`;
     $('pBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Profile</h2>
-      <button class="pcard" id="pfCard" aria-label="Edit your player card"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
+      <button class="pcard" id="pfCard" aria-label="Edit your player card" style="${avStyle(profile.card.color)}"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
         <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span>
           <span class="plv"><span>Level ${v.l}</span><span class="num">${v.into} / ${v.need} XP</span></span><span class="pxp"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></span></span>
         <span class="chev">${ICON.chev}</span></button>
@@ -6182,7 +6301,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   function showPause(on) {
     const el = $('pauseCard');
     if (on) {
-      $('pauseSub').textContent = run.mode === 'special' ? SP.BY[run.recipe].name + ' · ring ' + Math.min(run.st.hoops.length, run.hoops + 1) + ' of ' + run.st.hoops.length + ' · ' + fmtSol(run.prize) + ' SOL to win'
+      $('pauseSub').textContent = run.mode === 'special' ? SP.BY[run.recipe].name + ' · ring ' + Math.min(run.st.hoops.length, run.hoops + 1) + ' of ' + run.st.hoops.length + ' · ' + fmtAmt(run.prize) + ' SOL to win'
         : 'Level ' + run.level + ' · ' + fmtSol(run.bet * run.total) + ' SOL pot';
       syncSettings();
     }
