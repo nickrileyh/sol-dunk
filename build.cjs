@@ -23,6 +23,8 @@ const parts = {
   '/*@@PAYTABLE@@*/': r('paytable.cjs'),
   '/*@@BOT@@*/': r('bot.cjs'),
   '/*@@POTS@@*/': r('pots.cjs'),
+  '/*@@MISSIONS@@*/': r('missions.cjs'),
+  '/*@@SPECIAL@@*/': r('special.cjs'),
   '/*@@GAME@@*/': r('game.js')
 };
 for (const [k, v] of Object.entries(parts)) {

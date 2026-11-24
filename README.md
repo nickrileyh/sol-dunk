@@ -81,14 +81,44 @@ Alongside regular play, each UTC day has a challenge pot (`src/pots.cjs`, `serve
 - At midnight UTC everyone who made it splits the pot equally. The house keeps 10% of every entry whoever wins, so the pot earns from every player, however skilled. If nobody makes it, the pot rolls over to the next day.
 - API: `GET /api/pot` (works signed out), `POST /api/pot/enter`, and `/api/run/level` returns `pot` progress. `npm test` covers entry, the tier rule, completing once, the split, the rake and rollover.
 - The demo runs the same pot with demo SOL. It has no other players, so it simulates the other entrants (from each challenge's simulated success rate by skill) and says so, and it has a "Close this pot now" button to see a payout. `python3 tools/pot_flow.py` plays it end to end.
+- The pot has its own page: the **Daily pot** side of the Challenges tab.
+
+## The special level
+
+One special level a day (UTC), the same for everyone (`src/special.cjs`): a long level with a twist. Seven recipes take turns: The gauntlet (every ring moves), Tilt alley (every rim leans, left then right), Zigzag (high ring, low ring), Needle (tight rims, nothing moves), Marathon (18 rings), The wave (rings ride a rolling line) and Express (a quicker ball, rings spread to match). They're built like normal levels (same physics, ring band and climb budget), with 14 to 18 rings and the last one gold.
+
+- The player pays a fixed entry (0.05 SOL, `SPECIAL_ENTRY_LAMPORTS`) and gets a fresh course from its own provably fair seed, `HMAC-SHA256(serverSeed, clientSeed:nonce:special)`, so nobody can learn a course by heart. Clearing every ring pays the prize; missing one loses the entry. The server replays the taps before it pays.
+- Prizes come from the simulator: `node sim/special.cjs --write` (`npm run special`, about 5 min) plays 20,000 attempts per recipe and skill and sets each prize (to the 0.05× below) so a good player gets back at most 97% even at the top of the clear rate's 97.5% confidence interval. Re-run it whenever the physics, the bot or a recipe changes.
+
+| Recipe | Rings | Clear rate: casual / average / good / pro | Prize | Return: average / good / pro |
+|---|---|---|---|---|
+| The gauntlet | 14 | 3.7 / 11.5 / 35.8 / 65.1% | 2.65× | 30 / 95 / 173% |
+| Tilt alley | 16 | 2.2 / 8.9 / 33.1 / 67.3% | 2.85× | 25 / 94 / 192% |
+| Zigzag | 15 | 4.7 / 12.4 / 34.1 / 59.1% | 2.75× | 34 / 94 / 163% |
+| Needle | 18 | 4.6 / 13.6 / 39.9 / 73.9% | 2.35× | 32 / 94 / 174% |
+| Marathon | 18 | 2.9 / 10.2 / 34.7 / 64.2% | 2.70× | 28 / 94 / 173% |
+| The wave | 17 | 2.3 / 8.9 / 32.1 / 65.6% | 2.95× | 26 / 95 / 194% |
+| Express | 14 | 3.6 / 11.3 / 35.4 / 68.3% | 2.65× | 30 / 94 / 181% |
+
+- A fixed prize can't keep an edge against players who are better than "good": pros come out well ahead, as they do deep in regular runs. The server keeps accounts it has limited for beating the house (over 115% return after 150 runs, or a superhuman swish rate) out of the special level.
+- The special doesn't count toward missions or the pot, but its entry counts as play for mission SOL. It's on the **Special level** side of the Challenges tab, with the clear rates above shown as "about 1 in N" per skill.
+- API: `GET /api/special` (works signed out), `POST /api/special/start`, `POST /api/special/finish`. `npm test` covers the entry, the prize, refusals and the provably fair seed. `python3 tools/special_flow.py` plays it in the demo.
+
+## Missions that pay SOL
+
+Three daily missions and three weekly ones (`src/missions.cjs`), the same for everyone that UTC day or week (weeks start Monday 00:00 UTC). Every run counts, whatever the bet, and the server judges progress from the levels it replays.
+
+- Each pays XP, as before, and SOL. A window's SOL pays once the player has played its need in that window: 2 SOL a day, 10 SOL a week by default (`MISSION_DAY_LAMPORTS`, `MISSION_WEEK_LAMPORTS`), counting run bets and special level entries. Rewards earned before then wait, and are paid the moment a bet reaches the need; anything not collected when the window ends is gone.
+- Rewards: 0.001 / 0.002 / 0.003 SOL for the easy, medium and hard daily mission, 0.004 / 0.006 / 0.01 SOL weekly. They scale with the need: 0.3% of a day's need and 0.2% of a week's, at most 0.5% of everything played in a week. That's half the house's smallest edge against a good player (All-Star and Legend pay a good player back 99% at checkpoint 1), so a good player who plays just enough to collect still loses about 0.5% on average, however they bet. Bigger rewards need a bigger need, or they hand good players the edge.
+- API: `GET /api/missions`; `/api/run/start`, `/api/special/start`, `/api/run/level` (when a run ends) and `/api/run/cashout` return `missions` with what was done and paid. `npm test` checks the server's progress against a local replay and the ledger with rewards; `python3 tools/missions_flow.py` plays it in the demo.
 
 ## Around the game
 
-None of this changes bets, ring layouts, physics or payouts; it lives in the client (`src/game.js`) and the player's browser.
+None of this changes bets, ring layouts, physics or payouts; it lives in the client (`src/game.js`) and the player's browser (mission SOL is above).
 
-- **Navigation:** a floating tab bar in the lobby with four tabs. **Play** is the bet sheet over the live arena. **Missions** and **Profile** are full pages. The **Locker** keeps the arena on show above the collection, so whatever you pick, or tap to try on before you've unlocked it, flies there at once. Pausing a run shows a card with Resume and the sound and vibration switches.
-- **One home for everything:** the top bar holds the level (opens Profile), the balance (opens the Wallet) and mute. Pages push in over the current tab with a back button that names it: How to play, Odds & fairness, Wallet, Trophies and Recent runs; tapping the tab again also goes back. Sheets rise from the bottom only for a task you finish there: entering the pot and editing the player card. The Play sheet keeps the bet in three blocks (tier with an Odds link, bet, and Today: the next mission over the pot challenge) above the Play button. Profile runs card, level, stats (with Trophies and Recent runs), settings (Wallet, Sound, Vibration) and help (How to play, Odds & fairness).
-- **Missions** (XP only, never tied to bet size): 3 daily missions and 3 weekly ones, the same for everyone that day or week, and a career of 6 chapters with 4 missions each that you play at your own pace. Each chapter ends in an item you can only get there.
+- **Navigation:** a floating tab bar in the lobby with five tabs. **Play** is the bet sheet over the live arena. **Challenges** (the special level and the daily pot, each on its own page), **Missions** and **Profile** are full pages. The **Locker** keeps the arena on show above the collection, so whatever you pick, or tap to try on before you've unlocked it, flies there at once. Pausing a run shows a card with Resume and the sound and vibration switches.
+- **One home for everything:** the top bar holds the level (opens Profile), the balance (opens the Wallet) and mute. Pages push in over the current tab with a back button that names it: How to play, Odds & fairness, Wallet, Trophies and Recent runs; tapping the tab again also goes back. Sheets rise from the bottom only for a task you finish there: editing the player card. The Play sheet keeps the bet in three blocks (tier with an Odds link, bet, and Today: the next mission, today's special and the pot challenge, each a way into its home) above the Play button. Profile runs card, level, stats (with Trophies and Recent runs), settings (Wallet, Sound, Vibration) and help (How to play, Odds & fairness).
+- **Missions**: 3 daily missions and 3 weekly ones that also pay SOL (above), and a career of 6 chapters with 4 missions each that you play at your own pace, for XP. Each chapter ends in an item you can only get there.
 - **Locker:** six kinds of item, 56 in all, each marked common, rare, epic or legendary: 18 balls, 10 wings (feather, bat, butterfly and mech shapes), 9 flames, 7 trails, 6 rim colours and 6 courts (Arena, Street, Rooftop, Beach, Neon, Orbit). Items unlock with levels, trophies or career chapters. A court is one backdrop for every level; rim colours change the ordinary rings only, so the checkpoint ring stays gold and a missed one grey.
 - **Player card:** a name, an emblem, a colour and a title (titles come from trophies, levels and the career).
 
@@ -104,15 +134,19 @@ None of this changes bets, ring layouts, physics or payouts; it lives in the cli
 src/engine.cjs     physics, levels, replay, payout helpers (shared by client, sim, server)
 src/paytable.cjs   generated multiplier tables + average-player stats
 src/bot.cjs        human-like autopilot (simulation + lobby demo)
+src/pots.cjs       challenge pot rules (shared by client, server, demo)
+src/missions.cjs   daily and weekly missions, their SOL and what unlocks it (shared by client and server)
+src/special.cjs    the special level: recipes, generator, daily rotation, prizes (shared by client, server, sim)
 src/game.js        browser client: rendering, audio, input, betting flow, wallet
 src/index.html, src/style.css
 build.cjs          inlines everything into dist/*.html
-sim/               Monte Carlo runner, calibrator, quick stats
+sim/               Monte Carlo runner, calibrator, quick stats; special.cjs prices the special level
 server/            Express API, Solana deposits/withdrawals, replay verification, tests
 tools/             browser checks (Playwright + Chrome): flows.py plays every run outcome,
                    contact.py freezes rim contacts, audit.py screenshots every screen (to ./shots),
                    ui.py checks the tabs, the pages and their back button, the locker, missions,
                    the player card, the settings and the pause card,
+                   special_flow.py plays the special level, missions_flow.py mission SOL, pot_flow.py the pot,
                    speed.py plays deep into a tier and reports how much of the next ring is in view,
                    clip.py records exact 60 fps frames of a run (contact sheet + mp4), e.g. to
                    review the flame; sync_check.cjs (npm run check) checks every copy is the same build
@@ -122,6 +156,6 @@ tools/             browser checks (Playwright + Chrome): flows.py plays every ru
 
 This repository is the source of truth for SOL DUNK. Start any new session from a fresh clone, and push when you're done, so every chat builds on the latest version.
 
-- Any change to `src/engine.cjs` (physics) needs `npm run sim` then `npm run calibrate` (`node sim/calibrate.cjs patterns.json --mode edge --write`), or the paytable no longer matches the game.
+- Any change to `src/engine.cjs` (physics) needs `npm run sim` then `npm run calibrate` (`node sim/calibrate.cjs patterns.json --mode edge --write`), or the paytable no longer matches the game, and `npm run special` to re-price the special level.
 - After a change, run `npm run build`, `npm test` and `python3 tools/flows.py` before publishing.
 - `npm run check` confirms that `dist/` and the root `index.html` are the build of `src/` and that everything is pushed. Pass it a saved copy of the live demo (`npm run check -- live.html`) to check that too. CLAUDE.md lists the steps that keep the repo, GitHub Pages and the demo in sync.

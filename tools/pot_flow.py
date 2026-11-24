@@ -1,5 +1,5 @@
-"""Challenge pot, end to end in the demo: the lobby row, the sheet, entering (the entry is debited), completing the
-challenge in a run on its tier (live notice + result chip), and closing the pot (the share is paid).
+"""Challenge pot, end to end in the demo: its page on the Challenges tab, entering (the entry is debited), completing
+the challenge in a run on its tier (live notice + result chip), and closing the pot (the share is paid).
 Screenshots to ./shots/pot_*.png. Usage: python3 tools/pot_flow.py"""
 import asyncio, re
 from playwright.async_api import async_playwright
@@ -13,19 +13,19 @@ async def main():
         page.on('pageerror', lambda e: errs.append(str(e)))
         await page.goto(URL); await page.wait_for_timeout(2200)
         bal = lambda: page.evaluate("__solDunk.bal()")
-        await page.wait_for_selector('#potBtn:not(.hide)', timeout=5000)
-        await page.screenshot(path=OUT + 'lobby.png')
-        goal = await page.evaluate("document.getElementById('potT').textContent")
-        await page.click('#potBtn'); await page.wait_for_timeout(500)
+        await page.wait_for_function('__solDunk.pot()', timeout=5000)
+        goal = await page.evaluate("__solDunk.pot().goal.text")
+        await page.click('#tabChallenges'); await page.wait_for_timeout(500)
+        await page.click('#cBody [data-ch="pot"]'); await page.wait_for_timeout(500)
         await page.screenshot(path=OUT + 'sheet.png')
         b0 = await bal()
         await page.click('#potEnter'); await page.wait_for_timeout(600)
         await page.screenshot(path=OUT + 'entered.png')
         b1 = await bal()
         if abs((b0 - b1) - 0.05) > 1e-6: fails.append(f'entry debit {b0} -> {b1}')
-        if 'You’re in' not in await page.evaluate("document.getElementById('panelBody').innerText"): fails.append('sheet does not say you are in')
+        if 'You’re in' not in await page.evaluate("document.getElementById('cBody').innerText"): fails.append('the pot page does not say you are in')
         tier = await page.evaluate("__solDunk.pot().goal.tier")
-        await page.click('#panelClose'); await page.wait_for_timeout(400)
+        await page.click('#tabPlay'); await page.wait_for_timeout(400)
         await page.click(f'#diff{tier}'); await page.wait_for_timeout(200)
         await page.click('#playBtn'); await page.wait_for_timeout(700)
         await page.evaluate("__solDunk.autoplay('perfect'); __solDunk.tap()")
@@ -47,7 +47,7 @@ async def main():
         if not noticed: fails.append('no pot notice during the run')
         if 'Pot challenge done' not in gains: fails.append('no pot chip on the result card: ' + gains)
         await page.click('#lobbyBtn'); await page.wait_for_timeout(800)
-        await page.click('#potBtn'); await page.wait_for_timeout(500)
+        await page.click('#tabChallenges'); await page.wait_for_timeout(600)
         await page.screenshot(path=OUT + 'made.png')
         b2 = await bal()
         await page.click('#potClose'); await page.wait_for_timeout(900)

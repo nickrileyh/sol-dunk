@@ -72,6 +72,9 @@
       <span class="d-ic" id="dailyIc"></span><span class="d-t"><small id="dailyK">Next mission</small><span id="dailyT">Missions</span></span><span class="d-p num" id="dailyP"></span>
       <span class="d-bar" aria-hidden="true"><i id="dailyFill"></i></span>
     </button>
+    <button class="potrow sprow hide" id="chBtn" aria-label="Today’s special">
+      <span class="p-ic" aria-hidden="true"></span><span class="p-t"><small>Today’s special</small><span id="chT"></span></span><span class="p-v num" id="chV"></span><span class="p-s" id="chS"></span>
+    </button>
     <button class="potrow hide" id="potBtn" aria-label="Pot challenge">
       <span class="p-ic" aria-hidden="true"></span><span class="p-t"><small>Pot challenge</small><span id="potT"></span></span><span class="p-v num" id="potV"></span><span class="p-s" id="potS"></span>
     </button>
@@ -80,6 +83,7 @@
   <div class="err" id="lobbyErr" role="alert"></div>
 </section>
 
+<section id="vChallenges" class="view hide" aria-label="Challenges"><div class="vscroll" id="cBody"></div></section>
 <section id="vMissions" class="view hide" aria-label="Missions"><div class="vscroll" id="mBody"></div></section>
 <section id="vProfile" class="view hide" aria-label="Profile"><div class="vscroll" id="pBody"></div></section>
 <section id="vLocker" class="sheet locker hide" aria-label="Locker">
@@ -95,6 +99,7 @@
 
 <nav id="tabbar" role="tablist" aria-label="Sections">
   <button role="tab" data-tab="play" id="tabPlay" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M3.6 12h16.8M12 3.4v17.2M6.1 5.9c2.4 1.6 3.4 3.8 3.4 6.1s-1 4.5-3.4 6.1M17.9 5.9c-2.4 1.6-3.4 3.8-3.4 6.1s1 4.5 3.4 6.1"/></svg><span>Play</span></button>
+  <button role="tab" data-tab="challenges" id="tabChallenges" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.6 3.8h8.8v5.4a4.4 4.4 0 0 1-8.8 0z"/><path d="M7.6 5.6H4.8v1.2a3.3 3.3 0 0 0 3.1 3.3M16.4 5.6h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 13.6v3.6M8.4 20.2h7.2M9.8 20.2l.6-3h3.2l.6 3"/></svg><span>Challenges</span><i class="badge" id="badgeC"></i></button>
   <button role="tab" data-tab="missions" id="tabMissions" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="4.6"/><circle class="fill" cx="12" cy="12" r="1.3"/></svg><span>Missions</span><i class="badge" id="badgeM"></i></button>
   <button role="tab" data-tab="locker" id="tabLocker" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 3.4c.5 1.9 1.8 3 3.4 3s2.9-1.1 3.4-3l2.8.9c-.4 2.6.1 4.8 1.4 6.4v9.8H4.4v-9.8c1.3-1.6 1.8-3.8 1.4-6.4z"/><path d="M9.6 13.6h4.8"/></svg><span>Locker</span><i class="badge" id="badgeL"></i></button>
   <button role="tab" data-tab="profile" id="tabProfile" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20.4c.8-3.9 3.7-6.1 7.4-6.1s6.6 2.2 7.4 6.1"/></svg><span>Profile</span></button>
@@ -137,7 +142,7 @@
   </div>
   <div class="gains" id="resGains"></div>
   <div class="stack">
-    <button class="btn btn-primary" id="againBtn">Play again <span class="num" id="againAmt"></span></button>
+    <button class="btn btn-primary" id="againBtn"><span id="againT">Play again</span> <span class="num" id="againAmt"></span></button>
     <div class="pair">
       <button class="btn btn-plain" id="lobbyBtn">Change bet</button>
       <button class="btn btn-plain" id="shareBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M5 12.5v6A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-6"/></svg>Share</button>
@@ -157,6 +162,8 @@
 <script>/*@@PAYTABLE@@*/</script>
 <script>/*@@BOT@@*/</script>
 <script>/*@@POTS@@*/</script>
+<script>/*@@MISSIONS@@*/</script>
+<script>/*@@SPECIAL@@*/</script>
 <script>/*@@GAME@@*/</script>
 </body>
 </html>

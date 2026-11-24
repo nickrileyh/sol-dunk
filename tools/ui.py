@@ -1,5 +1,6 @@
-"""Checks the lobby's navigation and what lives behind it: the four tabs, the pages that push in over them (How to
-play, Odds & fairness, Wallet, Trophies, Recent runs) and their back button, the Locker (equip, try-on, leaving
+"""Checks the lobby's navigation and what lives behind it: the five tabs (Challenges has its own check,
+tools/special_flow.py), the pages that push in over them (How to play, Odds & fairness, Wallet, Trophies, Recent runs)
+and their back button, the Locker (equip, try-on, leaving
 clears the try-on), the missions (daily, weekly, career progress after a run), the player card editor, the
 settings on Profile, the pause card, and that items already earned under the newer unlock list are handed out on
 load."""
@@ -21,10 +22,15 @@ async def main():
         vis = lambda sel: page.evaluate(f"!document.querySelector('{sel}').classList.contains('hide')")
         check(await tab() == 'play' and await vis('#lobby'), 'opens on Play with the bet sheet')
         # tabs
+        await page.click('#tabChallenges'); await page.wait_for_timeout(500)
+        check(await tab() == 'challenges' and await vis('#vChallenges') and not await vis('#lobby'), 'Challenges tab shows the challenges page')
+        check(await page.evaluate("document.querySelectorAll('#cBody [data-ch]').length") == 2, 'Challenges switches between the special level and the daily pot')
         await page.click('#tabMissions'); await page.wait_for_timeout(400)
         check(await tab() == 'missions' and await vis('#vMissions') and not await vis('#lobby'), 'Missions tab shows the missions page')
         n = await page.evaluate("document.querySelectorAll('#mBody .mrow').length")
         check(n == 10, f'missions page lists 3 daily + 3 weekly + 4 career missions ({n})')
+        sol = await page.evaluate("document.querySelectorAll('#mBody .mxp small').length")
+        check(sol == 6 and await page.evaluate("document.querySelectorAll('#mBody .mneed').length") == 2, f'daily and weekly missions show their SOL and the play that unlocks it ({sol})')
         await page.keyboard.press('Space'); await page.wait_for_timeout(400)
         check(await page.evaluate('__solDunk.phase()') == 'lobby', 'Space on the Missions tab does not start a run')
         await page.click('#tabLocker'); await page.wait_for_timeout(600)
@@ -98,7 +104,7 @@ async def main():
         check('Nick' in await page.evaluate("document.getElementById('pBody').textContent"), 'the profile shows the new name')
         # a run: pause card, then mission progress afterwards
         await page.click('#tabPlay'); await page.wait_for_timeout(400)
-        before = await page.evaluate("JSON.stringify([__solDunk.profile.weekly, __solDunk.profile.career])")
+        before = await page.evaluate("JSON.stringify([__solDunk.missions().weekly.map((c) => c.p), __solDunk.profile.career])")
         await page.click('#playBtn'); await page.wait_for_timeout(900)
         await page.evaluate("__solDunk.autoplay('perfect'); __solDunk.tap()"); await page.wait_for_timeout(1500)
         check(not await vis('#tabbar') or await page.evaluate("getComputedStyle(document.getElementById('tabbar')).opacity") == '0', 'the tab bar hides during a run')
@@ -119,7 +125,7 @@ async def main():
             await page.wait_for_timeout(100)
         if ph == 'checkpoint':
             await page.wait_for_timeout(900); await page.click('#cashBtn'); await page.wait_for_timeout(2200)
-        after = await page.evaluate("JSON.stringify([__solDunk.profile.weekly, __solDunk.profile.career])")
+        after = await page.evaluate("JSON.stringify([__solDunk.missions().weekly.map((c) => c.p), __solDunk.profile.career])")
         check(after != before, 'the run moved the weekly and career missions on')
         car = await page.evaluate("__solDunk.profile.career")
         check(car['p'][0] > 0 or car['ch'] > 0, f"career progress recorded {car}")

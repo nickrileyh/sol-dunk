@@ -10,6 +10,7 @@
     "calibrate": "node sim/calibrate.cjs patterns.json --mode edge --write",
     "stats": "node sim/quick.cjs 400",
     "test": "cd server && npm test",
-    "check": "node tools/sync_check.cjs"
+    "check": "node tools/sync_check.cjs",
+    "special": "node sim/special.cjs 20000 --write"
   }
 }

@@ -8,9 +8,11 @@ m = re.search(r'<style>(.*?)</style>', h, re.S)
 style = m.group(1)
 tmpl = h[:m.start(1)] + '/*@@STYLE@@*/' + h[m.end(1):]
 blocks = list(re.finditer(r'<script>(.*?)</script>', tmpl, re.S))
-# builds from before the challenge pots (src/pots.cjs) have five scripts, later ones six
-names = ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'GAME'] if len(blocks) == 5 else ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'POTS', 'GAME']
-files = {'ENGINE': 'engine.cjs', 'PAYTABLE': 'paytable.cjs', 'BOT': 'bot.cjs', 'POTS': 'pots.cjs', 'GAME': 'game.js'}
+# builds from before the challenge pots (src/pots.cjs) have five scripts, then six; from the SOL missions and the
+# special level (src/missions.cjs, src/special.cjs) on, eight
+names = {5: ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'GAME'], 6: ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'POTS', 'GAME'],
+         8: ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'POTS', 'MISSIONS', 'SPECIAL', 'GAME']}.get(len(blocks), [])
+files = {'ENGINE': 'engine.cjs', 'PAYTABLE': 'paytable.cjs', 'BOT': 'bot.cjs', 'POTS': 'pots.cjs', 'MISSIONS': 'missions.cjs', 'SPECIAL': 'special.cjs', 'GAME': 'game.js'}
 assert len(blocks) == len(names), len(blocks)
 files = {k: f for k, f in files.items() if k in names}
 parts = {}

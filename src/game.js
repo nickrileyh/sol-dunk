@@ -1,7 +1,7 @@
 /* SOL DUNK — browser client. Rendering, input, audio, betting flow. */
 (() => {
   'use strict';
-  const E = window.DunkEngine, PAY = window.DunkPaytable, BOT = window.DunkBot, POTS = window.DunkPots;
+  const E = window.DunkEngine, PAY = window.DunkPaytable, BOT = window.DunkBot, POTS = window.DunkPots, MS = window.DunkMissions, SP = window.DunkSpecial;
   const CFG = Object.assign({ serverUrl: null, network: 'devnet', demoStart: 10, minBet: 0.001, maxBet: 100, solIconUrl: null }, window.SOL_DUNK_CONFIG || {});
   const W = E.WORLD, P = E.PHYS, DT = E.DT, NL = E.LEVELS, NH = E.HOOPS_PER_LEVEL, EV = E.EV;
   const $ = (id) => document.getElementById(id);
@@ -296,42 +296,27 @@
   const unlockReq = (u) => (u.lvl ? 'Level ' + u.lvl : u.ach ? ACH_BY[u.ach].name : 'Chapter ' + (u.ch + 1));
   const unlockHow = (u) => (u.lvl ? 'Reach level ' + u.lvl : u.ach ? ACH_BY[u.ach].desc : 'Finish career chapter ' + (u.ch + 1) + ', ' + CAREER[u.ch].name);
 
-  // Daily missions: three a day (easy, medium, hard), the same for everyone on a given date.
-  // "sum" missions add up over the day; the others have to happen within one run.
-  const DAILY = [
-    { k: 'swish', sum: true, n: [[10, 40], [18, 60], [28, 100]], text: (n) => `Swish ${n} rings` },
-    { k: 'points', sum: true, n: [[50, 40], [90, 60], [140, 100]], text: (n) => `Score ${n} points` },
-    { k: 'clears', sum: true, n: [[2, 40], [4, 60], [7, 100]], text: (n) => `Clear ${n} levels` },
-    { k: 'best', n: [[3, 40], [4, 60], [6, 100]], text: (n) => `Swish ${n} in a row` },
-    { k: 'score', n: [[20, 40], [32, 60], [48, 100]], text: (n) => `Score ${n} in one run` },
-    { k: 'level', n: [[2, 40], [3, 60], [5, 100]], text: (n) => `Reach level ${n}` },
-    { k: 'mov', sum: true, n: [[2, 40], [5, 60], [9, 100]], text: (n) => `Swish ${n} moving rings` },
-    { k: 'perfect', sum: true, n: [[1, 50], [1, 70], [2, 110]], text: (n) => (n === 1 ? 'Swish every ring in a level' : `Swish every ring in ${n} levels`) }
-  ];
-  const DAILY_BY = Object.fromEntries(DAILY.map((d) => [d.k, d]));
-  function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
-  function dailySet() {
-    const day = today();
-    if (!profile.daily || profile.daily.day !== day || !Array.isArray(profile.daily.list)) {
-      const rng = E.makeRng('daily|' + day), pool = DAILY.map((d) => d.k), list = [];
-      for (let slot = 0; slot < 3; slot++) {
-        const k = pool.splice(Math.floor(rng() * pool.length), 1)[0], [n, xp] = DAILY_BY[k].n[slot];
-        list.push({ k, n, xp, p: 0, done: false });
-      }
-      profile.daily = { day, list };
-    }
-    return profile.daily.list;
+  // Daily missions: three a UTC day (easy, medium, hard), the same for everyone; weekly ones run from Monday 00:00
+  // UTC. Their targets, XP and SOL rewards are in src/missions.cjs, shared with the server, which judges them from the
+  // runs it verifies. Where they stand (progress, done, paid, SOL played) comes from the bank: the demo keeps it in the
+  // profile, the server keeps the real one.
+  const DTEXT = {
+    swish: (n) => `Swish ${n} rings`, points: (n) => `Score ${n} points`, clears: (n) => `Clear ${n} levels`,
+    best: (n) => `Swish ${n} in a row`, score: (n) => `Score ${n} in one run`, level: (n) => `Reach level ${n}`,
+    mov: (n) => `Swish ${n} moving rings`, perfect: (n) => (n === 1 ? 'Swish every ring in a level' : `Swish every ring in ${n} levels`)
+  };
+  const mview = () => bank.missions.view(); // { daily, weekly, need, played, dayEnds, weekEnds }
+  const dailySet = () => mview().daily;
+  const dailyText = (c) => DTEXT[c.k](c.n);
+  function leftOf(ms) {
+    const mins = Math.max(1, Math.round(ms / 60000)), d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60);
+    return d > 0 ? d + 'd ' + h + 'h' : h > 0 ? h + 'h ' + (mins % 60) + 'm' : mins + 'm';
   }
-  const dailyText = (c) => DAILY_BY[c.k].text(c.n);
-  function untilMidnight() {
-    const now = new Date(), m = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const mins = Math.max(1, Math.round((m - now) / 60000));
-    return mins >= 60 ? Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm' : mins + 'm';
-  }
+  const untilMidnight = () => leftOf(mview().dayEnds - Date.now());
   // ---------------------------------------------------------------- missions
-  // Three kinds, all about how you play and never about how much you bet or how often you come back:
-  //   daily   3 a day (easy, medium, hard), the same for everyone on a date; new ones at local midnight.
-  //   weekly  3 a week with bigger totals, the same for everyone that week; new ones on Monday.
+  // Three kinds, all about how you play, whatever you bet:
+  //   daily   3 a UTC day (easy, medium, hard), the same for everyone; XP, and SOL once the day's play reaches its need.
+  //   weekly  3 a week with bigger totals, from Monday 00:00 UTC; XP, and SOL once the week's play reaches its need.
   //   career  6 chapters of 4 missions at your own pace. Each chapter ends in an item you can't get any other way.
   // "sum" missions add up across runs; the others have to happen within one run. Keys are run facts (runFacts).
   const MTEXT = {
@@ -346,36 +331,9 @@
     fires: (n) => (n === 1 ? 'Catch fire' : `Catch fire ${n} times`),
     novas: (n) => (n === 1 ? 'Go supernova' : `Go supernova ${n} times`)
   };
-  const WEEKLY = [
-    { k: 'swish', n: [[60, 120], [100, 180], [150, 260]] },
-    { k: 'points', n: [[300, 120], [500, 180], [800, 260]] },
-    { k: 'clears', n: [[10, 120], [18, 180], [28, 260]] },
-    { k: 'mov', n: [[12, 120], [22, 180], [36, 260]] },
-    { k: 'perfect', n: [[2, 140], [4, 200], [6, 280]] },
-    { k: 'fires', n: [[6, 120], [12, 180], [20, 260]] },
-    { k: 'novas', n: [[2, 140], [4, 200], [7, 280]] }
-  ];
-  const WEEKLY_BY = Object.fromEntries(WEEKLY.map((d) => [d.k, d]));
+  const weeklySet = () => mview().weekly;
   const weeklyText = (c) => MTEXT[c.k](c.n, true);
-  function weekStart() { const d = new Date(), m = new Date(d.getFullYear(), d.getMonth(), d.getDate()); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return m; }
-  function weekKey() { const m = weekStart(); return m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0') + '-' + String(m.getDate()).padStart(2, '0'); }
-  function weeklySet() {
-    const wk = weekKey();
-    if (!profile.weekly || profile.weekly.wk !== wk || !Array.isArray(profile.weekly.list)) {
-      const rng = E.makeRng('weekly|' + wk), pool = WEEKLY.map((d) => d.k), list = [];
-      for (let slot = 0; slot < 3; slot++) {
-        const k = pool.splice(Math.floor(rng() * pool.length), 1)[0], [n, xp] = WEEKLY_BY[k].n[slot];
-        list.push({ k, n, xp, p: 0, done: false });
-      }
-      profile.weekly = { wk, list };
-    }
-    return profile.weekly.list;
-  }
-  function untilMonday() {
-    const m = weekStart(); m.setDate(m.getDate() + 7);
-    const mins = Math.max(1, Math.round((m - new Date()) / 60000)), d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60);
-    return d > 0 ? d + 'd ' + h + 'h' : h > 0 ? h + 'h ' + (mins % 60) + 'm' : mins + 'm';
-  }
+  const untilMonday = () => leftOf(mview().weekEnds - Date.now());
   // [key, target, XP, sum]
   const CAREER = [
     { name: 'First bounce', reward: 'court:street', m: [['swish', 10, 30, 1], ['clears', 2, 30, 1], ['score', 15, 30, 0], ['mov', 1, 30, 1]] },
@@ -613,6 +571,72 @@
     }
   };
 
+  // ---------------------------------------------------------------- missions, demo (rules in src/missions.cjs)
+  // The same rules as the server, on demo SOL: progress from the levels the demo bank verifies, SOL once the window's
+  // play reaches its need. The state lives in the profile.
+  const DemoMissions = {
+    need: MS.NEED,
+    view() {
+      if (!profile.ms) { // carry over today's and this week's progress from the old local-time missions, as already paid
+        const now = Date.now(), old = (o, key) => (o && o[key] && Array.isArray(o.list) && o.list.length === 3 ? o.list.map((c) => ({ p: c.p | 0, done: !!c.done, paid: !!c.done })) : null);
+        const ms = MS.roll(null, now), d = profile.daily && profile.daily.day === ms.day && old(profile.daily, 'day'), w = profile.weekly && profile.weekly.wk === ms.week && old(profile.weekly, 'wk');
+        if (d) ms.d = d; if (w) ms.w = w;
+        profile.ms = ms;
+      }
+      profile.ms = MS.roll(profile.ms, Date.now()); return MS.view(profile.ms, Date.now(), this.need);
+    },
+    pay(paid) {
+      let sum = 0;
+      for (const p of paid) sum += p.amount;
+      if (sum) { wallet.balance = round9(wallet.balance + sum); stats.missionSol = round9((stats.missionSol || 0) + sum); }
+      return paid;
+    },
+    play(amount) { const r = MS.play(profile.ms, amount, Date.now(), this.need); profile.ms = r.s; return this.pay(r.paid); },
+    run(levels) { const r = MS.run(profile.ms, levels, Date.now(), this.need); profile.ms = r.s; return { done: r.done, paid: this.pay(r.paid) }; }
+  };
+  // a level as the banks verify it, for missions and the pot: only the rings that counted (a max win stops at the
+  // capped ring, which isn't a clear), and which of them were moving
+  function verifiedLevel(def, r, capIndex) {
+    const n = capIndex >= 0 ? capIndex + 1 : r.outcomes.length, o = r.outcomes.slice(0, n);
+    return { outcomes: o.join(''), clear: r.result === 'clear' && capIndex < 0, mov: o.map((x, k) => (def.hoops[k].amp ? '1' : '0')).join('') };
+  }
+
+  // ---------------------------------------------------------------- special level, demo (rules in src/special.cjs)
+  // One attempt at a time: a fresh course from its own seed (HMAC-SHA256(serverSeed, clientSeed:nonce:special)), the
+  // entry up front and the prize for clearing every ring, checked by replaying the taps, exactly as the server does.
+  const DemoSpecial = {
+    cur: null, fee: SP.ENTRY,
+    tally() { const day = SP.dayKey(Date.now()), t = store.get('special', null); return t && t.day === day ? t : { day, tries: 0, wins: 0 }; },
+    view() {
+      const day = SP.dayKey(Date.now()), R = SP.recipeFor(day), t = this.tally(), x = SP.prizeOf(R.id);
+      return { day, recipe: { id: R.id, name: R.name, blurb: R.blurb, rings: R.n }, fee: this.fee, prize: round9(this.fee * x), x, odds: (SP.PRIZES[R.id] || { p: [] }).p, closesAt: SP.closesAt(day), me: { tries: t.tries, wins: t.wins, blocked: false } };
+    },
+    start() {
+      const v = this.view();
+      if (!(v.prize > v.fee)) throw new Error('There’s no special level today');
+      if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
+      wallet.balance = round9(wallet.balance - v.fee);
+      const paid = DemoMissions.play(v.fee);
+      const t = this.tally(); t.tries++; store.set('special', t);
+      const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
+      this.cur = { serverSeed, clientSeed, nonce, recipe: v.recipe.id, fee: v.fee, prize: v.prize, day: v.day, seed: deriveLevelSeed(serverSeed, clientSeed, nonce, 'special') };
+      saveAll();
+      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, seed: this.cur.seed, recipe: v.recipe.id, fee: v.fee, prize: v.prize, missions: { paid }, special: this.view() };
+    },
+    finish(taps) {
+      const c = this.cur;
+      if (!c) throw new Error('No special level in progress');
+      this.cur = null;
+      const r = E.replay(SP.generate(c.seed, c.recipe), taps), won = r.result === 'clear';
+      if (won) {
+        wallet.balance = round9(wallet.balance + c.prize);
+        const t = this.tally(); if (t.day === c.day) { t.wins++; store.set('special', t); }
+      }
+      saveAll();
+      return { status: won ? 'won' : 'lost', payout: won ? c.prize : 0, serverSeed: c.serverSeed, outcomes: r.outcomes, special: this.view() };
+    }
+  };
+
   // ---------------------------------------------------------------- bank: demo (local) and server (real SOL)
   const LocalBank = {
     real: false,
@@ -622,10 +646,11 @@
       if (!(bet >= CFG.minBet)) throw new Error('Minimum bet is ' + CFG.minBet + ' SOL');
       if (bet > wallet.balance + 1e-12) throw new Error('Not enough demo SOL for that bet.');
       wallet.balance = round9(wallet.balance - bet);
+      const paid = DemoMissions.play(bet);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
       saveAll();
       this.cur = { di, bet, serverSeed, clientSeed, nonce, level: 1, total: 1, streak: 0, levels: [], potAt: Date.now() };
-      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, levelSeed: deriveLevelSeed(serverSeed, clientSeed, nonce, 1) };
+      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, levelSeed: deriveLevelSeed(serverSeed, clientSeed, nonce, 1), missions: { paid } };
     },
     // Re-verifies the level by replaying the taps, exactly as the server does.
     async level(L, taps) {
@@ -634,26 +659,33 @@
       const r = E.replay(def, taps);
       const a = E.applyLevel(PAY.PAYTABLE[c.di][L - 1], r.outcomes, c.total, E.DIFFS[c.di].maxWin, c.streak);
       c.total = a.total; c.streak = a.streak; c.level = L;
-      c.levels.push({ outcomes: r.outcomes.join(''), clear: r.result === 'clear' });
+      c.levels.push(verifiedLevel(def, r, a.capped ? a.capIndex : -1));
       const pot = DemoPot.check(c);
       const status = a.capped ? 'maxwin' : r.result === 'clear' ? (L >= NL ? 'final' : 'checkpoint') : 'bust';
-      let payout = 0;
+      let payout = 0, missions = null;
       if (status === 'maxwin' || status === 'final') payout = this._pay();
-      return { status, total: c.total, payout, serverSeed: status === 'checkpoint' ? null : c.serverSeed, pot };
+      if (status !== 'checkpoint') { missions = DemoMissions.run(c.levels); saveAll(); } // the run is over
+      return { status, total: c.total, payout, serverSeed: status === 'checkpoint' ? null : c.serverSeed, pot, missions };
     },
     async next() { const c = this.cur; c.level++; return { levelSeed: deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, c.level) }; },
-    async cashout() { const payout = this._pay(); return { payout, serverSeed: this.cur.serverSeed }; },
+    async cashout() { const payout = this._pay(), missions = DemoMissions.run(this.cur.levels); saveAll(); return { payout, serverSeed: this.cur.serverSeed, missions }; },
     _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); saveAll(); return payout; },
     pot: {
       async state() { DemoPot.roll(); return DemoPot.view(); },
       async enter() { return DemoPot.enter(); },
       async closeNow() { DemoPot.roll(true); return DemoPot.view(); } // demo only
+    },
+    missions: { view: () => DemoMissions.view(), async state() { return DemoMissions.view(); } },
+    special: {
+      async state() { return DemoSpecial.view(); },
+      async start() { return DemoSpecial.start(); },
+      async finish(taps) { return DemoSpecial.finish(taps); }
     }
   };
 
   // Real SOL: talks to server/server.mjs. Only active when SOL_DUNK_CONFIG.serverUrl is set.
   const ServerBank = {
-    real: true, token: null, address: null, bal: 0, runId: null,
+    real: true, token: null, address: null, bal: 0, runId: null, specId: null, mv: null,
     async api(path, body) {
       const res = await fetch(CFG.serverUrl.replace(/\/$/, '') + path, {
         method: body ? 'POST' : 'GET',
@@ -690,14 +722,41 @@
       const clientSeed = randomHex(8);
       const j = await this.api('/api/run/start', { difficulty: di, lamports: Math.round(bet * 1e9), clientSeed });
       this.runId = j.runId;
-      return { seedHash: j.serverSeedHash, clientSeed, nonce: j.nonce, levelSeed: j.levelSeed };
+      return { seedHash: j.serverSeedHash, clientSeed, nonce: j.nonce, levelSeed: j.levelSeed, missions: this.mfrom(j.missions) };
     },
     async level(L, taps) {
       const j = await this.api('/api/run/level', { runId: this.runId, level: L, taps });
-      return { status: j.status, total: j.total, payout: (j.payoutLamports || 0) / 1e9, serverSeed: j.serverSeed || null, pot: j.pot || null };
+      return { status: j.status, total: j.total, payout: (j.payoutLamports || 0) / 1e9, serverSeed: j.serverSeed || null, pot: j.pot || null, missions: this.mfrom(j.missions) };
     },
     async next() { return this.api('/api/run/continue', { runId: this.runId }); },
-    async cashout() { const j = await this.api('/api/run/cashout', { runId: this.runId }); return { payout: j.payoutLamports / 1e9, serverSeed: j.serverSeed }; },
+    async cashout() { const j = await this.api('/api/run/cashout', { runId: this.runId }); return { payout: j.payoutLamports / 1e9, serverSeed: j.serverSeed, missions: this.mfrom(j.missions) }; },
+    // the server's missions in SOL; keeps its latest view for the Missions page
+    mconv(v) {
+      const L = 1e9, one = (m) => Object.assign({}, m, { reward: m.rewardLamports / L });
+      return { day: v.day, week: v.week, dayEnds: v.dayEnds, weekEnds: v.weekEnds, need: { day: v.needLamports.day / L, week: v.needLamports.week / L }, played: { day: v.playedLamports.day / L, week: v.playedLamports.week / L }, daily: v.daily.map(one), weekly: v.weekly.map(one) };
+    },
+    mfrom(j) {
+      if (!j) return null;
+      if (j.view) this.mv = this.mconv(j.view);
+      return { done: j.done || [], paid: (j.paid || []).map((p) => Object.assign({}, p, { amount: p.lamports / 1e9 })) };
+    },
+    missions: {
+      view() { return ServerBank.mv || MS.view(null, Date.now()); },
+      async state() { ServerBank.mv = ServerBank.mconv(await ServerBank.api('/api/missions')); return ServerBank.mv; }
+    },
+    special: {
+      view(j) { const L = 1e9; return { day: j.day, recipe: j.recipe, fee: j.feeLamports / L, prize: j.prizeLamports / L, x: j.x, odds: j.odds, closesAt: j.closesAt, me: j.me || { tries: 0, wins: 0, blocked: false } }; },
+      async state() { return this.view(await ServerBank.api('/api/special')); },
+      async start() {
+        const clientSeed = randomHex(8), j = await ServerBank.api('/api/special/start', { clientSeed });
+        ServerBank.specId = j.runId;
+        return { seedHash: j.serverSeedHash, clientSeed, nonce: j.nonce, seed: j.seed, recipe: j.recipe, fee: j.feeLamports / 1e9, prize: j.prizeLamports / 1e9, missions: ServerBank.mfrom(j.missions), special: this.view(j.special) };
+      },
+      async finish(taps) {
+        const j = await ServerBank.api('/api/special/finish', { runId: ServerBank.specId, taps });
+        return { status: j.status, payout: j.payoutLamports / 1e9, serverSeed: j.serverSeed, outcomes: j.outcomes, special: this.view(j.special) };
+      }
+    },
     pot: {
       view(j) {
         const L = j.last;
@@ -1196,13 +1255,13 @@
   const view = { st: null, offset: 0, prevHoops: [], camX: 0, camY: 0, camV: 0, camT: null, zoom: 1, shake: 0, time: 0, pulse: 0, flash: 0, flashCol: '255,255,255' };
   let phase = 'lobby'; // lobby | ready | play | clearing | checkpoint | over | paused
   let pendingTap = false, acc = 0;
-  const run = { di: 1, bet: 0.1, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, taps: [], seedHash: '', clientSeed: '', nonce: 0, serverSeed: '', levelSeed: '', st: null, busy: false,
+  const run = { mode: 'run', recipe: null, prize: 0, di: 1, bet: 0.1, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, taps: [], seedHash: '', clientSeed: '', nonce: 0, serverSeed: '', levelSeed: '', st: null, busy: false,
     score: 0, cleared: 0, perfect: 0, mov: 0, tilt: 0, fires: 0, novas: 0, lvlSw: 0, newBest: false, prog: null, lost: false };
   const RUN_FRESH = { score: 0, cleared: 0, perfect: 0, mov: 0, tilt: 0, fires: 0, novas: 0, lvlSw: 0, newBest: false, prog: null, lost: false };
   const attract = { st: null, bot: null, wait: 0, level: 1, streak: 0, acc: 0, tap: false };
-  // navigation: which tab is open, the page pushed over it (if any), and what the locker's live preview should show
-  // (fx: force a flame streak)
-  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null };
+  // navigation: which tab is open, the page pushed over it (if any), which page Challenges shows (ch), and what the
+  // locker's live preview should show (fx: force a flame streak)
+  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null, ch: 'special' };
   // rings from the level just played that are already behind the ball (never the unplayed ones ahead)
   function keepBehind(st) {
     if (!st) return [];
@@ -1257,6 +1316,13 @@
   let potShown = 0, potUpTimer = 0;
   function fmtDelta(d) { return d >= 0.0001 ? fmtSol(d) : d >= 0.000001 ? d.toFixed(6) : d.toExponential(1); }
   function setPot(animate) {
+    ui.potCap.classList.toggle('prize', run.mode === 'special');
+    if (run.mode === 'special') { // the special pays only for clearing every ring: count the rings, show the prize
+      const st = run.st;
+      ui.mult.textContent = (st ? st.outcomes.length : 0) + '/' + (st ? st.hoops.length : 0);
+      ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = fmtSol(run.prize); potShown = run.prize;
+      return;
+    }
     const v = run.bet * run.total;
     ui.mult.textContent = fmtMult(run.total);
     if (animate && v > potShown + 1e-12) { // a green "+gain" under the pot and a brief glow
@@ -1362,25 +1428,26 @@
   }
   function clearNotices() { NOTE.q.length = 0; clearTimeout(NOTE.timer); NOTE.el.classList.remove('show'); NOTE.busy = false; NOTE.cur = null; }
   // what a daily mission would stand at if the run ended now
-  function dailyNow(c, r) { const v = r[c.k] || 0; return Math.min(c.n, DAILY_BY[c.k].sum ? c.p + v : Math.max(c.p, v)); }
+  function dailyNow(c, r) { const v = r[c.k] || 0; return Math.min(c.n, c.sum ? c.p + v : Math.max(c.p, v)); }
   // every unfinished mission with where it would stand if the run ended now: daily first, then weekly, then career
   function openMissions(r) {
     const out = [];
-    for (const c of dailySet()) if (!c.done) out.push({ id: 'd:' + c.k, kind: 'daily', text: dailyText(c), p: dailyNow(c, r), n: c.n, xp: c.xp });
-    for (const c of weeklySet()) if (!c.done) out.push({ id: 'w:' + c.k, kind: 'weekly', text: weeklyText(c), p: Math.min(c.n, c.p + (r[c.k] || 0)), n: c.n, xp: c.xp });
+    for (const c of dailySet()) if (!c.done) out.push({ id: 'd:' + c.k, kind: 'daily', text: dailyText(c), p: dailyNow(c, r), n: c.n, xp: c.xp, sol: c.reward });
+    for (const c of weeklySet()) if (!c.done) out.push({ id: 'w:' + c.k, kind: 'weekly', text: weeklyText(c), p: Math.min(c.n, c.p + (r[c.k] || 0)), n: c.n, xp: c.xp, sol: c.reward });
     const cs = careerState(), C = CAREER[cs.ch];
     if (C) C.m.forEach((m, i) => { if (!cs.done[i]) out.push({ id: 'c:' + cs.ch + ':' + i, kind: 'career', text: careerText(m), p: sumNow(cs.p[i], m[1], r[m[0]] || 0, m[3]), n: m[1], xp: m[2] }); });
     return out;
   }
   const KIND_NAME = { daily: 'Daily mission', weekly: 'Weekly mission', career: 'Career mission' };
   function liveGoals() {
-    if (!run.told || phase === 'lobby') return;
+    if (!run.told || phase === 'lobby' || run.mode === 'special') return;
     const pp = potProgress();
     if (pp && pp.done && !run.told.pot) { run.told.pot = 1; potNotice(); }
     const r = runFacts(0);
+    const mv = mview(), met = { daily: mv.played.day >= mv.need.day - 1e-9, weekly: mv.played.week >= mv.need.week - 1e-9 };
     for (const m of openMissions(r)) {
       if (run.told[m.id] || m.p < m.n) continue;
-      run.told[m.id] = 1; notice('n-' + m.kind, m.kind === 'career' ? ICON.flag : ICON.check, KIND_NAME[m.kind] + ' done', m.text + ' · +' + m.xp + ' XP');
+      run.told[m.id] = 1; notice('n-' + m.kind, m.kind === 'career' ? ICON.flag : ICON.check, KIND_NAME[m.kind] + ' done', m.text + ' · +' + m.xp + ' XP' + (m.sol && met[m.kind] ? ' · +' + fmtSol(m.sol) + ' SOL' : ''));
     }
     for (const a of ACH) {
       if (profile.ach[a.id] || run.told[a.id] || a.id === 'double' || a.id === 'swish100' || !a.test(r)) continue;
@@ -1389,6 +1456,7 @@
   }
   // the next goal, shown under each level's banner: the pot challenge if you're in it, else the next mission
   function goalLine() {
+    if (run.mode === 'special') return '';
     const pl = potLine();
     if (pl) return pl;
     for (const m of openMissions(runFacts(0))) if (!run.told[m.id] && m.p < m.n) return m.text + ' · ' + m.p + '/' + m.n;
@@ -1398,7 +1466,7 @@
   function shareText(head) {
     const em = { S: '🏀', F: '🔥', N: '💥', R: '⚪', X: '❌' };
     const url = CFG.shareUrl || (/^https?:/.test(location.protocol) && !/claude|usercontent|localhost/.test(location.host) ? location.origin + location.pathname : 'https://nickrileyh.github.io/sol-dunk/');
-    return [`SOL DUNK · ${E.DIFFS[run.di].name}`, head, `Score ${run.score} · best streak ${run.best}`, ...(run.log || []).map((lv) => lv.map((o) => em[o]).join('')), url].join('\n');
+    return [run.mode === 'special' ? `SOL DUNK · Special: ${SP.BY[run.recipe].name}` : `SOL DUNK · ${E.DIFFS[run.di].name}`, head, `Score ${run.score} · best streak ${run.best}`, ...(run.log || []).map((lv) => lv.map((o) => em[o]).join('')), url].join('\n');
   }
   async function copyText(t) {
     try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(t); return true; } } catch (e) { /* fall back */ }
@@ -1436,13 +1504,17 @@
   const runFacts0 = () => ({});
   function setPips(st) {
     let h = '';
-    for (let i = 0; i < NH; i++) {
+    const n = st ? st.hoops.length : NH;
+    for (let i = 0; i < n; i++) {
       const o = st ? st.outcomes[i] : null;
       const now = st && !st.done && i === st.next;
-      h += '<span class="seg-i' + (i === NH - 1 ? ' cp' : '') + (o ? ' on' + (o === 'S' ? ' sw' : '') : '') + (now ? ' now' : '') + '"></span>';
+      h += '<span class="seg-i' + (i === n - 1 ? ' cp' : '') + (o ? ' on' + (o === 'S' ? ' sw' : '') : '') + (now ? ' now' : '') + '"></span>';
     }
     ui.pips.innerHTML = h;
-    ui.level.textContent = 'Level ' + run.level;
+    // a special has more rings: thinner segments in about the same width
+    ui.pips.style.gridTemplateColumns = n === NH ? '' : 'repeat(' + n + ', ' + Math.max(3, Math.floor((128 - (n - 1) * 2) / n)) + 'px)';
+    ui.pips.style.gap = n === NH ? '' : '2px';
+    ui.level.textContent = run.mode === 'special' ? SP.BY[run.recipe].name : 'Level ' + run.level;
   }
   function setBalance() {
     ui.bal.textContent = fmtBal(bank.balance());
@@ -1494,8 +1566,10 @@
     $('playBtn').addEventListener('click', () => startRun());
     $('profBtn').addEventListener('click', () => setTab('profile'));
     $('dailyBtn').addEventListener('click', () => setTab('missions'));
+    $('chBtn').querySelector('.p-ic').innerHTML = ICON.spark;
+    $('chBtn').addEventListener('click', () => { nav.ch = 'special'; setTab('challenges'); });
     $('potBtn').querySelector('.p-ic').innerHTML = ICON.trophy;
-    $('potBtn').addEventListener('click', () => openPanel('pot'));
+    $('potBtn').addEventListener('click', () => { nav.ch = 'pot'; setTab('challenges'); });
   }
   function setBet(v) {
     const max = Math.min(CFG.maxBet, Math.max(CFG.minBet, bank.balance()));
@@ -1529,7 +1603,6 @@
     try { potState = await bank.pot.state(); } catch (e) { potState = potState || null; }
     potBusy = false;
     renderPotRow();
-    if (!ui.panel.classList.contains('hide') && $('panelBody').dataset.kind === 'pot') { $('panelBody').innerHTML = potHtml(); wirePanel('pot'); }
     // a pot you were in has closed since you last looked: say how it went
     const L = potState && potState.last;
     if (L && L.me && prefs.potSeen !== L.key) {
@@ -1539,16 +1612,18 @@
     }
   }
   const leftText = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; };
+  // the pot's row in Today (a way into its page on the Challenges tab), and the page itself while it's open
   function renderPotRow() {
     const p = potState, el = $('potBtn');
     el.classList.toggle('hide', !p);
+    if (nav.tab === 'challenges' && nav.ch === 'pot' && phase === 'lobby') renderChallenges(true);
     if (!p) return;
     const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
     $('potT').textContent = p.goal.text;
     $('potV').textContent = (p.pool >= 1 ? p.pool.toFixed(2) : fmtBet(p.pool)) + ' SOL';
     $('potS').textContent = done ? 'Done' : inn ? 'You’re in' : 'Enter ' + fmtBet(p.fee);
     el.classList.toggle('in', inn && !done); el.classList.toggle('done', done);
-    el.setAttribute('aria-label', `Pot challenge: ${p.goal.text} ${p.goal.sub}. ${fmtBal(p.pool)} SOL in the pot, ${p.entrants} in. ` + (done ? 'You made it.' : inn ? 'You’re in.' : 'Entry ' + fmtBet(p.fee) + ' SOL.'));
+    el.setAttribute('aria-label', `Pot challenge: ${p.goal.text} ${p.goal.sub}. ${fmtBal(p.pool)} SOL in the pot, ${p.entrants} in. ` + (done ? 'You made it.' : inn ? 'You’re in.' : 'Entry ' + fmtBet(p.fee) + ' SOL.') + ' Open the pot.');
   }
   // where the run stands on the pot challenge (null if you're not in it, it's done, or this tier doesn't count)
   function potLevels() {
@@ -1594,15 +1669,106 @@
       ${p.simulated ? `<div class="pot-demo"><p>Demo: the other entrants are simulated, from how often players at different skill levels make the challenge.</p><button class="btn btn-plain" id="potClose">Close this pot now</button></div>` : ''}`;
   }
 
+  // ---------------------------------------------------------------- Challenges tab: the special level and the daily pot
+  // Each on its own page, picked with the switch at the top. The lobby's row is a way in to today's special.
+  let specState = null, specBusy = false;
+  async function refreshSpecial() {
+    if (specBusy) return;
+    specBusy = true;
+    try { specState = await bank.special.state(); } catch (e) { specState = specState || null; }
+    specBusy = false;
+    renderChRow(); syncBadges();
+    if (nav.tab === 'challenges' && phase === 'lobby') renderChallenges(true);
+  }
+  function renderChRow() {
+    const s = specState, el = $('chBtn');
+    el.classList.toggle('hide', !s);
+    if (!s) return;
+    $('chT').textContent = s.recipe.name;
+    $('chV').textContent = fmtBet(s.prize) + ' SOL';
+    $('chS').textContent = 'Play ' + fmtBet(s.fee);
+    el.setAttribute('aria-label', `Today's special: ${s.recipe.name}. ${s.recipe.blurb}. Win ${fmtBet(s.prize)} SOL for a ${fmtBet(s.fee)} SOL entry. Open Challenges.`);
+  }
+  const oneIn = (p) => (p > 0 ? 'about 1 in ' + Math.max(1, Math.round(1 / p)) : '–');
+  function specialHtml() {
+    const s = specState;
+    if (!s) return '<div class="empty">The special level isn’t available right now. Try again in a moment.</div>';
+    const left = s.closesAt - Date.now(), o = s.odds || [], back = (p) => Math.round((p || 0) * s.x * 100);
+    const play = s.me.blocked ? '<div class="empty">The special level isn’t available on this account.</div>'
+      : `<button class="btn btn-go" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
+    return `<div class="sp-card">
+        <div class="sp-head"><div class="sp-k">Today’s special</div><div class="sp-name">${s.recipe.name}</div><div class="sp-blurb">${s.recipe.blurb} · ${s.recipe.rings} rings</div></div>
+        <canvas class="sp-course" id="spCourse" aria-hidden="true"></canvas>
+        <div class="sp-cap">A sample course. Every attempt gets a new one from its own seed.</div>
+      </div>
+      <div class="sp-prize"><span class="k">Clear every ring to win</span><div class="big"><span class="num">${fmtSol(s.prize)}</span><span class="unit">SOL</span></div><span class="x">${s.x.toFixed(2)}× your ${fmtBet(s.fee)} SOL entry</span></div>
+      ${play}
+      <div class="tiles"><div><b>${s.me.tries}</b><span>Tries today</span></div><div><b>${s.me.wins}</b><span>Wins today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>Next special</span></div></div>
+      <div class="sec-h"><h3>How often it’s beaten</h3></div>
+      <div class="group sp-odds">${[['A casual player', o[0]], ['An average player', o[1]], ['A strong player', o[2]]].map(([k, p]) => `<div class="row"><span>${k}</span><b>${oneIn(p)}</b></div>`).join('')}</div>
+      <p class="pot-rules">Miss any ring and the entry is gone; clear them all and the prize is paid at once. From the simulator: a strong player gets back about ${back(o[2])}% of their entries over time, an average one about ${back(o[1])}%. A new special comes every day at midnight UTC. Its rings don’t count toward missions or the pot, but the entry counts as play for mission SOL.</p>`;
+  }
+  // a sketch of a course: the rings in order, how far each one bobs, and the gold finish
+  function drawCourse(el, def) {
+    const k = Math.min(window.devicePixelRatio || 1, 2), w = el.clientWidth || 340, ht = el.clientHeight || 118;
+    el.width = Math.round(w * k); el.height = Math.round(ht * k);
+    const g = el.getContext('2d'); g.setTransform(k, 0, 0, k, 0, 0); g.clearRect(0, 0, w, ht);
+    const hs = def.hoops, x0 = -30, x1 = hs[hs.length - 1].x + 50, pad = 16, yT = E.Y_MIN - 70, yB = E.Y_MAX + 70;
+    const sx = (x) => pad + (x - x0) / (x1 - x0) * (w - pad * 2), sy = (y) => 8 + (y - yT) / (yB - yT) * (ht - 16);
+    g.lineCap = 'round';
+    g.strokeStyle = 'rgba(255,255,255,0.14)'; g.lineWidth = 1.4; g.setLineDash([2, 5]);
+    g.beginPath(); g.moveTo(sx(0), sy(def.startY)); for (const h of hs) g.lineTo(sx(h.x), sy(h.y0)); g.stroke(); g.setLineDash([]);
+    const half = Math.max(5, Math.min(9, (w - pad * 2) / hs.length * 0.32));
+    for (const h of hs) {
+      const cx = sx(h.x), cy = sy(h.y0);
+      if (h.amp) { g.strokeStyle = 'rgba(255,255,255,0.13)'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, sy(h.y0 - h.amp)); g.lineTo(cx, sy(h.y0 + h.amp)); g.stroke(); }
+      const a = h.tilt * 1.8, dx = Math.cos(a) * half, dy = Math.sin(a) * half, col = h.cp ? '#f5c542' : 'rgba(236,240,250,0.92)';
+      g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 2.2;
+      g.beginPath(); g.moveTo(cx - dx, cy - dy); g.lineTo(cx + dx, cy + dy); g.stroke();
+      for (const sg of [-1, 1]) { g.beginPath(); g.arc(cx + sg * dx, cy + sg * dy, 2.1, 0, Math.PI * 2); g.fill(); }
+    }
+    g.fillStyle = '#ff8a2a'; g.beginPath(); g.arc(sx(0), sy(def.startY), 4.2, 0, Math.PI * 2); g.fill();
+  }
+  function renderChallenges(keep) {
+    const body = $('cBody'), y = body.scrollTop;
+    const dot = specState && prefs.specSeen !== specState.day && nav.ch !== 'special' ? '<i class="dot"></i>' : '';
+    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2>
+      <div class="seg ch-seg" aria-label="Challenge">${[['special', 'Special level'], ['pot', 'Daily pot']].map(([c, t]) => `<button data-ch="${c}" aria-pressed="${nav.ch === c}">${t}${c === 'special' ? dot : ''}</button>`).join('')}</div>
+      <div class="ch-page" id="chPage">${nav.ch === 'pot' ? potHtml() : specialHtml()}</div></div>`;
+    if (keep) body.scrollTop = y;
+    wireChallenges();
+    if (nav.ch === 'special' && specState) {
+      if (prefs.specSeen !== specState.day) { prefs.specSeen = specState.day; saveAll(); syncBadges(); }
+      const day = specState.day, id = specState.recipe.id;
+      requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[id]) drawCourse(c, SP.generate('preview|' + day, id)); });
+    }
+  }
+  function wireChallenges() {
+    const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
+    document.querySelectorAll('#cBody [data-ch]').forEach((b) => b.addEventListener('click', () => {
+      if (nav.ch === b.dataset.ch) return;
+      nav.ch = b.dataset.ch; Sound.click(); renderChallenges(); $('cBody').scrollTop = 0;
+      if (nav.ch === 'pot') refreshPot(); else refreshSpecial();
+    }));
+    on('spPlay', () => startSpecial());
+    on('potEnter', async (e) => {
+      e.currentTarget.disabled = true;
+      try { potState = await bank.pot.enter(); setBalance(); renderChallenges(true); Sound.click(); buzz(8); toast('You’re in. Make it in any run ' + potState.goal.sub + '.'); }
+      catch (err) { const el = $('potErr'); if (el) el.textContent = err.message; e.currentTarget.disabled = false; }
+    });
+    on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderChallenges(true); refreshPot(); });
+  }
+
   // ---------------------------------------------------------------- run flow
   async function startRun() {
     if (run.busy || (phase !== 'lobby' && phase !== 'over')) return;
     Sound.unlock();
     const bet = prefs.bet;
     run.busy = true;
+    let r;
     try {
-      const r = await bank.start(prefs.di, bet);
-      Object.assign(run, { di: prefs.di, bet, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.levelSeed }, RUN_FRESH);
+      r = await bank.start(prefs.di, bet);
+      Object.assign(run, { mode: 'run', recipe: null, prize: 0, di: prefs.di, bet, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.levelSeed }, RUN_FRESH);
       run.log = []; run.told = {}; run.share = ''; run.potJust = false; // every ring of the run, and the goals already announced
       $('lobbyErr').textContent = '';
     } catch (e) {
@@ -1612,15 +1778,47 @@
     }
     run.busy = false;
     stats.runs++; stats.wagered = round9(stats.wagered + bet); saveAll();
-    closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vM, false); show(vP, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
+    enterRun(r.missions);
+  }
+  // a special level attempt: the entry up front, one long level, the prize for clearing every ring
+  async function startSpecial() {
+    if (run.busy || (phase !== 'lobby' && phase !== 'over')) return;
+    Sound.unlock();
+    run.busy = true;
+    let r;
+    try {
+      r = await bank.special.start();
+      Object.assign(run, { mode: 'special', recipe: r.recipe, prize: r.prize, di: SP.BY[r.recipe].base[0], bet: r.fee, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.seed }, RUN_FRESH);
+      run.log = []; run.told = {}; run.share = ''; run.potJust = false;
+      if (r.special) specState = r.special;
+    } catch (e) {
+      run.busy = false;
+      const el = $('spErr');
+      if (el && phase === 'lobby') el.textContent = e.message; else toast(e.message);
+      if (phase === 'over') { backToLobby(); setTab('challenges'); }
+      return;
+    }
+    run.busy = false;
+    stats.runs++; stats.wagered = round9(stats.wagered + run.bet); saveAll();
+    enterRun(r.missions);
+  }
+  function enterRun(missions) {
+    closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vM, false); show(vP, false); show(vC, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
     ball.lastVis = 0; // a new run lets the old flame die down quietly
     setHudMode(true); setBalance();
     clearCallouts(); clearNotices(); potShown = run.bet; setStreakHud();
     beginLevel(true);
+    paidNote(missions);
+  }
+  // mission SOL that a bet has just unlocked
+  function paidNote(m) {
+    const sum = m && m.paid ? m.paid.reduce((a, p) => a + p.amount, 0) : 0;
+    if (sum > 0) { notice('n-pot', ICON.gift, 'Mission rewards', '+' + fmtSol(sum) + ' SOL paid to your balance', true); setBalance(); }
   }
 
   function beginLevel(first) {
-    const def = E.generateLevel(run.levelSeed, run.di, run.level);
+    const sp = run.mode === 'special';
+    const def = sp ? SP.generate(run.levelSeed, run.recipe) : E.generateLevel(run.levelSeed, run.di, run.level);
     const prev = view.st;
     view.prevHoops = keepBehind(prev);
     view.offset = first && prev ? ball.x + 140 : ball.x + 24;
@@ -1631,10 +1829,10 @@
     ball.fall = null; ball.hidden = false;
     phase = 'ready';
     run.lvlSw = 0; run.log.push([]);
-    profile.lv[run.di][run.level - 1][0]++;
+    if (!sp) profile.lv[run.di][run.level - 1][0]++;
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
     if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
-    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', run.level === 1 ? (newPlayer() ? 'Drop down through each ring' : potLine()) : '');
+    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtSol(run.prize) + ' SOL' : run.level === 1 ? (newPlayer() ? 'Drop down through each ring' : potLine()) : '');
   }
 
   function settleOffset() { ball.x += ball.ox; ball.y += ball.oy; ball.ox = 0; ball.oy = 0; }
@@ -1680,12 +1878,11 @@
     if (o === 'S') { run.swishes++; run.lvlSw++; if (h.amp) run.mov++; if (h.tilt) run.tilt++; } else run.rims++;
     run.best = Math.max(run.best, run.streak);
     if (run.streak === 3) run.fires++; else if (run.streak === 5) run.novas++;
-    const pt = PAY.PAYTABLE[run.di][run.level - 1];
-    const m = E.hoopMultiplier(pt, o, run.streak);
+    const sp = run.mode === 'special';
+    const m = sp ? 1 : E.hoopMultiplier(PAY.PAYTABLE[run.di][run.level - 1], o, run.streak);
     const cap = E.DIFFS[run.di].maxWin;
-    run.total = run.total * m;
     let capped = false;
-    if (run.total >= cap) { run.total = cap; capped = true; }
+    if (!sp) { run.total = run.total * m; if (run.total >= cap) { run.total = cap; capped = true; } }
     const pts = ringPoints(o, run.streak);
     run.log[run.log.length - 1].push(o === 'S' ? (run.streak >= 5 ? 'N' : run.streak >= 3 ? 'F' : 'S') : 'R');
     scoreFx(o, h, st, m, run.streak, pts);
@@ -1715,6 +1912,7 @@
   function onClear() {
     phase = 'clearing';
     run.cleared++;
+    if (run.mode === 'special') { specialFinish(true); return; }
     profile.lv[run.di][run.level - 1][1]++;
     if (!REDUCED) view.shake = Math.max(view.shake, 2);
     confetti(ball.x, ball.y - 30, 56);
@@ -1737,6 +1935,7 @@
     }).catch(netFail);
   }
 
+  const BUST_TITLES = { rimout: 'Rimmed out', over: 'Over the rim', under: 'Under the rim', floor: 'Hit the floor', timeout: 'Out of time' };
   function onBust(kind, h) {
     phase = 'over';
     run.lost = true; setHeat(0); // the flame goes out with the run
@@ -1748,14 +1947,14 @@
     ball.fall = { vx: run.st.ball.vx * 0.6, vy: Math.min(run.st.ball.vy, 200), hover: false, t: 0 };
     if (!REDUCED) view.shake = 6;
     Sound.bust(); buzz([30, 60, 50]);
-    const titles = { rimout: 'Rimmed out', over: 'Over the rim', under: 'Under the rim', floor: 'Hit the floor', timeout: 'Out of time' };
+    if (run.mode === 'special') { specialFinish(false, kind); return; }
     const L = run.level, taps = run.taps.slice();
     bank.level(L, taps).then((r) => {
       if (r.status !== 'bust') return verifyFail();
       potResult(r.pot);
       run.serverSeed = r.serverSeed || '';
-      record(0, 'bust');
-      setTimeout(() => showResult(titles[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtSol(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 650);
+      record(0, 'bust', r.missions);
+      setTimeout(() => showResult(BUST_TITLES[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtSol(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 650);
     }).catch(netFail);
   }
 
@@ -1769,7 +1968,7 @@
       phase = 'over';
       hideStreak(); clearNotices();
       winFx(1);
-      record(r.payout, 'cashout');
+      record(r.payout, 'cashout', r.missions);
       show(ui.cp, false);
       showResult('Cashed out', '+' + fmtSol(r.payout - run.bet), 'win', `${fmtSol(r.payout)} SOL · ${fmtMult(run.total)} after level ${run.level}`, r.payout - run.bet);
     } catch (e) { run.busy = false; netFail(e); }
@@ -1784,7 +1983,7 @@
       potResult(r.pot);
       run.serverSeed = r.serverSeed || '';
       winFx(kind === 'maxwin' ? 1.6 : 1.3);
-      record(r.payout, kind);
+      record(r.payout, kind, r.missions);
       const t = kind === 'maxwin' ? 'Max win' : 'Champion';
       const s = kind === 'maxwin' ? `${E.DIFFS[run.di].maxWin}× cap · ${fmtSol(r.payout)} SOL` : `All ${NL} levels · ${fmtSol(r.payout)} SOL`;
       setTimeout(() => showResult(t, '+' + fmtSol(r.payout - run.bet), 'win', s, r.payout - run.bet), 700);
@@ -1798,14 +1997,45 @@
   }
   function netFail(e) { toast(e && e.message ? e.message : 'Connection problem. Try again.'); phase = 'over'; setBalance(); backToLobby(); }
 
-  function record(payout, result) {
+  // the special level is over: the bank replays the taps and says whether it was cleared
+  function specialFinish(won, kind) {
+    phase = 'over';
+    clearCallouts(); clearNotices();
+    if (won) {
+      hideStreak();
+      if (!REDUCED) view.shake = Math.max(view.shake, 2);
+      confetti(ball.x, ball.y - 30, 56); Sound.checkpoint(); buzz([12, 40, 12]);
+      ball.glide = null; ball.fall = { vx: Math.max(120, run.st.ball.vx), vy: -240, hover: true, t: 0 };
+    }
+    const R = SP.BY[run.recipe], n = run.st.hoops.length, at = Math.min(n, run.hoops + 1);
+    bank.special.finish(run.taps.slice()).then((r) => {
+      if (r.status !== (won ? 'won' : 'lost')) return verifyFail();
+      if (r.special) specState = r.special;
+      run.serverSeed = r.serverSeed || '';
+      recordSpecial(r.payout, won);
+      if (won) { winFx(1.4); setTimeout(() => showResult('Special cleared', '+' + fmtSol(r.payout - run.bet), 'win', `${R.name} · all ${n} rings · ${fmtSol(r.payout)} SOL`, r.payout - run.bet), 700); }
+      else setTimeout(() => showResult(BUST_TITLES[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `${R.name} · out at ring ${at} of ${n}`), REDUCED ? 200 : 650);
+    }).catch(netFail);
+  }
+  function recordSpecial(payout, won) {
+    stats.returned = round9(stats.returned + payout);
+    stats.hoops += run.hoops; stats.swishes += run.swishes;
+    stats.history.unshift({ t: Date.now(), kind: 'special', recipe: run.recipe, di: run.di, bet: run.bet, payout, level: 1, mult: won ? run.prize / run.bet : 0, result: won ? 'won' : 'lost', seedHash: run.seedHash, serverSeed: run.serverSeed, clientSeed: run.clientSeed, nonce: run.nonce });
+    stats.history.length = Math.min(stats.history.length, 30);
+    // XP for the points; the special doesn't count toward missions, trophies or the pot
+    const before = lvlOf(profile.xp), xp = run.score + (won ? 25 : 0);
+    profile.tot.swish += run.swishes; profile.xp += xp;
+    run.prog = { xp, runXp: xp, before, after: lvlOf(profile.xp), newBest: false, prevBest: 0, achs: [], dailies: [], weeklies: [], careers: [], chapter: null, unlocks: grantUnlocks(), paid: [] };
+    saveAll(); setBalance();
+  }
+  function record(payout, result, missions) {
     stats.returned = round9(stats.returned + payout);
     stats.hoops += run.hoops; stats.swishes += run.swishes;
     stats.deepest = Math.max(stats.deepest, run.level);
     if (payout > 0) stats.best = Math.max(stats.best, run.total);
     stats.history.unshift({ t: Date.now(), di: run.di, bet: run.bet, payout, level: run.level, mult: payout > 0 ? run.total : 0, result, seedHash: run.seedHash, serverSeed: run.serverSeed, clientSeed: run.clientSeed, nonce: run.nonce });
     stats.history.length = Math.min(stats.history.length, 30);
-    run.prog = progress(payout);
+    run.prog = progress(payout, missions);
     saveAll(); setBalance();
   }
 
@@ -1814,7 +2044,7 @@
     return { di: run.di, score: run.score, points: run.score, swish: run.swishes, best: run.best, perfect: run.perfect,
       clears: run.cleared, level: run.level, mov: run.mov, tilt: run.tilt, fires: run.fires, novas: run.novas, paid: payout > 0, total: run.total };
   }
-  function progress(payout) {
+  function progress(payout, mres) {
     const r = runFacts(payout), di = run.di, before = lvlOf(profile.xp);
     const prevBest = profile.best[di], newBest = run.score > prevBest;
     if (newBest) profile.best[di] = run.score;
@@ -1825,16 +2055,12 @@
     const achs = ACH.filter((a) => !profile.ach[a.id] && a.test(r));
     for (const a of achs) { profile.ach[a.id] = Date.now(); xp += a.xp; }
     const dailies = [], weeklies = [], careers = [];
-    for (const c of dailySet()) {
-      if (c.done) continue;
-      const v = r[c.k] || 0;
-      c.p = Math.min(c.n, DAILY_BY[c.k].sum ? c.p + v : Math.max(c.p, v));
-      if (c.p >= c.n) { c.done = true; dailies.push(c); xp += c.xp; }
-    }
-    for (const c of weeklySet()) {
-      if (c.done) continue;
-      c.p = Math.min(c.n, c.p + (r[c.k] || 0));
-      if (c.p >= c.n) { c.done = true; weeklies.push(c); xp += c.xp; }
+    // daily and weekly missions: the bank moved them on with this run's verified levels and says what it finished
+    const mv = mview();
+    for (const d of (mres && mres.done) || []) {
+      const c = (d.win === 'day' ? mv.daily : mv.weekly)[d.slot];
+      if (!c || c.k !== d.k) continue;
+      (d.win === 'day' ? dailies : weeklies).push(c); xp += d.xp;
     }
     // career: the current chapter's missions; finishing all four opens the next chapter and its reward
     const cs = careerState(), C = CAREER[cs.ch];
@@ -1850,7 +2076,7 @@
     profile.mNew += dailies.length + weeklies.length + careers.length;
     profile.xp += xp;
     const unlocks = grantUnlocks();
-    return { xp, runXp, before, after: lvlOf(profile.xp), newBest, prevBest, achs, dailies, weeklies, careers, chapter, unlocks };
+    return { xp, runXp, before, after: lvlOf(profile.xp), newBest, prevBest, achs, dailies, weeklies, careers, chapter, unlocks, paid: (mres && mres.paid) || [] };
   }
 
   function showCheckpoint() {
@@ -1897,12 +2123,15 @@
     if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtSol(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
     $('resAmount').className = 'big ' + cls;
     $('resSub').textContent = sub;
-    run.share = shareText(cls === 'win' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
+    const sp = run.mode === 'special';
+    run.share = shareText(sp ? (cls === 'win' ? 'Cleared it' : title + ' at ring ' + Math.min(run.st ? run.st.hoops.length : 0, run.hoops + 1)) : cls === 'win' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
     $('resStats').innerHTML = [[run.score, nb ? 'New best' : 'Score', nb], [run.hoops, 'Rings'], [run.best, 'Best streak']]
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
-    $('againAmt').textContent = fmtBet(prefs.bet) + ' SOL';
+    $('againT').textContent = sp ? 'Try again' : 'Play again';
+    $('againAmt').textContent = fmtBet(sp ? run.bet : prefs.bet) + ' SOL';
+    $('lobbyBtn').textContent = sp ? 'Back' : 'Change bet';
     showProgress(pr);
-    show(ui.res, true); armCard(ui.res, 600); refreshPot();
+    show(ui.res, true); armCard(ui.res, 600); refreshPot(); if (sp) refreshSpecial();
     setTimeout(() => ui.res.focus({ preventScroll: true }), 60);
     refreshLobby();
   }
@@ -1950,13 +2179,24 @@
     }, 1100));
     const g = [];
     if (run.potJust && potState) g.push(['pot', ICON.trophy, 'Pot challenge done · in for a share']);
+    const paid = (pr.paid || []).reduce((a, p) => a + p.amount, 0);
+    if (paid > 0) g.push(['pot', ICON.gift, 'Mission rewards · +' + fmtSol(paid) + ' SOL']);
+    // mission SOL earned but waiting for the window's play: say how much more unlocks it
+    if (run.mode !== 'special' && (pr.dailies.length || pr.weeklies.length)) {
+      const mv = mview();
+      for (const [list, win, when] of [[mv.daily, 'day', 'today'], [mv.weekly, 'week', 'this week']]) {
+        const wait = list.filter((c) => c.done && !c.paid).reduce((a, c) => a + c.reward, 0), more = mv.need[win] - mv.played[win];
+        if (wait > 0 && more > 0) g.push(['', ICON.gift, `${fmtBet(wait)} SOL waiting · play ${fmtBet(Math.ceil(more * 100) / 100)} more SOL ${when}`]);
+      }
+    }
     pr.unlocks.forEach((u) => g.push(['unlock', '', 'New ' + itemName(u), u]));
     pr.achs.forEach((x) => g.push(['ach', ICON.medal, x.name + ' · +' + x.xp + ' XP']));
     if (pr.chapter != null) g.push(['ach', ICON.flag, 'Chapter ' + (pr.chapter + 1) + ' done · ' + CAREER[pr.chapter].name]);
     pr.dailies.forEach((c) => g.push(['daily', ICON.check, dailyText(c) + ' · +' + c.xp + ' XP']));
     pr.weeklies.forEach((c) => g.push(['daily', ICON.check, weeklyText(c) + ' · +' + c.xp + ' XP']));
     pr.careers.forEach((m) => g.push(['daily', ICON.flag, careerText(m) + ' · +' + m[2] + ' XP']));
-    if (!g.length) { // nothing new this run: show the next mission, so there's always a goal
+    if (!g.length && run.mode === 'special' && specState) g.push(['', ICON.trophy, `${specState.recipe.name} today: ${specState.me.wins} of ${specState.me.tries} cleared`]);
+    else if (!g.length) { // nothing new this run: show the next mission, so there's always a goal
       const m = openMissions(runFacts0())[0];
       if (m) g.push(['', ICON.target, `${m.text} · ${m.p}/${m.n}`]);
     }
@@ -1964,7 +2204,7 @@
     $('resGains').innerHTML = g.slice(0, more ? room - 1 : room).map((x, i) => (x[3] ? unlockChip(x[3], i) : gainChip(x[0], x[1], x[2], i))).join('') +
       (more ? gainChip('', ICON.spark, '+' + more + ' more', room - 1) : '');
     wireUnlockChips();
-    if (pr.achs.length || pr.unlocks.length || pr.dailies.length || pr.weeklies.length || pr.careers.length) xpTimers.push(setTimeout(() => Sound.unlockItem(), up ? 1500 : 500));
+    if (pr.achs.length || pr.unlocks.length || pr.dailies.length || pr.weeklies.length || pr.careers.length || paid > 0) xpTimers.push(setTimeout(() => Sound.unlockItem(), up ? 1500 : 500));
   }
   function backToLobby() {
     show(ui.res, false); show(ui.cp, false); hidePrompt(); clearNotices();
@@ -3065,7 +3305,7 @@
       const panelOpen = !ui.panel.classList.contains('hide');
       if (e.code === 'Space' && !panelOpen && !e.repeat) {
         if (phase === 'lobby') { e.preventDefault(); if (nav.tab === 'play') startRun(); return; }
-        if (phase === 'over' && armed(ui.res)) { e.preventDefault(); show(ui.res, false); startRun(); return; }
+        if (phase === 'over' && armed(ui.res)) { e.preventDefault(); show(ui.res, false); if (run.mode === 'special') startSpecial(); else startRun(); return; }
       }
       e.preventDefault();
       if (!e.repeat) flapInput();
@@ -3103,8 +3343,8 @@
 
   $('cashBtn').addEventListener('click', cashOut);
   $('goBtn').addEventListener('click', keepGoing);
-  $('againBtn').addEventListener('click', () => { if (!armed(ui.res)) return; show(ui.res, false); startRun(); });
-  $('lobbyBtn').addEventListener('click', () => { Sound.click(); backToLobby(); });
+  $('againBtn').addEventListener('click', () => { if (!armed(ui.res)) return; show(ui.res, false); if (run.mode === 'special') startSpecial(); else startRun(); });
+  $('lobbyBtn').addEventListener('click', () => { Sound.click(); const sp = run.mode === 'special'; backToLobby(); if (sp) setTab('challenges'); });
   $('shareBtn').addEventListener('click', shareRun);
   $('pauseBtn').addEventListener('click', () => { if (phase === 'play') pause(); else if (phase === 'paused') resume(); });
 
@@ -3116,8 +3356,8 @@
   function openPanel(kind) {
     Sound.click();
     const body = $('panelBody'), title = $('panelTitle');
-    const map = { pot: ['Pot challenge', potHtml], card: ['Player card', cardHtml] };
-    const [t, fn] = map[kind] || map.pot;
+    const map = { card: ['Player card', cardHtml] };
+    const [t, fn] = map[kind] || map.card;
     title.textContent = t; body.innerHTML = fn(); body.dataset.kind = kind;
     body.scrollTop = 0;
     ui.scrim.classList.add('show'); show(ui.panel, true); document.body.classList.add('panel-open');
@@ -3154,7 +3394,8 @@
     fire: '<path d="M12 21.2c-3.7 0-6.2-2.5-6.2-5.8 0-3.5 2.7-5.4 3.7-8.7.9 1.7 2 2.6 2.7 2.6.4-2.3-.2-4.6-1.2-6.7 3.9 1.6 7.2 5.8 7.2 10.5 0 4.3-2.6 8.1-6.2 8.1z"/>',
     flag: '<ellipse cx="12" cy="16.5" rx="8.5" ry="3"/><path d="M12 13.5V3.2l5.4 2.1L12 7.4"/>',
     star: '<path d="m12 3.3 2.6 5.4 5.9.8-4.3 4.1 1.1 5.9-5.3-2.9-5.3 2.9 1.1-5.9-4.3-4.1 5.9-.8z"/>',
-    mission: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="m8.4 12.2 2.5 2.5 4.8-5"/>'
+    mission: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="m8.4 12.2 2.5 2.5 4.8-5"/>',
+    trophy: '<path d="M7.6 3.8h8.8v5.4a4.4 4.4 0 0 1-8.8 0z"/><path d="M7.6 5.6H4.8v1.2a3.3 3.3 0 0 0 3.1 3.3M16.4 5.6h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 13.6v3.6M8.4 20.2h7.2"/>'
   };
   function howHtml() {
     const row = (icon, tone, title, text) => `<div class="hrow"><span class="hic ${tone}"><svg viewBox="0 0 24 24" aria-hidden="true">${HOW_ICON[icon]}</svg></span><div><h3>${title}</h3><p>${text}</p></div></div>`;
@@ -3165,7 +3406,8 @@
       row('fire', 'heat', 'Fire', `Two swishes in a row and the ball starts to smoulder. Three and it's <b>on fire</b>; five and it burns at full heat (blue-white with the Fire flame). Touch a rim and the flame goes out. Flames from the locker change the colours, never the pay.`) +
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.`) +
       row('star', 'gold', 'Score and XP', `Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, missions and trophies earn XP, which unlocks balls, wings, flames, trails, rims and courts in the Locker. Score and XP never change what a run pays.`) +
-      row('mission', '', 'Missions', `Three new missions every day and every week, and a career of six chapters, each ending in an item you can only get there. They count in every run, whatever you bet.`) +
+      row('mission', '', 'Missions', `Three new missions every day and every week (new ones at midnight UTC, and on Mondays), and a career of six chapters, each ending in an item you can only get there. They count in every run, whatever you bet. Daily and weekly missions also pay SOL once you've played ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week (bets and special level entries); rewards earned before then wait, and go when the day or week ends.`) +
+      row('trophy', 'gold', 'Challenges', `<b>Special level</b>: one a day, the same for everyone, with a twist like every ring moving. Pay the entry, then clear every ring of a fresh course to win the prize. <b>Daily pot</b>: buy in, then meet the day's challenge in any regular run to share the pot.`) +
       `</div>`;
   }
   // locker thumbnails, drawn with the same code as the game
@@ -3246,7 +3488,7 @@
     const last = h ? `<h3>Your last run</h3><span class="mono">hash ${h.seedHash}</span><span class="mono">seed ${h.serverSeed || 'revealed when the run ends'}</span><span class="mono">client ${h.clientSeed} · nonce ${h.nonce}</span>
       ${canVerify ? '<button class="btn btn-plain verify" id="fairVerify">Verify this run</button><div class="verify-out" id="fairOut"></div>' : ''}` : '';
     return `<p>Every ring position comes from a seed that is locked in before you tap. You see its SHA-256 hash first, and the seed itself when the run ends.</p>
-      <p>Each level is built from <b>HMAC-SHA256(seed, client seed:nonce:level)</b>, and every payout is checked by replaying your taps through the same physics.</p>${last}`;
+      <p>Each level is built from <b>HMAC-SHA256(seed, client seed:nonce:level)</b>, and a special level from <b>HMAC-SHA256(seed, client seed:nonce:special)</b>. Every payout is checked by replaying your taps through the same physics.</p>${last}`;
   }
   function walletHtml() {
     if (!CFG.serverUrl) {
@@ -3279,24 +3521,17 @@
   };
   function runsHtml() {
     if (!stats.history.length) return '<div class="empty">Your runs will show up here.</div>';
-    const what = (h) => (h.result === 'bust' ? 'Out on level ' + h.level : h.result === 'maxwin' ? 'Max win · ' + fmtMult(h.mult) : h.result === 'final' ? 'All ' + NL + ' levels · ' + fmtMult(h.mult) : 'Cashed out at ' + fmtMult(h.mult));
+    const spName = (h) => (SP.BY[h.recipe] ? SP.BY[h.recipe].name : 'Special level');
+    const what = (h) => (h.kind === 'special' ? (h.result === 'won' ? 'Cleared ' + spName(h) + ' · ' + fmtMult(h.mult) : 'Missed ' + spName(h))
+      : h.result === 'bust' ? 'Out on level ' + h.level : h.result === 'maxwin' ? 'Max win · ' + fmtMult(h.mult) : h.result === 'final' ? 'All ' + NL + ' levels · ' + fmtMult(h.mult) : 'Cashed out at ' + fmtMult(h.mult));
     return `<p class="vsub">${stats.history.length === 1 ? 'Your last run.' : 'Your last ' + stats.history.length + ' runs, newest first.'}</p>
       <div class="runs">${stats.history.map((h) => {
         const p = h.payout - h.bet;
-        return `<div class="rr"><span class="rr-t"><b>${what(h)}</b><span>${E.DIFFS[h.di].name} · ${fmtBet(h.bet)} SOL · ${agoText(h.t)}</span></span><span class="rr-v num ${p >= 0 ? 'pos' : 'neg'}">${p >= 0 ? '+' : '−'}${fmtSol(Math.abs(p))}<span class="unit">SOL</span></span></div>`;
+        return `<div class="rr"><span class="rr-t"><b>${what(h)}</b><span>${h.kind === 'special' ? 'Special level' : E.DIFFS[h.di].name} · ${fmtBet(h.bet)} SOL · ${agoText(h.t)}</span></span><span class="rr-v num ${p >= 0 ? 'pos' : 'neg'}">${p >= 0 ? '+' : '−'}${fmtSol(Math.abs(p))}<span class="unit">SOL</span></span></div>`;
       }).join('')}</div>`;
   }
   function wirePanel(kind) {
-    const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
     if (kind === 'card') wireCard();
-    if (kind === 'pot') {
-      on('potEnter', async (e) => {
-        e.currentTarget.disabled = true;
-        try { potState = await bank.pot.enter(); setBalance(); renderPotRow(); $('panelBody').innerHTML = potHtml(); wirePanel('pot'); Sound.click(); buzz(8); toast('You’re in. Make it in any run ' + potState.goal.sub + '.'); }
-        catch (err) { const el = $('potErr'); if (el) el.textContent = err.message; e.currentTarget.disabled = false; }
-      });
-      on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
-    }
   }
   function wirePage(kind) {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
@@ -3308,7 +3543,8 @@
       const out = $('fairOut');
       if (!ok) { out.className = 'verify-out bad'; out.textContent = 'The revealed seed does not match the hash shown before the run.'; return; }
       const rows = [];
-      for (let L = 1; L <= h.level; L++) rows.push(`<li><span>Level ${L}</span><span class="mono-s">${deriveLevelSeed(h.serverSeed, h.clientSeed, h.nonce, L).slice(0, 16)}…</span></li>`);
+      if (h.kind === 'special') rows.push(`<li><span>Special</span><span class="mono-s">${deriveLevelSeed(h.serverSeed, h.clientSeed, h.nonce, 'special').slice(0, 16)}…</span></li>`);
+      else for (let L = 1; L <= h.level; L++) rows.push(`<li><span>Level ${L}</span><span class="mono-s">${deriveLevelSeed(h.serverSeed, h.clientSeed, h.nonce, L).slice(0, 16)}…</span></li>`);
       out.className = 'verify-out good';
       out.innerHTML = `<p><b>Verified.</b> The revealed seed hashes to the value you saw before the run, so the rings were fixed before your first tap.</p><ul class="list group">${rows.join('')}</ul>`;
     });
@@ -3316,7 +3552,7 @@
       if (phase !== 'lobby' && phase !== 'over') { toast('Finish this run first.'); return; }
       wallet.balance = CFG.demoStart; saveAll(); refreshLobby(); renderPage(true); Sound.click(); toast('Demo balance reset to ' + CFG.demoStart + ' SOL');
     });
-    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; setBalance(); refreshLobby(); refreshPot(); renderPage(true); } catch (e) { $('wErr').textContent = e.message; } });
+    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; await bank.missions.state().catch(() => null); setBalance(); refreshLobby(); refreshPot(); refreshSpecial(); renderPage(true); } catch (e) { $('wErr').textContent = e.message; } });
     on('wDeposit', async () => { try { await ServerBank.deposit(parseFloat($('wAmt').value)); setBalance(); renderPage(true); toast('Deposit credited'); } catch (e) { $('wErr').textContent = e.message; } });
     on('wWithdraw', async () => { try { await ServerBank.withdraw(parseFloat($('wAmt').value)); setBalance(); renderPage(true); toast('Withdrawal sent'); } catch (e) { $('wErr').textContent = e.message; } });
   }
@@ -3329,7 +3565,7 @@
     trophies: ['Trophies', trophiesHtml],
     runs: ['Recent runs', runsHtml]
   };
-  const TAB_NAME = { play: 'Play', missions: 'Missions', locker: 'Locker', profile: 'Profile' };
+  const TAB_NAME = { play: 'Play', challenges: 'Challenges', missions: 'Missions', locker: 'Locker', profile: 'Profile' };
   const vPg = $('vPage');
   function openPage(kind) {
     if (!PAGES[kind]) return;
@@ -3356,7 +3592,7 @@
     if (!nav.page) return;
     nav.page = null;
     show(vPg, false); document.body.classList.remove('page-open');
-    nav.cover = nav.tab === 'missions' || nav.tab === 'profile';
+    nav.cover = nav.tab === 'missions' || nav.tab === 'profile' || nav.tab === 'challenges';
     if (nav.tab === 'profile' && phase === 'lobby') renderProfileView(); // the wallet row and run counts may have moved
     sheetTopC = -1;
     if (!quiet) Sound.click();
@@ -3364,12 +3600,12 @@
   }
   $('pgBack').addEventListener('click', () => closePage());
 
-  // ---------------------------------------------------------------- navigation: Play, Missions, Locker, Profile
-  // Four tabs along the bottom, in the lobby only. Play is the bet sheet over the live arena; the Locker keeps the
-  // arena on show above the collection, so whatever you pick (or tap to try) flies there at once; Missions and
-  // Profile are full pages, and the arena stops drawing behind them.
-  const TABS = ['play', 'missions', 'locker', 'profile'];
-  const vM = $('vMissions'), vP = $('vProfile'), vL = $('vLocker');
+  // ---------------------------------------------------------------- navigation: Play, Challenges, Missions, Locker, Profile
+  // Five tabs along the bottom, in the lobby only. Play is the bet sheet over the live arena; the Locker keeps the
+  // arena on show above the collection, so whatever you pick (or tap to try) flies there at once; Challenges,
+  // Missions and Profile are full pages, and the arena stops drawing behind them.
+  const TABS = ['play', 'challenges', 'missions', 'locker', 'profile'];
+  const vM = $('vMissions'), vP = $('vProfile'), vL = $('vLocker'), vC = $('vChallenges');
   function setTab(t, quiet) {
     if (!TABS.includes(t)) t = 'play';
     const was = nav.tab;
@@ -3387,9 +3623,10 @@
     const inLobby = phase === 'lobby';
     show(ui.lobby, inLobby && t === 'play');
     show(vL, inLobby && t === 'locker');
-    show(vM, t === 'missions'); show(vP, t === 'profile');
-    nav.cover = t === 'missions' || t === 'profile';
+    show(vM, t === 'missions'); show(vP, t === 'profile'); show(vC, t === 'challenges');
+    nav.cover = t === 'missions' || t === 'profile' || t === 'challenges';
     sheetTopC = -1;
+    if (t === 'challenges') { renderChallenges(); $('cBody').scrollTop = 0; refreshSpecial(); refreshPot(); }
     if (t === 'missions') { renderMissions(); $('mBody').scrollTop = 0; if (profile.mNew) { profile.mNew = 0; saveAll(); } }
     if (t === 'locker') renderLocker();
     if (t === 'profile') { renderProfileView(); $('pBody').scrollTop = 0; }
@@ -3399,18 +3636,28 @@
   }
   function syncBadges() {
     $('badgeM').classList.toggle('on', profile.mNew > 0 && nav.tab !== 'missions');
+    $('badgeC').classList.toggle('on', !!specState && prefs.specSeen !== specState.day && nav.tab !== 'challenges');
     $('badgeL').classList.toggle('on', profile.fresh.length > 0 && nav.tab !== 'locker');
   }
   document.querySelectorAll('#tabbar [data-tab]').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
 
   // ---------------------------------------------------------------- Missions tab
   const ring = (p) => `<span class="mring${p > 0 ? '' : ' zero'}"><svg viewBox="0 0 36 36"><circle class="trk" cx="18" cy="18" r="15"/><circle class="val" cx="18" cy="18" r="15" pathLength="100" stroke-dasharray="${(Math.max(0.0001, p) * 100).toFixed(1)} 100"/></svg><span class="ck">${ICON.check}</span></span>`;
-  function mRow(text, p, n, xp, done) {
-    return `<div class="mrow${done ? ' done' : ''}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? 'Done' : p + ' / ' + n}</span></span><span class="mxp">${done ? 'Done' : '+' + xp + ' XP'}</span></div>`;
+  function mRow(text, p, n, xp, done, sol, paid) {
+    const right = done ? '<b>Done</b>' + (sol ? `<small class="${paid ? 'paid' : ''}">${fmtBet(sol)} SOL ${paid ? 'paid' : 'waiting'}</small>` : '')
+      : `<b>+${xp} XP</b>` + (sol ? `<small>+${fmtBet(sol)} SOL</small>` : '');
+    return `<div class="mrow${done ? ' done' : ''}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? 'Done' : p + ' / ' + n}</span></span><span class="mxp">${right}</span></div>`;
+  }
+  // a window's SOL pays once this much has been played in it (bets on runs and special level entries)
+  function needRow(mv, win) {
+    const need = mv.need[win], got = mv.played[win], met = got >= need - 1e-9, when = win === 'day' ? 'today' : 'this week';
+    const shown = Math.min(need, Math.floor(got * 100 + 1e-6) / 100);
+    return `<div class="mneed${met ? ' met' : ''}"><div class="mn-h"><span>${met ? 'SOL rewards unlocked ' + when : 'Play ' + fmtBet(need) + ' SOL ' + when + ' to collect the SOL'}</span><b>${fmtBet(shown)} / ${fmtBet(need)} SOL</b></div>
+      <div class="bar"><i style="width:${(Math.min(1, got / need) * 100).toFixed(1)}%"></i></div></div>`;
   }
   const rewardOf = (C) => { const [t, id] = C.reward.split(':'); return { t, id, u: UNLOCK_BY[C.reward] }; };
   function renderMissions() {
-    const d = dailySet(), w = weeklySet(), cs = careerState(), C = CAREER[cs.ch];
+    const mv = mview(), d = mv.daily, w = mv.weekly, cs = careerState(), C = CAREER[cs.ch];
     const dDone = d.filter((c) => c.done).length, wDone = w.filter((c) => c.done).length;
     let career;
     if (C) {
@@ -3428,11 +3675,11 @@
       return `<div class="chli ${st}"><span class="cs">${st === 'done' ? ICON.check : st === 'now' ? ICON.target : ICON.lock}</span><b>${i + 1}. ${K.name}</b><span class="cr">${COS[r.t][r.id].name}<canvas width="52" height="52" data-t="${r.t}" data-id="${r.id}"></canvas></span></div>`;
     }).join('');
     $('mBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Missions</h2>
-      <p class="vsub">Earn XP to level up and unlock new gear. Every run counts, whatever you bet.</p>
+      <p class="vsub">Earn XP to level up and unlock new gear. Every run counts, whatever you bet. Daily and weekly missions pay SOL too, once you've played that day's or week's amount.</p>
       <div class="sec-h"><h3>Today</h3><span>${ICON.clock}New in ${untilMidnight()}</span></div>
-      <div class="group">${d.map((c) => mRow(dailyText(c), c.p, c.n, c.xp, c.done)).join('')}</div>
+      <div class="group">${needRow(mv, 'day')}${d.map((c) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>
       <div class="sec-h"><h3>This week</h3><span>${ICON.clock}New in ${untilMonday()}</span></div>
-      <div class="group">${w.map((c) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done)).join('')}</div>
+      <div class="group">${needRow(mv, 'week')}${w.map((c) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>
       <p class="mnote">${dDone} of ${d.length} done today, ${wDone} of ${w.length} this week.</p>
       <div class="sec-h"><h3>Career</h3><span>${Math.min(cs.ch, CAREER.length)} of ${CAREER.length} chapters</span></div>
       ${career}
@@ -3564,7 +3811,8 @@
   function showPause(on) {
     const el = $('pauseCard');
     if (on) {
-      $('pauseSub').textContent = 'Level ' + run.level + ' · ' + fmtSol(run.bet * run.total) + ' SOL pot';
+      $('pauseSub').textContent = run.mode === 'special' ? SP.BY[run.recipe].name + ' · ring ' + Math.min(run.st.hoops.length, run.hoops + 1) + ' of ' + run.st.hoops.length + ' · ' + fmtSol(run.prize) + ' SOL to win'
+        : 'Level ' + run.level + ' · ' + fmtSol(run.bet * run.total) + ' SOL pot';
       syncSettings();
     }
     show(el, on);
@@ -3578,8 +3826,8 @@
       if (snap.profile) fixProfile(Object.assign(profile, snap.profile));
     }
     if (!(wallet.balance >= 0)) wallet.balance = CFG.demoStart;
-    grantUnlocks(); syncSettings(); applyFlameTheme(); buildLobby(); setTab('play', true); refreshLobby(); setHudMode(false); refreshPot();
-    setInterval(() => { if (phase === 'lobby' && !document.hidden) refreshPot(); }, 30000); // entrants, pot and time left move on
+    grantUnlocks(); syncSettings(); applyFlameTheme(); buildLobby(); setTab('play', true); refreshLobby(); setHudMode(false); refreshPot(); refreshSpecial();
+    setInterval(() => { if (phase === 'lobby' && !document.hidden) { refreshPot(); if (nav.tab === 'challenges') refreshSpecial(); } }, 30000); // entrants, pot and time left move on
     attract.wait = 0;
     if (document.fonts && document.fonts.load) document.fonts.load('800 20px "Big Shoulders Display"').catch(() => {}); // canvas text uses it too
     requestAnimationFrame((t) => { last = t; frame(t); });
@@ -3605,6 +3853,9 @@
     step: (n) => { dbg.steps = n | 0; },  // while held: play n frames of 1/60 s
     stepsLeft: () => dbg.steps | 0,
     pot: () => potState, // the challenge pot as the client sees it
+    special: () => specState, // today's special level as the client sees it
+    missions: () => mview(), // daily and weekly missions, with SOL and the play that unlocks it
+    mode: () => run.mode,
     bal: () => bank.balance(),
     sfx: (name, args, secs) => Sound.render(name, args, secs), // a sound's samples, rendered offline
     ballScreen: () => ({ x: view.bsx, y: view.bsy }),

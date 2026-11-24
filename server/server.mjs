@@ -12,7 +12,9 @@
 //   TOKEN_SECRET=<random string>   DB_FILE=data/db.json
 //   MIN_BET_LAMPORTS=1000000  MAX_BET_LAMPORTS=1000000000  MAX_PAYOUT_LAMPORTS=50000000000
 //   MIN_REALTIME=0.9   (a level can't be submitted faster than 90% of its game time)
-//   SHARP_RTP=1.15  SHARP_MIN_RUNS=150   (players above this return get limited bets)
+//   SHARP_RTP=1.15  SHARP_MIN_RUNS=150   (players above this return get limited bets and no special level)
+//   POT_ENTRY_LAMPORTS=50000000  SPECIAL_ENTRY_LAMPORTS=50000000
+//   MISSION_DAY_LAMPORTS=2000000000  MISSION_WEEK_LAMPORTS=10000000000  (play before a window's mission SOL pays)
 //   WITHDRAW_REVIEW_LAMPORTS=20000000000 (larger withdrawals wait for manual review)
 import express from 'express';
 import crypto from 'node:crypto';
@@ -29,6 +31,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const E = require('../src/engine.cjs');
 const PAY = require('../src/paytable.cjs');
 const POTS = require('../src/pots.cjs');
+const MS = require('../src/missions.cjs');
+const SP = require('../src/special.cjs');
 
 const env = process.env;
 const num = (v, d) => (v === undefined || v === '' ? d : Number(v));
@@ -49,6 +53,9 @@ const CFG = {
   withdrawReview: num(env.WITHDRAW_REVIEW_LAMPORTS, 20_000_000_000),
   potEntry: num(env.POT_ENTRY_LAMPORTS, Math.round(POTS.ENTRY * 1e9)), // challenge pot entry
   potGoal: env.MOCK_CHAIN === '1' ? env.POT_GOAL || '' : '',            // tests only: force a challenge
+  specialEntry: num(env.SPECIAL_ENTRY_LAMPORTS, Math.round(SP.ENTRY * 1e9)),
+  specialRecipe: env.MOCK_CHAIN === '1' ? env.SPECIAL_RECIPE || '' : '', // tests only: force a recipe
+  missionNeed: { day: num(env.MISSION_DAY_LAMPORTS, Math.round(MS.NEED.day * 1e9)), week: num(env.MISSION_WEEK_LAMPORTS, Math.round(MS.NEED.week * 1e9)) },
   checkpointTimeoutMs: 10 * 60 * 1000,
   playingTimeoutMs: 3 * 60 * 1000
 };
@@ -60,7 +67,7 @@ const db = fs.existsSync(CFG.dbFile)
   ? JSON.parse(fs.readFileSync(CFG.dbFile, 'utf8'))
   : { users: {}, runs: {}, deposits: {}, withdrawals: [], nonces: {}, secret: crypto.randomBytes(32).toString('hex') };
 const TOKEN_SECRET = CFG.tokenSecret || db.secret;
-db.pots = db.pots || {}; db.potClock = db.potClock || 0; db.houseRake = db.houseRake || 0;
+db.pots = db.pots || {}; db.potClock = db.potClock || 0; db.houseRake = db.houseRake || 0; db.missionPaid = db.missionPaid || 0;
 let saveTimer = null;
 function save() {
   if (saveTimer) return;
@@ -260,7 +267,7 @@ if (CFG.mock) {
 // One pot per UTC day. Players pay a fixed entry, then play ordinary runs; everyone who meets the day's challenge in
 // a run (started after entering, on the challenge's tier or harder) splits the pot when the day ends. The house
 // keeps POTS.RAKE of every entry whoever wins; with no winners the pot rolls into the next day's.
-// The pot clock is real time; in mock mode /api/dev/pot/advance moves it forward a day for tests.
+// The day clock (pots, missions, the special level) is real time; in mock mode /api/dev/pot/advance moves it on a day.
 const potNow = () => Date.now() + db.potClock;
 function potFor(day) {
   return db.pots[day] || (db.pots[day] = { day, goal: CFG.potGoal && POTS.GOAL_BY[CFG.potGoal] ? CFG.potGoal : POTS.goalFor(day).id, fee: CFG.potEntry, entries: {}, carryIn: 0, paidIn: 0, settled: false, createdAt: Date.now() });
@@ -304,7 +311,7 @@ function lastPot(u) {
 function potCheck(u, run) {
   const p = db.pots[POTS.dayKey(potNow())], e = p && p.entries[u.address];
   if (!e || !(run.potAt >= e.at)) return null;
-  const pr = POTS.progress(p.goal, run.levels.map((l) => ({ outcomes: l.outcomes, clear: l.result === 'clear' })), run.di);
+  const pr = POTS.progress(p.goal, verifiedLevels(run), run.di);
   if (!pr.counts) return { counts: false, done: !!e.done };
   if (pr.value > (e.best || 0)) e.best = pr.value;
   const just = !e.done && pr.done;
@@ -337,11 +344,41 @@ if (CFG.mock) {
   app.post('/api/dev/pot/advance', wrap(async () => { db.potClock += POTS.DAY_MS; settlePots(); save(); return { ok: true, houseRake: db.houseRake }; }));
 }
 
+// ------------------------------------------------------------------ missions (rules in src/missions.cjs)
+// Three missions a UTC day and three a week. Every run counts toward them whatever the bet; each pays SOL once the
+// player has played the window's need (run bets and special entries), so the rewards stay inside the house's edge.
+function missionPay(u, paid) {
+  let sum = 0;
+  const out = paid.map((p) => { const lamports = Math.floor(p.amount); sum += lamports; return { win: p.win, slot: p.slot, k: p.k, n: p.n, lamports }; });
+  if (sum) { u.balance += sum; u.returned += sum; u.missionPaid = (u.missionPaid || 0) + sum; db.missionPaid += sum; } // counts in the player's return
+  return out;
+}
+function missionView(u) {
+  u.ms = MS.roll(u.ms, potNow());
+  const v = MS.view(u.ms, potNow(), CFG.missionNeed), fix = (l) => l.map((m) => ({ k: m.k, n: m.n, xp: m.xp, sum: m.sum, p: m.p, done: m.done, paid: m.paid, rewardLamports: Math.floor(m.reward) }));
+  return { day: v.day, week: v.week, dayEnds: v.dayEnds - db.potClock, weekEnds: v.weekEnds - db.potClock, needLamports: v.need, playedLamports: v.played, daily: fix(v.daily), weekly: fix(v.weekly) };
+}
+// a bet or a special entry counts toward both windows' play; it may unlock rewards already earned
+function missionPlay(u, lamports) { const r = MS.play(u.ms, lamports, potNow(), CFG.missionNeed); u.ms = r.s; return missionPay(u, r.paid); }
+// the rings of a run that counted, level by level (a max win ends the run at the capped ring, which isn't a clear)
+const verifiedLevels = (run) => run.levels.map((l) => {
+  const n = l.counted == null ? l.outcomes.length : l.counted;
+  return { outcomes: l.outcomes.slice(0, n), clear: l.result === 'clear' && !l.capped, mov: l.mov || '' };
+});
+app.get('/api/missions', wrap(async (req) => missionView(auth(req))));
+
+// the most the house could owe right now: every balance, every open run's pot (a special's prize), every open pot
+function owedLamports() {
+  return Object.values(db.users).reduce((a, x) => a + x.balance, 0)
+    + Object.values(db.runs).filter((r) => r.status === 'checkpoint' || r.status === 'playing').reduce((a, r) => a + (r.kind === 'special' ? r.prize : Math.floor(r.bet * r.total)), 0)
+    + Object.values(db.pots).filter((p) => !p.settled).reduce((a, p) => a + p.carryIn + p.paidIn, 0); // pots in play belong to players
+}
+
 // --- runs
 function openRun(u) { return Object.values(db.runs).find((r) => r.address === u.address && (r.status === 'playing' || r.status === 'checkpoint')); }
 function getRun(u, runId) {
   const r = db.runs[runId];
-  if (!r || r.address !== u.address) throw new HttpError(404, 'Run not found');
+  if (!r || r.address !== u.address || r.kind === 'special') throw new HttpError(404, 'Run not found');
   return r;
 }
 function settle(u, run, status) {
@@ -353,6 +390,11 @@ function settle(u, run, status) {
   }
   run.payout = payout;
   u.returned += payout; u.runs++;
+  // missions move on from the levels the server verified (a voided run doesn't count)
+  if (run.kind !== 'special' && status !== 'void') {
+    const r = MS.run(u.ms, verifiedLevels(run), potNow(), CFG.missionNeed);
+    u.ms = r.s; run.missions = { done: r.done, paid: missionPay(u, r.paid) };
+  }
   // limit accounts that keep beating the house (skilled players and bots)
   if (!u.flagged && u.runs >= CFG.sharpMinRuns && u.wagered > 0 && u.returned / u.wagered > CFG.sharpRtp) u.flagged = { reason: 'high return', at: Date.now() };
   if (!u.flagged && u.hoops >= 120 && u.swishes / u.hoops > 0.97) u.flagged = { reason: 'superhuman swish rate', at: Date.now() };
@@ -374,10 +416,9 @@ app.post('/api/run/start', wrap(async (req) => {
     if (bet > u.balance) throw bad('Not enough balance for that bet');
     // the house must be able to cover the biggest possible win plus every player balance
     const need = bet * E.DIFFS[di].maxWin;
-    const owed = Object.values(db.users).reduce((a, x) => a + x.balance, 0) + Object.values(db.runs).filter((r) => r.status === 'checkpoint' || r.status === 'playing').reduce((a, r) => a + Math.floor(r.bet * r.total), 0)
-      + Object.values(db.pots).filter((p) => !p.settled).reduce((a, p) => a + p.carryIn + p.paidIn, 0); // pots in play belong to players
-    if ((await houseLamports()) - owed < need) throw bad('The house can’t cover a bet that size right now. Try a smaller bet.');
+    if ((await houseLamports()) - owedLamports() < need) throw bad('The house can’t cover a bet that size right now. Try a smaller bet.');
     u.balance -= bet; u.wagered += bet;
+    const paid = missionPlay(u, bet);
     const run = {
       id: crypto.randomUUID(), address: u.address, di, bet,
       serverSeed: crypto.randomBytes(32).toString('hex'), clientSeed, nonce: u.nonce++,
@@ -385,7 +426,7 @@ app.post('/api/run/start', wrap(async (req) => {
       createdAt: Date.now(), potAt: potNow(), levelStartedAt: Date.now(), updatedAt: Date.now()
     };
     db.runs[run.id] = run; save();
-    return { runId: run.id, serverSeedHash: sha256Hex(run.serverSeed), nonce: run.nonce, level: 1, levelSeed: levelSeed(run, 1), ...publicMe(u) };
+    return { runId: run.id, serverSeedHash: sha256Hex(run.serverSeed), nonce: run.nonce, level: 1, levelSeed: levelSeed(run, 1), missions: { paid, view: missionView(u) }, ...publicMe(u) };
   });
 }));
 
@@ -410,7 +451,8 @@ app.post('/api/run/level', wrap(async (req) => {
     const counted = a.capped ? a.capIndex + 1 : r.outcomes.length;
     u.hoops += counted; u.swishes += r.outcomes.slice(0, counted).filter((o) => o === 'S').length;
     run.total = a.total; run.streak = a.streak; run.updatedAt = Date.now();
-    run.levels.push({ level: run.level, taps: taps.length, outcomes: r.outcomes.join(''), result: r.result, ticks: r.ticks });
+    run.levels.push({ level: run.level, taps: taps.length, outcomes: r.outcomes.join(''), result: r.result, ticks: r.ticks, counted, capped: a.capped,
+      mov: r.outcomes.slice(0, counted).map((o, k) => (def.hoops[k].amp ? '1' : '0')).join('') });
     let status;
     if (a.capped) status = 'maxwin';
     else if (r.result !== 'clear') status = 'bust';
@@ -423,6 +465,7 @@ app.post('/api/run/level', wrap(async (req) => {
     return {
       status, total: run.total, outcomes: r.outcomes.slice(0, counted), streak: run.streak, pot,
       potLamports: Math.floor(run.bet * run.total), payoutLamports: payout,
+      missions: run.missions ? { ...run.missions, view: missionView(u) } : undefined,
       serverSeed: status === 'checkpoint' ? undefined : run.serverSeed, ...publicMe(u)
     };
   });
@@ -444,7 +487,83 @@ app.post('/api/run/cashout', wrap(async (req) => {
     const run = getRun(u, (req.body || {}).runId);
     if (run.status !== 'checkpoint') throw bad('You can only cash out at a checkpoint');
     const payout = settle(u, run, 'cashout');
-    return { payoutLamports: payout, total: run.total, serverSeed: run.serverSeed, ...publicMe(u) };
+    return { payoutLamports: payout, total: run.total, serverSeed: run.serverSeed, missions: { ...run.missions, view: missionView(u) }, ...publicMe(u) };
+  });
+}));
+
+// ------------------------------------------------------------------ special level (rules in src/special.cjs)
+// One special a UTC day: a long level with a twist. Each attempt pays a fixed entry and gets a fresh course from its
+// own provably fair seed (HMAC-SHA256(serverSeed, clientSeed:nonce:special)); clearing every ring pays the prize.
+// Accounts limited for beating the house can't enter: strong players can come out ahead on a fixed prize.
+function specialToday() {
+  const day = SP.dayKey(potNow());
+  return { day, R: (CFG.specialRecipe && SP.BY[CFG.specialRecipe]) || SP.recipeFor(day) };
+}
+function specialView(u) {
+  const { day, R } = specialToday(), fee = CFG.specialEntry, x = SP.prizeOf(R.id);
+  const out = {
+    day, recipe: { id: R.id, name: R.name, blurb: R.blurb, rings: R.n }, feeLamports: fee, prizeLamports: Math.floor(fee * x), x,
+    odds: (SP.PRIZES[R.id] || { p: [] }).p, closesAt: SP.closesAt(day) - db.potClock
+  };
+  if (u) { const t = u.special && u.special.day === day ? u.special : { tries: 0, wins: 0 }; out.me = { tries: t.tries, wins: t.wins, blocked: !!u.flagged }; }
+  return out;
+}
+app.get('/api/special', wrap(async (req) => specialView(maybeAuth(req))));
+app.post('/api/special/start', wrap(async (req) => {
+  const u = auth(req);
+  const { clientSeed } = req.body || {};
+  if (typeof clientSeed !== 'string' || !/^[0-9a-zA-Z]{4,64}$/.test(clientSeed)) throw bad('Invalid client seed');
+  return withLock(u.address, async () => {
+    if (openRun(u)) throw bad('Finish your current run first');
+    if (u.flagged) throw bad('The special level isn’t available on this account');
+    const { day, R } = specialToday(), fee = CFG.specialEntry, prize = Math.floor(fee * SP.prizeOf(R.id));
+    if (!(prize > fee)) throw bad('There’s no special level today');
+    if (u.balance < fee) throw bad('Not enough balance for the entry');
+    if ((await houseLamports()) - owedLamports() < prize) throw bad('The house can’t cover the prize right now. Try again later.');
+    u.balance -= fee; u.wagered += fee;
+    const paid = missionPlay(u, fee);
+    if (!u.special || u.special.day !== day) u.special = { day, tries: 0, wins: 0 };
+    u.special.tries++;
+    const run = {
+      id: crypto.randomUUID(), address: u.address, kind: 'special', recipe: R.id, day, di: R.base[0], bet: fee, prize,
+      serverSeed: crypto.randomBytes(32).toString('hex'), clientSeed, nonce: u.nonce++,
+      level: 1, total: 1, status: 'playing', levels: [], createdAt: Date.now(), levelStartedAt: Date.now(), updatedAt: Date.now()
+    };
+    db.runs[run.id] = run; save();
+    return {
+      runId: run.id, serverSeedHash: sha256Hex(run.serverSeed), nonce: run.nonce, seed: levelSeed(run, 'special'),
+      recipe: R.id, feeLamports: fee, prizeLamports: prize, missions: { paid, view: missionView(u) }, special: specialView(u), ...publicMe(u)
+    };
+  });
+}));
+app.post('/api/special/finish', wrap(async (req) => {
+  const u = auth(req);
+  const { runId, taps } = req.body || {};
+  return withLock(u.address, async () => {
+    const run = db.runs[runId];
+    if (!run || run.address !== u.address || run.kind !== 'special') throw new HttpError(404, 'Run not found');
+    if (run.status !== 'playing') throw bad('This attempt is already over');
+    if (!E.validTaps(taps)) throw bad('Invalid tap data');
+    const def = SP.generate(levelSeed(run, 'special'), run.recipe);
+    const r = E.replay(def, taps);
+    const gameMs = r.ticks * E.DT * 1000, elapsed = Date.now() - run.levelStartedAt;
+    if (elapsed < gameMs * CFG.minRealtime - 250) {
+      run.flag = 'too fast'; settle(u, run, 'void');
+      throw bad('Level submitted faster than real time. The attempt was voided.');
+    }
+    const won = r.result === 'clear';
+    u.hoops += r.outcomes.length; u.swishes += r.outcomes.filter((o) => o === 'S').length;
+    run.levels.push({ level: 1, taps: taps.length, outcomes: r.outcomes.join(''), result: r.result, ticks: r.ticks });
+    run.total = won ? run.prize / run.bet : 0;
+    const status = won ? 'won' : 'lost';
+    run.status = status; run.endedAt = Date.now();
+    const payout = won ? run.prize : 0;
+    run.payout = payout; u.balance += payout; u.returned += payout; u.runs++;
+    if (won && u.special && u.special.day === run.day) u.special.wins++;
+    if (!u.flagged && u.runs >= CFG.sharpMinRuns && u.wagered > 0 && u.returned / u.wagered > CFG.sharpRtp) u.flagged = { reason: 'high return', at: Date.now() };
+    if (!u.flagged && u.hoops >= 120 && u.swishes / u.hoops > 0.97) u.flagged = { reason: 'superhuman swish rate', at: Date.now() };
+    save();
+    return { status, outcomes: r.outcomes, result: r.result, payoutLamports: payout, serverSeed: run.serverSeed, special: specialView(u), ...publicMe(u) };
   });
 }));
 
@@ -454,7 +573,7 @@ app.get('/api/run/:id', wrap(async (req) => {
   if (!run) throw new HttpError(404, 'Run not found');
   const done = !(run.status === 'playing' || run.status === 'checkpoint');
   return {
-    id: run.id, difficulty: run.di, betLamports: run.bet, status: run.status, total: run.total, payoutLamports: run.payout || 0,
+    id: run.id, kind: run.kind || 'run', recipe: run.recipe, difficulty: run.di, betLamports: run.bet, status: run.status, total: run.total, payoutLamports: run.payout || 0,
     serverSeedHash: sha256Hex(run.serverSeed), serverSeed: done ? run.serverSeed : undefined, clientSeed: run.clientSeed, nonce: run.nonce, levels: run.levels
   };
 }));

@@ -365,19 +365,58 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 #callout.gold .c1 { background-image: linear-gradient(180deg, #fffbe0 5%, #ffd60a 50%, #ff9f0a 95%); filter: drop-shadow(0 0 16px rgba(255, 200, 20, 0.5)); }
 #callout.green .c1 { background-image: linear-gradient(180deg, #e6ffe9 5%, #30d158 60%, #1fa347 95%); filter: drop-shadow(0 0 14px rgba(48, 209, 88, 0.45)); }
 
-/* ---------- lobby: challenge pot row ---------- */
-#potBtn {
+/* ---------- lobby: today's special and the pot challenge, ways into their pages on the Challenges tab ---------- */
+#potBtn, #chBtn {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 8px;
   width: 100%; height: 44px; padding: 0 7px 0 12px; margin: 0 0 10px; border-radius: 16px; background: var(--surface); text-align: left;
 }
-#potBtn.hide { display: none; }
-#potBtn .p-ic { display: flex; color: var(--gold); }
-#potBtn .p-ic svg { width: 17px; height: 17px; }
-#potBtn .p-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 600; color: var(--label); white-space: nowrap; }
-#potBtn .p-v { font-size: 13px; font-weight: 700; color: var(--label); white-space: nowrap; }
-#potBtn .p-s { padding: 6px 10px; border-radius: 11px; background: var(--surface-2); font-size: 12px; font-weight: 700; color: var(--label); white-space: nowrap; }
+#potBtn.hide, #chBtn.hide { display: none; }
+#potBtn .p-ic, #chBtn .p-ic { display: flex; color: var(--gold); }
+#potBtn .p-ic svg, #chBtn .p-ic svg { width: 17px; height: 17px; }
+#potBtn .p-t, #chBtn .p-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 600; color: var(--label); white-space: nowrap; }
+#potBtn .p-v, #chBtn .p-v { font-size: 13px; font-weight: 700; color: var(--label); white-space: nowrap; }
+#potBtn .p-s, #chBtn .p-s { padding: 6px 10px; border-radius: 11px; background: var(--surface-2); font-size: 12px; font-weight: 700; color: var(--label); white-space: nowrap; }
 #potBtn.in .p-s { color: var(--gold); }
 #potBtn.done .p-s { background: rgba(47, 211, 107, 0.14); color: var(--green); }
+#chBtn .p-v { color: var(--gold); }
+
+/* ---------- the Challenges tab: the special level and the daily pot, each on its own page ---------- */
+.ch-seg { display: grid; grid-template-columns: 1fr 1fr; margin: 18px 0 4px; }
+.ch-seg button { position: relative; }
+.ch-seg .dot { position: absolute; top: 9px; right: 12px; width: 7px; height: 7px; border-radius: 4px; background: var(--red); }
+.ch-page { padding-top: 14px; }
+.sp-card { border-radius: 22px; background: var(--surface); overflow: hidden; }
+.sp-head { padding: 16px 16px 4px; }
+.sp-k { font-size: 13px; font-weight: 600; color: var(--label-3); }
+.sp-name { margin-top: 2px; font-family: var(--font-display); font-weight: 800; font-size: 38px; line-height: 0.98; letter-spacing: 0.01em; color: var(--label); }
+.sp-blurb { margin-top: 4px; font-size: 14px; color: var(--label-2); }
+.sp-course { display: block; width: 100%; height: 118px; }
+.sp-cap { padding: 0 16px 14px; font-size: 12px; color: var(--label-3); }
+.sp-prize { margin: 22px 0 4px; text-align: center; }
+.sp-prize .k { display: block; font-size: 13px; font-weight: 600; color: var(--label-2); }
+.sp-prize .big { margin: 2px 0 0; font-size: 60px; }
+.sp-prize .x { display: block; margin-top: 2px; font-size: 14px; font-weight: 600; color: var(--gold); }
+.ch-page .btn { width: 100%; margin-top: 16px; }
+.ch-page .tiles { margin: 16px 0 0; text-align: center; }
+.sp-odds { margin-top: 10px; }
+.sp-odds .row { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; font-size: 14px; color: var(--label-2); }
+.sp-odds .row + .row { box-shadow: inset 0 0.5px 0 var(--sep); }
+.sp-odds .row b { font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }
+.ch-page .pot-rules { margin-top: 14px; }
+.ch-page .pot-goal { margin-top: 0; }
+#potCap.prize::before { content: "Win"; margin-right: 4px; font-size: 0.8em; font-weight: 650; color: var(--label-2); }
+/* missions: the SOL a mission pays, and the play that unlocks a window's SOL */
+.mxp { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.mxp small { font-size: 11.5px; font-weight: 650; color: var(--label-2); }
+.mrow.done .mxp small { color: var(--label-3); }
+.mrow.done .mxp small.paid { color: var(--green); }
+.mneed { padding: 12px 14px 13px; }
+.mneed .mn-h { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--label-2); }
+.mneed .mn-h b { font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mneed .bar { height: 4px; margin-top: 8px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.mneed .bar i { display: block; height: 100%; border-radius: 2px; background: var(--gold); }
+.mneed.met .bar i { background: var(--green); }
+.mneed + .mrow { box-shadow: inset 0 0.5px 0 var(--sep); }
 
 /* ---------- the pot sheet ---------- */
 .pot-goal { display: flex; align-items: center; gap: 12px; margin: 2px 0 6px; }
@@ -488,7 +527,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 #tabbar {
   position: fixed; left: 50%; bottom: calc(var(--safe-b) + 8px); z-index: 11;
   width: min(430px, calc(100% - 16px)); height: var(--tab-h);
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 5px;
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 2px; padding: 5px;
   border-radius: 31px; background: rgba(13, 17, 29, 0.78);
   -webkit-backdrop-filter: saturate(160%) blur(26px); backdrop-filter: saturate(160%) blur(26px);
   box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 44px rgba(0, 0, 0, 0.55);
@@ -740,15 +779,16 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .pe-prev .pav { width: 56px; height: 56px; border-radius: 18px; }
 .pe-prev .pav svg { width: 30px; height: 30px; }
 
-/* ---------- lobby: Today, the next mission over the daily pot in one group ---------- */
-#dailyBtn .d-t, #potBtn .p-t { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
-#dailyBtn .d-t small, #potBtn .p-t small { font-size: 11px; font-weight: 600; color: var(--label-3); }
-#dailyBtn .d-t span, #potBtn .p-t span { font-size: 13px; font-weight: 600; color: var(--label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#dailyBtn, #potBtn { height: 50px; }
+/* ---------- lobby: Today, the next mission over today's special and the daily pot, in one group ---------- */
+#dailyBtn .d-t, #potBtn .p-t, #chBtn .p-t { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+#dailyBtn .d-t small, #potBtn .p-t small, #chBtn .p-t small { font-size: 11px; font-weight: 600; color: var(--label-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 350px) { #potBtn .p-v, #chBtn .p-v { display: none; } } /* narrow phones: the name and the action, the amounts are a tap away */
+#dailyBtn .d-t span, #potBtn .p-t span, #chBtn .p-t span { font-size: 13px; font-weight: 600; color: var(--label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#dailyBtn, #potBtn, #chBtn { height: 50px; }
 #dailyBtn .d-bar { bottom: 5px; }
-.today #dailyBtn, .today #potBtn { margin: 0; border-radius: 0; background: none; transition: background 0.2s; }
-.today #dailyBtn:active, .today #potBtn:active { background: var(--surface-2); }
-.today #potBtn { box-shadow: inset 0 1px 0 var(--line); }
+.today #dailyBtn, .today #potBtn, .today #chBtn { margin: 0; border-radius: 0; background: none; transition: background 0.2s; }
+.today #dailyBtn:active, .today #potBtn:active, .today #chBtn:active { background: var(--surface-2); }
+.today #potBtn, .today #chBtn { box-shadow: inset 0 1px 0 var(--line); }
 
 /* ---------- pause ---------- */
 #pauseCard .pause-set { margin: 18px 0 14px; text-align: left; }
@@ -770,7 +810,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   .score { font-size: 42px; }
 }
 @media (max-height: 660px) {
-  #dailyBtn, #potBtn { height: 42px; }
+  #dailyBtn, #potBtn, #chBtn { height: 42px; }
   .big { font-size: 58px; }
   .tiles { margin: 16px 0 14px; }
   .next { margin: 16px 2px 12px; }
@@ -787,11 +827,11 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   .next { margin: 16px 2px 12px; padding: 12px 2px 0; }
 }
 @media (max-height: 560px) {
-  #potBtn, .sheet .today { display: none; }
+  #potBtn, #chBtn, .sheet .today { display: none; }
 }
 @media (max-height: 600px) {
   #dailyBtn { display: none; }
-  .today #potBtn { box-shadow: none; }
+  .today #chBtn { box-shadow: none; }
   .tiles { padding: 9px 0 8px; }
   .tiles b { font-size: 24px; }
 }
