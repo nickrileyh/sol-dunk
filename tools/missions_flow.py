@@ -22,7 +22,7 @@ async def main():
         need = m0['need']['day']
         check(len(m0['daily']) == 3 and len(m0['weekly']) == 3 and m0['played']['day'] == 0 and need > 0, 'three daily and three weekly missions, nothing played yet')
         check(all(c['reward'] > 0 for c in m0['daily'] + m0['weekly']), 'every daily and weekly mission pays SOL')
-        await page.click('#diff0'); await page.click('#chips [data-chip="1"]'); await page.wait_for_timeout(200)
+        await page.click('#diff0'); await page.fill('#betInput', '1'); await page.evaluate("document.getElementById('betInput').blur()"); await page.wait_for_timeout(200)
 
         async def run(levels, shot):
             await page.click('#playBtn' if await page.evaluate('__solDunk.phase()') == 'lobby' else '#againBtn'); await page.wait_for_timeout(800)

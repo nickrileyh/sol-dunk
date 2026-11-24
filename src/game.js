@@ -11,7 +11,7 @@
   const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const round9 = (x) => Math.round(x * 1e9) / 1e9;
   const FONT_ROUND = 'ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
-  const FONT_DISPLAY = '"Big Shoulders Display", "Arial Narrow", "Roboto Condensed", sans-serif';
+  const FONT_DISPLAY = 'ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif'; // canvas numbers and labels
 
   // ---------------------------------------------------------------- format
   function fmtSol(x) { const a = Math.abs(x); return x.toFixed(a >= 100 ? 2 : a >= 10 ? 3 : 4); }
@@ -795,7 +795,7 @@
   let dprCap = 2;
   const perf = { avg: 1 / 60, slow: 0 };
   let bgEl = null;      // cached backdrop, rebuilt on resize
-  let sheetTopC = -1, brandC = 64;   // cached top of the bet sheet and bottom of the title (layout read only when it changes)
+  let sheetTopC = -1, heroT = 0, heroB = 0;   // the page's window onto the arena, in screen px (layout read only when it changes)
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, dprCap);
     bgEl = null; sheetTopC = -1;
@@ -901,26 +901,6 @@
         const sg = g.createRadialGradient(vw / 2, 0, 0, vw / 2, 0, playW * 0.62);
         sg.addColorStop(0, 'rgba(215,225,255,0.16)'); sg.addColorStop(1, 'rgba(215,225,255,0)');
         g.fillStyle = sg; g.fillRect(0, 0, vw, vh);
-        // the arena's lighting rig: a row of floodlights along the roof, each throwing a faint beam down into
-        // the haze, the outer ones angled in toward the court
-        const nL = 5, rigY = Math.max(4, vh * 0.008), step = playW / nL;
-        for (let i = 0; i < nL; i++) {
-          const k = i - (nL - 1) / 2, x = vw / 2 + k * step;
-          // the beam: three nested wedges with a little light each, so it widens as it falls and its edges are soft
-          g.save(); g.translate(x, rigY); g.rotate(k * 0.075);
-          const len = vh * 0.6, bm2 = g.createRadialGradient(0, 0, 0, 0, 0, len);
-          bm2.addColorStop(0, 'rgba(205,220,255,0.04)'); bm2.addColorStop(0.55, 'rgba(205,220,255,0.014)'); bm2.addColorStop(1, 'rgba(205,220,255,0)');
-          g.fillStyle = bm2;
-          for (const a of [0.045, 0.08, 0.125]) {
-            const w = Math.tan(a) * len;
-            g.beginPath(); g.moveTo(-2, 0); g.lineTo(2, 0); g.lineTo(w + 2, len); g.lineTo(-w - 2, len); g.closePath(); g.fill();
-          }
-          g.restore();
-          const bloom = g.createRadialGradient(x, rigY, 0, x, rigY, 30);
-          bloom.addColorStop(0, 'rgba(225,235,255,0.42)'); bloom.addColorStop(0.3, 'rgba(200,218,255,0.12)'); bloom.addColorStop(1, 'rgba(200,218,255,0)');
-          g.fillStyle = bloom; g.fillRect(x - 30, rigY - 30, 60, 60);
-          g.fillStyle = 'rgba(246,249,255,0.9)'; g.beginPath(); g.ellipse(x, rigY, 4.5, 1.5, 0, 0, Math.PI * 2); g.fill();
-        }
         vignette(g, vw, vh);
       },
       // behind the court: the courtside crowd and the LED board (drawArena)
@@ -1352,19 +1332,6 @@
     }
     if (under !== STK.under) { STK.under = under; el.classList.toggle('under', under); }
   }
-  // the title over the arena on the Play tab steps back while the demo ball flies up through it
-  const BRAND = { el: $('brand'), rect: null, k: 0, on: false };
-  function brandDodge() {
-    let on = false;
-    if (phase === 'lobby' && nav.tab === 'play' && !nav.page && view.bsr) {
-      if (!BRAND.rect || ++BRAND.k % 30 === 0) { // the text itself, not the full-width box it sits in
-        const rg = document.createRange(); rg.selectNodeContents(BRAND.el); BRAND.rect = rg.getBoundingClientRect();
-      }
-      const R = BRAND.rect, r = view.bsr * 1.35; // the wings reach a little past the ball
-      on = R.height > 0 && view.bsx + r > R.left && view.bsx - r < R.right && view.bsy + r > R.top && view.bsy - r < R.bottom;
-    }
-    if (on !== BRAND.on) { BRAND.on = on; BRAND.el.classList.toggle('dodge', on); }
-  }
   function setStreakHud(mode) {
     const s = run.streak, el = STK.el;
     clearTimeout(STK.timer);
@@ -1484,22 +1451,8 @@
   }
   function flash(col, a) { if (REDUCED) return; view.flashCol = col; view.flash = Math.max(view.flash, a); }
 
-  // lobby: the player's emblem in the level ring, and the next mission (today's first, then the week's, then career)
-  function refreshProfileHud() {
-    const v = lvlOf(profile.xp), col = cardColor();
-    $('profLv').textContent = 'Level ' + v.l;
-    $('xpArc').style.strokeDashoffset = (94.25 * (1 - v.into / v.need)).toFixed(2);
-    const em = $('profEm'); em.innerHTML = emblemSvg(profile.card.emblem); em.style.setProperty('--av', col); em.style.setProperty('--av-ink', inkFor(col));
-    const m = openMissions(runFacts0())[0];
-    $('dailyBtn').classList.toggle('done', !m);
-    $('dailyIc').innerHTML = m ? (m.kind === 'career' ? ICON.flag : ICON.target) : ICON.check;
-    $('dailyK').textContent = m ? KIND_NAME[m.kind] : 'Missions';
-    $('dailyT').textContent = m ? m.text : 'All done for now';
-    $('dailyP').textContent = m ? `${m.p}/${m.n}` : '';
-    $('dailyFill').style.width = ((m ? m.p / m.n : 1) * 100).toFixed(0) + '%';
-    $('dailyBtn').setAttribute('aria-label', m ? `${KIND_NAME[m.kind]}: ${m.text}, ${m.p} of ${m.n}. Open missions.` : 'Missions: all done for now. Open missions.');
-    syncBadges();
-  }
+  // progress changed: the tab bar's dots follow it (the Profile and Missions tabs show the rest)
+  function refreshProfileHud() { syncBadges(); }
   // no run under way: every mission at its saved progress
   const runFacts0 = () => ({});
   function setPips(st) {
@@ -1542,7 +1495,11 @@
   const armed = (el) => !el.classList.contains('hide') && !el.classList.contains('arming');
 
   // ---------------------------------------------------------------- lobby
-  const CHIPS = [0.01, 0.05, 0.1, 0.5, 1];
+  const LADDER = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100]; // the bet stepper's steps
+  function stepBet(dir) {
+    const b = prefs.bet, up = LADDER.find((x) => x > b + 1e-9), down = LADDER.filter((x) => x < b - 1e-9).pop();
+    setBet(dir > 0 ? (up != null ? up : b) : (down != null ? down : CFG.minBet));
+  }
   function avgClear(di, L) { return PAY.AVG_CLEAR[di][L - 1]; }
   // the most a run can really pay on each tier: every ring a swish through all 8 levels, or the tier's cap if that's lower
   const TOP = PAY.PAYTABLE.map((rows, di) => {
@@ -1552,24 +1509,16 @@
   });
   function buildLobby() {
     const d = $('diffs');
-    d.innerHTML = E.DIFFS.map((D, i) => `<button role="radio" id="diff${i}" data-di="${i}" aria-checked="${i === prefs.di}" aria-label="${D.name}, wins up to ${TOP[i]}×"><span class="tn">${D.name}</span><span class="tx">${TOP[i]}×</span></button>`).join('');
+    d.innerHTML = E.DIFFS.map((D, i) => `<button role="radio" id="diff${i}" data-di="${i}" aria-checked="${i === prefs.di}" aria-label="${D.name}, wins up to ${TOP[i]}×">${D.name}</button>`).join('');
     d.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { prefs.di = +b.dataset.di; Sound.click(); refreshLobby(); saveAll(); }));
-    $('chips').innerHTML = CHIPS.map((c) => `<button data-chip="${c}" aria-pressed="false">${c}</button>`).join('');
-    $('chips').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { setBet(+b.dataset.chip); Sound.click(); }));
-    $('betHalf').addEventListener('click', () => { setBet(prefs.bet / 2); Sound.click(); });
-    $('betDouble').addEventListener('click', () => { setBet(prefs.bet * 2); Sound.click(); });
+    $('betDown').addEventListener('click', () => { stepBet(-1); Sound.click(); });
+    $('betUp').addEventListener('click', () => { stepBet(1); Sound.click(); });
     const inp = $('betInput');
     inp.addEventListener('input', () => { const v = parseFloat(inp.value.replace(',', '.')); if (v > 0) { prefs.bet = v; refreshLobby(true); } });
     inp.addEventListener('blur', () => { setBet(prefs.bet); });
     inp.addEventListener('focus', () => { try { inp.select(); } catch (e) { /* ignore */ } });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { inp.blur(); startRun(); } });
     $('playBtn').addEventListener('click', () => startRun());
-    $('profBtn').addEventListener('click', () => setTab('profile'));
-    $('dailyBtn').addEventListener('click', () => setTab('missions'));
-    $('chBtn').querySelector('.p-ic').innerHTML = ICON.spark;
-    $('chBtn').addEventListener('click', () => { nav.ch = 'special'; setTab('challenges'); });
-    $('potBtn').querySelector('.p-ic').innerHTML = ICON.trophy;
-    $('potBtn').addEventListener('click', () => { nav.ch = 'pot'; setTab('challenges'); });
   }
   function setBet(v) {
     const max = Math.min(CFG.maxBet, Math.max(CFG.minBet, bank.balance()));
@@ -1584,8 +1533,9 @@
     refreshProfileHud();
     if (!keepInput) $('betInput').value = fmtBet(prefs.bet);
     $('playAmt').textContent = fmtBet(prefs.bet) + ' SOL';
-    document.querySelectorAll('#chips button').forEach((b) => b.setAttribute('aria-pressed', String(Math.abs(+b.dataset.chip - prefs.bet) < 1e-9)));
     const short = prefs.bet > bank.balance() + 1e-12, broke = bank.balance() < CFG.minBet;
+    const top = Math.min(CFG.maxBet, Math.max(CFG.minBet, bank.balance()));
+    $('betDown').disabled = prefs.bet <= CFG.minBet + 1e-9; $('betUp').disabled = prefs.bet >= top - 1e-9;
     $('playBtn').disabled = short;
     const err = $('lobbyErr');
     if (broke && !bank.real) err.innerHTML = 'You\u2019re out of demo SOL. <button class="link" id="quickReset">Reset to ' + CFG.demoStart + ' SOL</button>';
@@ -1612,18 +1562,9 @@
     }
   }
   const leftText = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; };
-  // the pot's row in Today (a way into its page on the Challenges tab), and the page itself while it's open
+  // the pot's page on the Challenges tab, kept current while it's open
   function renderPotRow() {
-    const p = potState, el = $('potBtn');
-    el.classList.toggle('hide', !p);
     if (nav.tab === 'challenges' && nav.ch === 'pot' && phase === 'lobby') renderChallenges(true);
-    if (!p) return;
-    const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
-    $('potT').textContent = p.goal.text;
-    $('potV').textContent = (p.pool >= 1 ? p.pool.toFixed(2) : fmtBet(p.pool)) + ' SOL';
-    $('potS').textContent = done ? 'Done' : inn ? 'You’re in' : 'Enter ' + fmtBet(p.fee);
-    el.classList.toggle('in', inn && !done); el.classList.toggle('done', done);
-    el.setAttribute('aria-label', `Pot challenge: ${p.goal.text} ${p.goal.sub}. ${fmtBal(p.pool)} SOL in the pot, ${p.entrants} in. ` + (done ? 'You made it.' : inn ? 'You’re in.' : 'Entry ' + fmtBet(p.fee) + ' SOL.') + ' Open the pot.');
   }
   // where the run stands on the pot challenge (null if you're not in it, it's done, or this tier doesn't count)
   function potLevels() {
@@ -1677,17 +1618,8 @@
     specBusy = true;
     try { specState = await bank.special.state(); } catch (e) { specState = specState || null; }
     specBusy = false;
-    renderChRow(); syncBadges();
+    syncBadges();
     if (nav.tab === 'challenges' && phase === 'lobby') renderChallenges(true);
-  }
-  function renderChRow() {
-    const s = specState, el = $('chBtn');
-    el.classList.toggle('hide', !s);
-    if (!s) return;
-    $('chT').textContent = s.recipe.name;
-    $('chV').textContent = fmtBet(s.prize) + ' SOL';
-    $('chS').textContent = 'Play ' + fmtBet(s.fee);
-    el.setAttribute('aria-label', `Today's special: ${s.recipe.name}. ${s.recipe.blurb}. Win ${fmtBet(s.prize)} SOL for a ${fmtBet(s.fee)} SOL entry. Open Challenges.`);
   }
   const oneIn = (p) => (p > 0 ? 'about 1 in ' + Math.max(1, Math.round(1 / p)) : '–');
   function specialHtml() {
@@ -2415,7 +2347,7 @@
     const ix = lerp(ball.px, ball.x, alpha), iy = lerp(ball.py, ball.y, alpha);
     updateFx(dt, ix, iy);
     render(alpha, ix + ball.ox, iy + ball.oy);
-    streakDodge(); brandDodge();
+    streakDodge();
     requestAnimationFrame(frame);
   }
 
@@ -2487,20 +2419,21 @@
     view.shake *= Math.exp(-dt * 9);
     view.pulse *= Math.exp(-dt * 3.5);
     view.flash *= Math.exp(-dt * 6);
-    // zoom: in the lobby the view zooms out and lifts the world so the demo play fits above the bet
-    // sheet. In a run it pulls back a little on faster levels, whose rings are spaced farther apart,
-    // so the next ring comes into view as early as on level 1.
-    let zoomT = 1, centreY = null;
-    const sheet = nav.tab === 'locker' ? vL : ui.lobby;
+    // zoom: in the lobby the live arena shows through the page's rounded window, so the view zooms to fit
+    // a span of the world into it: on Play the demo ball's flight and the floor line (world y 130 to 676), in
+    // the Locker the flight alone (130 to 560) so the ball you're dressing shows bigger, except for courts.
+    // In a run it pulls back a little on faster levels, whose rings are spaced farther apart, so the next
+    // ring comes into view as early as on level 1.
+    let zoomT = 1, centreY = null, centreW = 0;
+    const lk = nav.tab === 'locker', sheet = lk ? vL : ui.lobby;
     if (phase === 'lobby' && !sheet.classList.contains('hide')) {
-      if (sheetTopC < 0) { // the play area runs from under the title (Play) or the top bar (Locker) down to the sheet
-        sheetTopC = sheet.offsetTop;
-        const br = $('brand');
-        brandC = nav.tab === 'play' && br.offsetHeight ? br.offsetTop + br.offsetHeight - 18 : 64;
+      if (sheetTopC < 0) {
+        const h = lk ? $('lkHero') : $('hero');
+        heroT = sheet.offsetTop + h.offsetTop; heroB = heroT + h.offsetHeight; sheetTopC = heroT;
       }
-      const sheetTop = sheetTopC;
-      zoomT = clamp((sheetTop - 84) / (360 * scale), 0.55, 1);
-      centreY = (brandC + sheetTop - 10) / 2;
+      const near = lk && nav.cat !== 'court', top = 130, bot = near ? 560 : 676; // courts show their floor line
+      zoomT = clamp((heroB - heroT - 8) / ((bot - top) * scale), 0.45, 1);
+      centreY = (heroT + heroB) / 2; centreW = (top + bot) / 2;
     } else if (phase !== 'lobby' && run.st) zoomT = levelZoom(run.level);
     view.zoom = lerp(view.zoom, zoomT, 1 - Math.exp(-dt * 4));
     const S = scale * view.zoom;
@@ -2517,7 +2450,7 @@
     view.camX += view.camV * dt;
     view.camX = lerp(view.camX, target, 1 - Math.exp(-dt * (phase === 'play' ? 8 : 5)));
     const oy = (vh - VIEW_H * S) / 2 - VIEW_TOP * S;
-    const camYT = centreY == null ? 0 : 300 - (centreY - oy) / S;
+    const camYT = centreY == null ? 0 : centreW - (centreY - oy) / S; // the middle of the framed span at the window's middle
     view.camY = lerp(view.camY, camYT, 1 - Math.exp(-dt * 4));
   }
 
@@ -2963,11 +2896,6 @@
       c.fillStyle = at; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
     }
     if (sk.rim) { c.strokeStyle = sk.rim; c.lineWidth = r * 0.07; c.beginPath(); c.arc(0, 0, r - r * 0.04, Math.PI * 0.62, Math.PI * 1.08); c.stroke(); }
-    // the arena's cool light catching the far edge, so the ball sits in the scene's light (inside the hitbox edge)
-    const rl = c.createLinearGradient(r * 0.2, -r, r * 0.6, r);
-    rl.addColorStop(0, 'rgba(150,182,255,0)'); rl.addColorStop(0.45, 'rgba(150,182,255,0.42)'); rl.addColorStop(1, 'rgba(150,182,255,0)');
-    c.strokeStyle = rl; c.lineWidth = r * 0.08;
-    c.beginPath(); c.arc(0, 0, r - r * 0.06, -Math.PI * 0.2, Math.PI * 0.42); c.stroke();
     const hl = c.createRadialGradient(-r * 0.4, -r * 0.5, 0, -r * 0.4, -r * 0.5, r * (sk.shine ? 0.62 : 0.5));
     hl.addColorStop(0, 'rgba(255,255,255,' + (sk.shine ? 0.75 : 0.45) + ')'); hl.addColorStop(1, 'rgba(255,255,255,0)');
     c.fillStyle = hl; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
@@ -3400,13 +3328,13 @@
   function howHtml() {
     const row = (icon, tone, title, text) => `<div class="hrow"><span class="hic ${tone}"><svg viewBox="0 0 24 24" aria-hidden="true">${HOW_ICON[icon]}</svg></span><div><h3>${title}</h3><p>${text}</p></div></div>`;
     return `<div class="how">` +
-      row('tap', '', 'Tap to flap', `Drop the ball down through every ring. Fly past one, go under it or hit the floor and the run ends.`) +
-      row('rim', '', 'Rims', `Touch the rim and you can still score: if the ball comes down over the opening it drops in. It only bounces out when it comes down past the rim.`) +
-      row('swish', '', 'Swish', `Go through without touching the ring for a swish. Swishes pay more than rim hits, and swishes in a row pay more each time, up to 5 in a row. Your streak carries into the next level.`) +
+      row('tap', 'blue', 'Tap to flap', `Drop the ball down through every ring. Fly past one, go under it or hit the floor and the run ends.`) +
+      row('rim', 'red', 'Rims', `Touch the rim and you can still score: if the ball comes down over the opening it drops in. It only bounces out when it comes down past the rim.`) +
+      row('swish', 'green', 'Swish', `Go through without touching the ring for a swish. Swishes pay more than rim hits, and swishes in a row pay more each time, up to 5 in a row. Your streak carries into the next level.`) +
       row('fire', 'heat', 'Fire', `Two swishes in a row and the ball starts to smoulder. Three and it's <b>on fire</b>; five and it burns at full heat (blue-white with the Fire flame). Touch a rim and the flame goes out. Flames from the locker change the colours, never the pay.`) +
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.`) +
       row('star', 'gold', 'Score and XP', `Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, missions and trophies earn XP, which unlocks balls, wings, flames, trails, rims and courts in the Locker. Score and XP never change what a run pays.`) +
-      row('mission', '', 'Missions', `Three new missions every day and every week (new ones at midnight UTC, and on Mondays), and a career of six chapters, each ending in an item you can only get there. They count in every run, whatever you bet. Daily and weekly missions also pay SOL once you've played ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week (bets and special level entries); rewards earned before then wait, and go when the day or week ends.`) +
+      row('mission', 'purple', 'Missions', `Three new missions every day and every week (new ones at midnight UTC, and on Mondays), and a career of six chapters, each ending in an item you can only get there. They count in every run, whatever you bet. Daily and weekly missions also pay SOL once you've played ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week (bets and special level entries); rewards earned before then wait, and go when the day or week ends.`) +
       row('trophy', 'gold', 'Challenges', `<b>Special level</b>: one a day, the same for everyone, with a twist like every ring moving. Pay the entry, then clear every ring of a fresh course to win the prize. <b>Daily pot</b>: buy in, then meet the day's challenge in any regular run to share the pot.`) +
       `</div>`;
   }
@@ -3615,6 +3543,7 @@
     }
     if (was === 'locker' && t !== 'locker') endTry();
     nav.tab = t; document.body.dataset.tab = t;
+    if (was !== t) { document.body.classList.add('instant'); requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove('instant'))); }
     document.querySelectorAll('#tabbar [data-tab]').forEach((b) => {
       const on = b.dataset.tab === t;
       b.setAttribute('aria-selected', String(on));
@@ -3640,6 +3569,8 @@
     $('badgeL').classList.toggle('on', profile.fresh.length > 0 && nav.tab !== 'locker');
   }
   document.querySelectorAll('#tabbar [data-tab]').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  // full pages: the top bar turns to material once the page scrolls under it, as on iOS
+  document.querySelectorAll('.view > .vscroll').forEach((el) => el.addEventListener('scroll', () => el.parentElement.classList.toggle('scrolled', el.scrollTop > 6), { passive: true }));
 
   // ---------------------------------------------------------------- Missions tab
   const ring = (p) => `<span class="mring${p > 0 ? '' : ' zero'}"><svg viewBox="0 0 36 36"><circle class="trk" cx="18" cy="18" r="15"/><circle class="val" cx="18" cy="18" r="15" pathLength="100" stroke-dasharray="${(Math.max(0.0001, p) * 100).toFixed(1)} 100"/></svg><span class="ck">${ICON.check}</span></span>`;
@@ -3767,8 +3698,8 @@
     const nextU = UNLOCKS.filter((u) => u.lvl && u.lvl > v.l).sort((a, b) => a.lvl - b.lvl)[0];
     const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–', net = stats.returned - stats.wagered;
     const got = ACH.filter((a) => profile.ach[a.id]).length;
-    const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi">${ic}</span><span class="mn">${name}</span><span class="mv num">${val || ''}</span><span class="chev">${ICON.chev}</span></button>`;
-    const sw = (k, ic, name) => `<div class="mrow-sw"><span class="mi">${ic}</span><span class="mn" id="sw-${k}">${name}</span><button class="switch" role="switch" data-set="${k}" aria-checked="${!!settings[k]}" aria-labelledby="sw-${k}"></button></div>`;
+    const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi mi-${page}">${ic}</span><span class="mn">${name}</span><span class="mv num">${val || ''}</span><span class="chev">${ICON.chev}</span></button>`;
+    const sw = (k, ic, name) => `<div class="mrow-sw"><span class="mi mi-${k}">${ic}</span><span class="mn" id="sw-${k}">${name}</span><button class="switch" role="switch" data-set="${k}" aria-checked="${!!settings[k]}" aria-labelledby="sw-${k}"></button></div>`;
     $('pBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Profile</h2>
       <button class="pcard" id="pfCard" aria-label="Edit your player card"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
         <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span><br><span class="pedit">${ICON.pencil}Edit card</span></span></button>
@@ -3829,7 +3760,6 @@
     grantUnlocks(); syncSettings(); applyFlameTheme(); buildLobby(); setTab('play', true); refreshLobby(); setHudMode(false); refreshPot(); refreshSpecial();
     setInterval(() => { if (phase === 'lobby' && !document.hidden) { refreshPot(); if (nav.tab === 'challenges') refreshSpecial(); } }, 30000); // entrants, pot and time left move on
     attract.wait = 0;
-    if (document.fonts && document.fonts.load) document.fonts.load('800 20px "Big Shoulders Display"').catch(() => {}); // canvas text uses it too
     requestAnimationFrame((t) => { last = t; frame(t); });
   }
   const hot = window.claude && window.claude.hot;

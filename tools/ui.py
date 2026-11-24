@@ -86,12 +86,14 @@ async def main():
         sw = await page.evaluate("document.querySelector('#pBody .switch[data-set=\"sound\"]').getAttribute('aria-checked')")
         lbl = await page.evaluate("document.getElementById('muteBtn').getAttribute('aria-label')")
         check(sw == 'false' and lbl == 'Turn sound on', f'the Sound switch on Profile turns sound off and the mute button follows ({sw}, {lbl})')
-        await page.click('#muteBtn'); await page.wait_for_timeout(200)
+        await page.evaluate("document.getElementById('muteBtn').click()"); await page.wait_for_timeout(200)  # it shows during runs only
         sw = await page.evaluate("document.querySelector('#pBody .switch[data-set=\"sound\"]').getAttribute('aria-checked')")
         check(sw == 'true', 'the mute button turns it back on and the switch follows')
+        bar = await page.evaluate("['balBtn', 'muteBtn'].map((id) => getComputedStyle(document.getElementById(id)).display).join()")
+        check(bar.split(',')[0] != 'none' and bar.split(',')[1] == 'none', f'between runs the top bar is just the balance ({bar})')
         # profile and the card editor
-        await page.click('#profBtn'); await page.wait_for_timeout(400)
-        check(await tab() == 'profile' and await vis('#vProfile'), 'the level capsule opens the Profile tab')
+        await page.click('#tabProfile'); await page.wait_for_timeout(400)
+        check(await tab() == 'profile' and await vis('#vProfile'), 'the Profile tab opens the profile page')
         await page.click('#pfCard'); await page.wait_for_timeout(400)
         await page.fill('#peIn', 'Nick'); await page.dispatch_event('#peIn', 'change')
         await page.click('#panelBody [data-em="crown"]'); await page.wait_for_timeout(150)

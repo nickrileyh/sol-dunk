@@ -55,6 +55,7 @@ Never publish a build you haven't pushed, and don't push a game change without p
 ## What the owner has asked for (keep these)
 
 - A dark, clean, Apple-like look. One backdrop for every level, with no per-level colour themes.
+- Apple-style layout and navigation (the owner asked for a much cleaner, sleeker look): black pages with large titles in the system font, the live arena in a rounded window on Play and in the Locker, an iOS tab bar docked to the bottom, pages that push in with a back button, and sheets with a grabber and Done. Flat fills only: no glows, gradient text, floodlights or display fonts. The Play tab holds only the title, the balance, the arena window, tier, bet and one Play button; everything else lives in the other tabs.
 - The checkpoint card must not describe how much harder the next level is.
 - Amounts read as "SOL" text. Don't draw the Solana logo; the owner can drop the official icon in as `src/sol-icon.svg`.
 - Original art only: no Flappy Dunk assets.
@@ -69,5 +70,5 @@ Never publish a build you haven't pushed, and don't push a game change without p
 - Better navigation, more customization and missions (the owner asked for these): a tab bar (Play, Challenges, Missions, Locker, Profile), six locker categories (ball, wings, flame, trail, rims, court) plus a player card, and daily, weekly and career missions. Mission progress and XP never depend on bet size. Courts stay dark and are one backdrop for every level; rim colours never touch the gold checkpoint ring or the grey missed ring.
 - An organized layout (the owner asked for it): everything has one home and no menu is duplicated. Pages (How to play, Odds & fairness, Wallet, Trophies, Recent runs) push in over the current tab with a back button; sheets are only for tasks (editing the player card); settings live on Profile, so the top bar is just level, balance and mute. Scrolling pages fade out under the top bar instead of showing through the capsules.
 - Missions pay SOL, so players play more to earn them (the owner asked for this): daily and weekly missions pay SOL once the window's play reaches its need (2 SOL a day, 10 a week by default), priced inside the house's edge (see Rules). Career missions pay XP and items only.
-- The pot has its own page (the owner asked for this): the Daily pot side of the Challenges tab, where you enter it too. The Today rows on the Play sheet (today's special, the pot challenge) lead to their pages.
+- The pot has its own page (the owner asked for this): the Daily pot side of the Challenges tab, where you enter it too.
 - A special level challenge (the owner asked for it): a generated special level each day; the player pays an entry and wins a SOL prize for clearing it. Each attempt is a new course from its own provably fair seed, the same recipe for everyone that day, one backdrop like every level.
