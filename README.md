@@ -82,6 +82,15 @@ Alongside regular play, each UTC day has a challenge pot (`src/pots.cjs`, `serve
 - API: `GET /api/pot` (works signed out), `POST /api/pot/enter`, and `/api/run/level` returns `pot` progress. `npm test` covers entry, the tier rule, completing once, the split, the rake and rollover.
 - The demo runs the same pot with demo SOL. It has no other players, so it simulates the other entrants (from each challenge's simulated success rate by skill) and says so, and it has a "Close this pot now" button to see a payout. `python3 tools/pot_flow.py` plays it end to end.
 
+## Around the game
+
+None of this changes bets, ring layouts, physics or payouts; it lives in the client (`src/game.js`) and the player's browser.
+
+- **Navigation:** a floating tab bar in the lobby with four tabs. **Play** is the bet sheet over the live arena. **Missions** and **Profile** are full pages. The **Locker** keeps the arena on show above the collection, so whatever you pick, or tap to try on before you've unlocked it, flies there at once. Pausing a run shows a card with Resume and the sound and vibration switches.
+- **Missions** (XP only, never tied to bet size): 3 daily missions and 3 weekly ones, the same for everyone that day or week, and a career of 6 chapters with 4 missions each that you play at your own pace. Each chapter ends in an item you can only get there.
+- **Locker:** six kinds of item, 56 in all, each marked common, rare, epic or legendary: 18 balls, 10 wings (feather, bat, butterfly and mech shapes), 9 flames, 7 trails, 6 rim colours and 6 courts (Arena, Street, Rooftop, Beach, Neon, Orbit). Items unlock with levels, trophies or career chapters. A court is one backdrop for every level; rim colours change the ordinary rings only, so the checkpoint ring stays gold and a missed one grey.
+- **Player card:** a name, an emblem, a colour and a title (titles come from trophies, levels and the career).
+
 ## Before real money
 
 1. **Skill and bots.** The tables keep an edge against average and good players at every checkpoint, but elite players (the `pro` bot) still profit deep in a run, and a bot that plays perfectly hits the max win on almost every run. The server already limits bets for accounts above 115% return after 150 runs, and for superhuman swish rates. Add tap-timing anomaly checks and manual review of large wins before launch.
@@ -101,6 +110,7 @@ sim/               Monte Carlo runner, calibrator, quick stats
 server/            Express API, Solana deposits/withdrawals, replay verification, tests
 tools/             browser checks (Playwright + Chrome): flows.py plays every run outcome,
                    contact.py freezes rim contacts, audit.py screenshots every screen (to ./shots),
+                   ui.py checks the tabs, the locker, missions, the player card and the pause card,
                    speed.py plays deep into a tier and reports how much of the next ring is in view,
                    clip.py records exact 60 fps frames of a run (contact sheet + mp4), e.g. to
                    review the flame; sync_check.cjs (npm run check) checks every copy is the same build
