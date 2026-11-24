@@ -24,33 +24,41 @@
   // ring points, the same as the score in the game: a rim hit 1, a swish 1 + streak (up to 6), a perfect level +10
   const ringPoints = (o, streak) => (o === 'S' ? 1 + Math.min(streak, 5) : 1);
 
-  // The challenges. tier = the easiest tier where it counts (0 Rookie, 1 Pro, 2 All-Star, 3 Legend).
+  // The challenges. tier = the easiest mode where it counts (0 Easy, 1 Hard; engine v14 has just the two).
   // p = the chance one run makes it at that tier for a [casual, average, good] player, from the simulator
   // (they keep going until they bust); the demo uses it to simulate other entrants. Aim: an average player
   // makes one in about 4-15% of runs, a strong one in 25-50%. Measured on engine v13 (20,000 runs per skill):
   // with the rings spread out 1:1 with the speed, swishes got rarer (an average player swishes 65% of Pro's
   // level-1 rings, down from 71%), so the streak, swish and score challenges came down and "Swish every ring in
   // a level" moved to Pro. Each replaced its v12 challenge in place, so every day keeps the same kind of challenge.
+  // Engine v14 has two modes, Easy (v13's Pro rings) and Hard (v13's Legend rings); every challenge was measured
+  // again (node sim/pots.cjs, 3000 runs per skill). Hard's three drifted below the aim on Legend's rings and were
+  // replaced in place by easier ones (Clear level 4, Swish 12 rings, Swish 5 in a row), and Score 120 by Clear
+  // level 6 on Easy.
   const GOALS = [
-    { id: 'streak8', kind: 'best', n: 8, tier: 1, text: 'Swish 8 in a row', p: [0.019, 0.076, 0.336] },
-    { id: 'perfect1', kind: 'perfect', n: 1, tier: 1, text: 'Swish every ring in a level', p: [0.038, 0.116, 0.408] },
-    { id: 'clear5', kind: 'clears', n: 5, tier: 2, text: 'Clear level 5', p: [0.017, 0.082, 0.345] },
-    { id: 'score90', kind: 'score', n: 90, tier: 1, text: 'Score 90 in one run', p: [0.005, 0.06, 0.48] },
-    { id: 'swish15', kind: 'swishes', n: 15, tier: 2, text: 'Swish 15 rings in one run', p: [0.006, 0.061, 0.433] },
-    { id: 'streak6', kind: 'best', n: 6, tier: 2, text: 'Swish 6 in a row', p: [0.027, 0.075, 0.267] },
-    { id: 'score120', kind: 'score', n: 120, tier: 0, text: 'Score 120 in one run', p: [0.002, 0.039, 0.465] }
+    { id: 'streak8', kind: 'best', n: 8, tier: 0, text: 'Swish 8 in a row', p: [0.022, 0.078, 0.327] },
+    { id: 'perfect1', kind: 'perfect', n: 1, tier: 0, text: 'Swish every ring in a level', p: [0.039, 0.124, 0.396] },
+    { id: 'clear4', kind: 'clears', n: 4, tier: 1, text: 'Clear level 4', p: [0.024, 0.102, 0.37] },
+    { id: 'score90', kind: 'score', n: 90, tier: 0, text: 'Score 90 in one run', p: [0.005, 0.059, 0.468] },
+    { id: 'swish12', kind: 'swishes', n: 12, tier: 1, text: 'Swish 12 rings in one run', p: [0.008, 0.069, 0.423] },
+    { id: 'streak5', kind: 'best', n: 5, tier: 1, text: 'Swish 5 in a row', p: [0.044, 0.12, 0.357] },
+    { id: 'clear6', kind: 'clears', n: 6, tier: 0, text: 'Clear level 6', p: [0.023, 0.112, 0.387] }
   ];
-  // challenges taken out of the rotation (engine v13): no new pot gets one, but a pot that opened with one before
-  // an update is still shown and judged by it until it closes
+  // challenges taken out of the rotation (engine v13 and v14): no new pot gets one, but a pot that opened with one
+  // before an update is still shown and judged by it until it closes
   const RETIRED = [
-    { id: 'streak10', kind: 'best', n: 10, tier: 1, text: 'Swish 10 in a row' },
-    { id: 'score100', kind: 'score', n: 100, tier: 1, text: 'Score 100 in one run' },
-    { id: 'swish25', kind: 'swishes', n: 25, tier: 1, text: 'Swish 25 rings in one run' },
-    { id: 'streak8a', kind: 'best', n: 8, tier: 2, text: 'Swish 8 in a row' }
+    { id: 'clear5', kind: 'clears', n: 5, tier: 1, text: 'Clear level 5' },
+    { id: 'swish15', kind: 'swishes', n: 15, tier: 1, text: 'Swish 15 rings in one run' },
+    { id: 'streak6', kind: 'best', n: 6, tier: 1, text: 'Swish 6 in a row' },
+    { id: 'score120', kind: 'score', n: 120, tier: 0, text: 'Score 120 in one run' },
+    { id: 'streak10', kind: 'best', n: 10, tier: 0, text: 'Swish 10 in a row' },
+    { id: 'score100', kind: 'score', n: 100, tier: 0, text: 'Score 100 in one run' },
+    { id: 'swish25', kind: 'swishes', n: 25, tier: 0, text: 'Swish 25 rings in one run' },
+    { id: 'streak8a', kind: 'best', n: 8, tier: 1, text: 'Swish 8 in a row' }
   ];
   const GOAL_BY = Object.fromEntries(RETIRED.concat(GOALS).map((g) => [g.id, g]));
-  const TIER_NAMES = ['Rookie', 'Pro', 'All-Star', 'Legend'];
-  const tierText = (t) => (t >= 3 ? 'on Legend' : t > 0 ? 'on ' + TIER_NAMES[t] + ' or harder' : 'on any tier');
+  const TIER_NAMES = ['Easy', 'Hard'];
+  const tierText = (t) => (t >= 1 ? 'on Hard' : 'in either mode');
 
   // a small seeded generator (the same mulberry32 the engine uses), so every pot's challenge is fixed by its day
   function rng(seedStr) {

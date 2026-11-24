@@ -37,16 +37,16 @@ async def main():
         await page.goto(URL)
         await page.wait_for_timeout(2600)
         await page.screenshot(path=OUT + 'a_lobby.png')
-        # 1) novice on Pro: expect an early bust
+        # 1) novice on Hard: expect an early bust
         seen, res = await run_flow(page, 1, 'novice', 8, 'b_bust', shoot=True)
         print('bust flow:', seen, res)
         await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
-        # 2) perfect on Rookie through all 8 levels -> champion
+        # 2) perfect on Easy through all 8 levels -> champion (its best possible win is under the cap)
         seen, res = await run_flow(page, 0, 'perfect', 8, 'c_final')
         print('final flow:', seen, res)
         await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
-        # 3) perfect on Legend -> max win cap
-        seen, res = await run_flow(page, 3, 'perfect', 8, 'd_max', shoot=True)
+        # 3) perfect on Hard -> max win cap
+        seen, res = await run_flow(page, 1, 'perfect', 8, 'd_max', shoot=True)
         print('maxwin flow:', seen, res)
         # play again works after a win
         await page.click('#againBtn'); await page.wait_for_timeout(900)

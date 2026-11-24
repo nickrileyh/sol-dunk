@@ -72,7 +72,7 @@ async def main():
         p0 = (await mv())['played']['day']
         await page.click('#tabChallenges'); await page.wait_for_timeout(500)
         fee = await page.evaluate('__solDunk.special().fee')
-        await page.click('#chSpPlay'); await page.wait_for_timeout(600)
+        await page.click('#chSpPlay0'); await page.wait_for_timeout(600)
         check(abs((await mv())['played']['day'] - (p0 + fee)) < 1e-9, 'a special level entry counts as play')
         check(not errs, 'no page errors ' + json.dumps(errs))
         await b.close()

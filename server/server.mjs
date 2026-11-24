@@ -54,7 +54,7 @@ const CFG = {
   potEntry: num(env.POT_ENTRY_LAMPORTS, Math.round(POTS.ENTRY * 1e9)), // challenge pot entry
   potGoal: env.MOCK_CHAIN === '1' ? env.POT_GOAL || '' : '',            // tests only: force a challenge
   specialEntry: num(env.SPECIAL_ENTRY_LAMPORTS, Math.round(SP.ENTRY * 1e9)),
-  specialRecipe: env.MOCK_CHAIN === '1' ? env.SPECIAL_RECIPE || '' : '', // tests only: force a recipe
+  specialRecipe: env.MOCK_CHAIN === '1' ? env.SPECIAL_RECIPE || '' : '', // tests only: force every slot's twist
   missionNeed: { day: num(env.MISSION_DAY_LAMPORTS, Math.round(MS.NEED.day * 1e9)), week: num(env.MISSION_WEEK_LAMPORTS, Math.round(MS.NEED.week * 1e9)) },
   checkpointTimeoutMs: 10 * 60 * 1000,
   playingTimeoutMs: 3 * 60 * 1000
@@ -453,6 +453,8 @@ app.post('/api/run/level', wrap(async (req) => {
     run.total = a.total; run.streak = a.streak; run.updatedAt = Date.now();
     run.levels.push({ level: run.level, taps: taps.length, outcomes: r.outcomes.join(''), result: r.result, ticks: r.ticks, counted, capped: a.capped,
       mov: r.outcomes.slice(0, counted).map((o, k) => (def.hoops[k].amp ? '1' : '0')).join('') });
+    // the special levels' skill rating learns from every verified level (src/special.cjs)
+    u.skill = SP.addLevel(u.skill, run.di, run.level, counted, !a.capped && r.result !== 'clear');
     let status;
     if (a.capped) status = 'maxwin';
     else if (r.result !== 'clear') status = 'bust';
@@ -491,48 +493,63 @@ app.post('/api/run/cashout', wrap(async (req) => {
   });
 }));
 
-// ------------------------------------------------------------------ special level (rules in src/special.cjs)
-// One special a UTC day: a long level with a twist. Each attempt pays a fixed entry and gets a fresh course from its
-// own provably fair seed (HMAC-SHA256(serverSeed, clientSeed:nonce:special)); clearing every ring pays the prize.
-// Accounts limited for beating the house can't enter: strong players can come out ahead on a fixed prize.
-function specialToday() {
-  const day = SP.dayKey(potNow());
-  return { day, R: (CFG.specialRecipe && SP.BY[CFG.specialRecipe]) || SP.recipeFor(day) };
+// ------------------------------------------------------------------ special levels (rules in src/special.cjs)
+// Three a UTC day, prizes 2x, 3x and 5x a fixed entry. Every course is set for the player's level in that special,
+// which moves like a weighted staircase (up after a clear, down after a miss) and settles where they clear it often
+// enough to get back 90%: the house expects 10% from everyone. A level starts higher for players whose verified
+// regular runs or other specials show more. Each attempt gets a fresh course from its own provably fair seed,
+// HMAC-SHA256(serverSeed, clientSeed:nonce:special), built from the twist, grade and length fixed at the start.
+// Accounts limited for beating the house can't enter.
+function specialsToday(u) {
+  const day = SP.dayKey(potNow()), fee = CFG.specialEntry, forced = CFG.specialRecipe && SP.BY[CFG.specialRecipe];
+  return {
+    day, fee,
+    list: SP.specialsFor(day).map(({ slot, x, recipe }) => {
+      const R = forced || recipe, d = SP.levelOf(u && u.skill, slot), c = SP.courseFor(d, R.id, x);
+      return { slot, x, recipe: R, g: c.g, n: c.n, chance: c.chance, level: Math.round(d * 100) / 100, prize: Math.floor(fee * x) };
+    })
+  };
 }
 function specialView(u) {
-  const { day, R } = specialToday(), fee = CFG.specialEntry, x = SP.prizeOf(R.id);
+  const { day, fee, list } = specialsToday(u);
+  const t = u && u.special && u.special.day === day ? u.special : null;
   const out = {
-    day, recipe: { id: R.id, name: R.name, blurb: R.blurb, rings: R.n }, feeLamports: fee, prizeLamports: Math.floor(fee * x), x,
-    odds: (SP.PRIZES[R.id] || { p: [] }).p, closesAt: SP.closesAt(day) - db.potClock
+    day, feeLamports: fee, closesAt: SP.closesAt(day) - db.potClock, target: SP.TARGET,
+    specials: list.map((s) => ({
+      slot: s.slot, x: s.x, prizeLamports: s.prize, recipe: { id: s.recipe.id, name: s.recipe.name, blurb: s.recipe.blurb },
+      course: { grade: s.g, rings: s.n, chance: s.chance, level: s.level, levelName: SP.levelName(s.level) }, me: t ? { tries: t.tries[s.slot] || 0, wins: t.wins[s.slot] || 0 } : { tries: 0, wins: 0 }
+    }))
   };
-  if (u) { const t = u.special && u.special.day === day ? u.special : { tries: 0, wins: 0 }; out.me = { tries: t.tries, wins: t.wins, blocked: !!u.flagged }; }
+  if (u) out.me = { blocked: !!u.flagged, skill: SP.rating(u.skill) };
   return out;
 }
 app.get('/api/special', wrap(async (req) => specialView(maybeAuth(req))));
 app.post('/api/special/start', wrap(async (req) => {
   const u = auth(req);
-  const { clientSeed } = req.body || {};
+  const { clientSeed, slot } = req.body || {};
   if (typeof clientSeed !== 'string' || !/^[0-9a-zA-Z]{4,64}$/.test(clientSeed)) throw bad('Invalid client seed');
+  if (!(slot >= 0 && slot < SP.SLOTS.length && slot === Math.floor(slot))) throw bad('Unknown special level');
   return withLock(u.address, async () => {
     if (openRun(u)) throw bad('Finish your current run first');
-    if (u.flagged) throw bad('The special level isn’t available on this account');
-    const { day, R } = specialToday(), fee = CFG.specialEntry, prize = Math.floor(fee * SP.prizeOf(R.id));
-    if (!(prize > fee)) throw bad('There’s no special level today');
+    if (u.flagged) throw bad('The special levels aren’t available on this account');
+    const { day, fee, list } = specialsToday(u), s = list[slot];
     if (u.balance < fee) throw bad('Not enough balance for the entry');
-    if ((await houseLamports()) - owedLamports() < prize) throw bad('The house can’t cover the prize right now. Try again later.');
+    if ((await houseLamports()) - owedLamports() < s.prize) throw bad('The house can’t cover the prize right now. Try again later.');
     u.balance -= fee; u.wagered += fee;
     const paid = missionPlay(u, fee);
-    if (!u.special || u.special.day !== day) u.special = { day, tries: 0, wins: 0 };
-    u.special.tries++;
+    if (!u.special || u.special.day !== day || !Array.isArray(u.special.tries)) u.special = { day, tries: [0, 0, 0], wins: [0, 0, 0] };
+    u.special.tries[slot]++;
     const run = {
-      id: crypto.randomUUID(), address: u.address, kind: 'special', recipe: R.id, day, di: R.base[0], bet: fee, prize,
+      id: crypto.randomUUID(), address: u.address, kind: 'special', slot, recipe: s.recipe.id, grade: s.g, rings: s.n, chance: s.chance,
+      day, di: SP.GRADES[s.g][0], bet: fee, prize: s.prize,
       serverSeed: crypto.randomBytes(32).toString('hex'), clientSeed, nonce: u.nonce++,
       level: 1, total: 1, status: 'playing', levels: [], createdAt: Date.now(), levelStartedAt: Date.now(), updatedAt: Date.now()
     };
     db.runs[run.id] = run; save();
     return {
       runId: run.id, serverSeedHash: sha256Hex(run.serverSeed), nonce: run.nonce, seed: levelSeed(run, 'special'),
-      recipe: R.id, feeLamports: fee, prizeLamports: prize, missions: { paid, view: missionView(u) }, special: specialView(u), ...publicMe(u)
+      slot, recipe: s.recipe.id, grade: s.g, rings: s.n, chance: s.chance, feeLamports: fee, prizeLamports: s.prize,
+      missions: { paid, view: missionView(u) }, special: specialView(u), ...publicMe(u)
     };
   });
 }));
@@ -543,8 +560,8 @@ app.post('/api/special/finish', wrap(async (req) => {
     const run = db.runs[runId];
     if (!run || run.address !== u.address || run.kind !== 'special') throw new HttpError(404, 'Run not found');
     if (run.status !== 'playing') throw bad('This attempt is already over');
-    if (!E.validTaps(taps)) throw bad('Invalid tap data');
-    const def = SP.generate(levelSeed(run, 'special'), run.recipe);
+    const def = SP.generate(levelSeed(run, 'special'), run.recipe, run.grade, run.rings);
+    if (!E.validTaps(taps, def.maxTicks)) throw bad('Invalid tap data');
     const r = E.replay(def, taps);
     const gameMs = r.ticks * E.DT * 1000, elapsed = Date.now() - run.levelStartedAt;
     if (elapsed < gameMs * CFG.minRealtime - 250) {
@@ -553,13 +570,14 @@ app.post('/api/special/finish', wrap(async (req) => {
     }
     const won = r.result === 'clear';
     u.hoops += r.outcomes.length; u.swishes += r.outcomes.filter((o) => o === 'S').length;
+    u.skill = SP.addSpecial(u.skill, run.slot, won, r.outcomes.length); // that special's level moves: up after a clear, down after a miss
     run.levels.push({ level: 1, taps: taps.length, outcomes: r.outcomes.join(''), result: r.result, ticks: r.ticks });
     run.total = won ? run.prize / run.bet : 0;
     const status = won ? 'won' : 'lost';
     run.status = status; run.endedAt = Date.now();
     const payout = won ? run.prize : 0;
     run.payout = payout; u.balance += payout; u.returned += payout; u.runs++;
-    if (won && u.special && u.special.day === run.day) u.special.wins++;
+    if (won && u.special && u.special.day === run.day && Array.isArray(u.special.wins)) u.special.wins[run.slot]++;
     if (!u.flagged && u.runs >= CFG.sharpMinRuns && u.wagered > 0 && u.returned / u.wagered > CFG.sharpRtp) u.flagged = { reason: 'high return', at: Date.now() };
     if (!u.flagged && u.hoops >= 120 && u.swishes / u.hoops > 0.97) u.flagged = { reason: 'superhuman swish rate', at: Date.now() };
     save();
@@ -573,7 +591,7 @@ app.get('/api/run/:id', wrap(async (req) => {
   if (!run) throw new HttpError(404, 'Run not found');
   const done = !(run.status === 'playing' || run.status === 'checkpoint');
   return {
-    id: run.id, kind: run.kind || 'run', recipe: run.recipe, difficulty: run.di, betLamports: run.bet, status: run.status, total: run.total, payoutLamports: run.payout || 0,
+    id: run.id, kind: run.kind || 'run', recipe: run.recipe, grade: run.grade, rings: run.rings, difficulty: run.di, betLamports: run.bet, status: run.status, total: run.total, payoutLamports: run.payout || 0,
     serverSeedHash: sha256Hex(run.serverSeed), serverSeed: done ? run.serverSeed : undefined, clientSeed: run.clientSeed, nonce: run.nonce, levels: run.levels
   };
 }));

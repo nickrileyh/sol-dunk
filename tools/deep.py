@@ -10,7 +10,7 @@ async def main():
         errs = []
         page.on('pageerror', lambda e: errs.append(str(e)))
         await page.goto(URL); await page.wait_for_timeout(1500)
-        await page.evaluate("document.querySelector('#diff2').click()")
+        await page.evaluate("document.querySelector('#diff1').click()")
         await page.click('#playBtn'); await page.wait_for_timeout(800)
         await page.evaluate("__solDunk.autoplay('perfect'); __solDunk.tap()")
         shot = 0

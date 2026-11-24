@@ -7,7 +7,7 @@
  * SOL. A window's SOL rewards pay once the player has played NEED in that window (bets on runs plus special level
  * entries), at once if that's already true when a mission is done, or the moment it becomes true. Rewards not
  * collected when the window ends are gone. The rewards in a window add up to RATE of its NEED, and RATE is half the
- * house's smallest edge against a good player (1%: All-Star and Legend paid back 99% at checkpoint 1), counting days
+ * house's smallest edge against a good player (1%: Hard pays a good player back 99% at checkpoint 1), counting days
  * and weeks together. So a good player who plays just enough to collect everything still loses on average, and the
  * house keeps its edge however the player bets. Amounts are in whatever unit NEED is in (SOL here, lamports on the
  * server).

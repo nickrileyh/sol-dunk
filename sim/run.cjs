@@ -9,7 +9,7 @@ const path = require('path');
 
 if (isMainThread) {
   const scale = +(process.argv[2] || 1);
-  const tiers = (process.argv[3] || '0,1,2,3').split(',').map(Number);
+  const tiers = (process.argv[3] || require('../src/engine.cjs').DIFFS.map((d, i) => i).join(',')).split(',').map(Number);
   const merge = process.argv[4] === 'merge';
   const sizes = { average: 24000, average_val: 8000, novice: 6000, casual: 6000, good: 6000, pro: 6000, perfect: 2000 };
   const tasks = [];

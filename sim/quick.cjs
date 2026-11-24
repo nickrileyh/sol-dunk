@@ -2,7 +2,7 @@
 const { batch, summarize } = require('./simcore.cjs');
 const n = +(process.argv[2] || 400);
 const skills = (process.argv[3] || 'perfect,pro,good,average,casual,novice').split(',');
-const diffs = (process.argv[4] || '0,1,2,3').split(',').map(Number);
+const diffs = (process.argv[4] || require('../src/engine.cjs').DIFFS.map((d, i) => i).join(',')).split(',').map(Number);
 const t0 = Date.now();
 for (const di of diffs) {
   console.log('\n== difficulty', di);

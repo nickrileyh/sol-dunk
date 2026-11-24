@@ -172,7 +172,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 
 
 /* difficulty tiers: an iOS segmented control, names only (the foot line says what the tier can win) */
-.tiers, .seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; padding: 2px; border-radius: 9px; background: var(--surface-2); }
+.tiers, .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; padding: 2px; border-radius: 9px; background: var(--surface-2); }
 .tiers button, .seg button {
   position: relative; display: flex; align-items: center; justify-content: center;
   height: 32px; padding: 0 2px; border-radius: 7px;
@@ -378,7 +378,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 #callout.gold .c1 { color: var(--gold); }
 #callout.green .c1 { color: var(--green); }
 
-/* ---------- the Challenges tab: the special level and the daily pot, each on its own page ---------- */
+/* ---------- the Challenges tab: cards for today's specials and the daily pot, each opening its page ---------- */
 .cc { margin-top: 12px; border-radius: 12px; background: var(--surface); overflow: hidden; }
 .vtitle + .cc { margin-top: 16px; }
 .cc-open { display: grid; grid-template-columns: minmax(0, 1fr) 14px; column-gap: 10px; width: 100%; padding: 13px 14px 0 16px; text-align: left; }
@@ -397,6 +397,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .pill[disabled] { opacity: 0.5; }
 .pill.in, .pill.ok, .pill.off { font-weight: 600; color: var(--label-2); }
 .pill.ok { color: var(--green); }
+/* today's specials: one card, a row for each with its twist and length, its prize and Play; a row opens its page */
+.cc-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 13px 14px 4px 16px; }
+.cc-t { font-size: 13px; color: var(--label-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.spr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; margin-left: 16px; padding: 10px 14px 11px 0; }
+.spr + .spr { box-shadow: inset 0 0.5px 0 var(--sep); }
+.spr-open { min-width: 0; padding: 2px 0; text-align: left; }
+.spr-open b { display: block; font-family: var(--font-title); font-size: 18px; font-weight: 700; line-height: 1.2; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spr-open span { display: block; margin-top: 2px; font-size: 13px; color: var(--label-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spr-act { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.spr-win { font-size: 13px; color: var(--label-2); white-space: nowrap; }
+.spr-win b { font-weight: 600; color: var(--gold); font-variant-numeric: tabular-nums; }
 .sp-card { border-radius: 12px; background: var(--surface); overflow: hidden; }
 .sp-head { padding: 14px 16px 4px; }
 .sp-k { font-size: 13px; color: var(--label-2); }
@@ -508,7 +519,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .item .lock { position: absolute; top: 7px; right: 7px; width: 12px; height: 12px; color: var(--label-3); }
 .item .new { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 4px; background: var(--red); }
 .reset-note { margin: 8px 4px 0; font-size: 12px; color: var(--label-3); }
-.bests { display: grid; grid-template-columns: repeat(4, 1fr); padding: 11px 0 10px; border-radius: 12px; background: var(--surface); }
+.bests { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 11px 0 10px; border-radius: 12px; background: var(--surface); }
 .bests div { padding: 0 4px; text-align: center; }
 .bests div + div { box-shadow: inset 0.5px 0 0 var(--line); }
 .bests b { display: block; font-family: var(--font-round); font-size: 20px; font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }
@@ -991,7 +1002,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 13; // v13: rings spread out 1:1 with v12's faster ball (v11 came from two chats at once; v12 was both)
+  const VERSION = 14; // v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -1026,7 +1037,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 
   const HOOPS_PER_LEVEL = 6;
   const LEVELS = 8;
-  const MAX_TICKS = TICK_HZ * 45;   // a level can never take longer than this
+  const MAX_TICKS = TICK_HZ * 45;   // a level can never take longer than this (a special course sets its own, level.maxTicks)
   const Y_MIN = 220, Y_MAX = 500;   // rim centre band; v11: was 540, so even a bobbing ring's lowest point stays 152 above the floor
   const FIRST_HOOP_X = 300; // v13: 250 before; it grows with the speed like the spacing
   const START_Y = 300;
@@ -1037,19 +1048,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   // time between rims as on v10. Speed grows 4% per level and the rings spread out with it (spacing and the first
   // ring's distance grow 4% too), so every level gives the same time between rims. Deeper levels get harder through
   // tighter, moving and tilted rims and bigger height changes, not through less time to react.
+  // v14: two modes (the owner asked for only an easy and a hard mode). Easy is v13's Pro (the classic feel: static
+  // rings on level 1, moving ones from level 2, tilts from level 4) and Hard is v13's Legend (faster, tighter, moving
+  // from level 1 and tilted from level 2, up to 1000x). Rookie and All-Star are gone.
   const DIFFS = [
     {
-      id: 'rookie', name: 'Rookie', blurb: 'Wide rings, gentle pace',
-      speed: 166, spacing: 277, maxWin: 50,
-      hoopW:   [92, 91, 90, 89, 88, 87, 86, 85],   // v13: 1 narrower, so level 1 keeps the house edge with more time between rims
-      dy:      [115, 122, 129, 136, 143, 150, 157, 164],
-      moveP:   [0.45, 0.47, 0.5, 0.53, 0.57, 0.62, 0.7, 0.8],   // a few rings bob gently from level 1 (v13: a few more early on)
-      moveAmp: [26, 27, 29, 31, 34, 38, 42, 46],
-      tiltP:   [0, 0, 0, 0, 0.2, 0.3, 0.4, 0.5],
-      tiltMax: [0, 0, 0, 0, 8, 9, 10, 11]
-    },
-    {
-      id: 'pro', name: 'Pro', blurb: 'The classic feel',
+      id: 'easy', name: 'Easy', blurb: 'Wide rings, steady pace',
       speed: 178, spacing: 281, maxWin: 100,
       hoopW:   [91, 90, 89, 88, 87, 86, 85, 84],
       dy:      [120, 128, 136, 144, 152, 160, 168, 176],
@@ -1059,17 +1063,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       tiltMax: [0, 0, 0, 8, 10, 11, 12, 13]
     },
     {
-      id: 'allstar', name: 'All-Star', blurb: 'Moving rings',
-      speed: 192, spacing: 286, maxWin: 250,
-      hoopW:   [87, 85, 83, 82, 81, 80, 79, 78],
-      dy:      [140, 152, 164, 174, 182, 190, 198, 206],
-      moveP:   [0, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
-      moveAmp: [0, 35, 40, 45, 50, 55, 60, 64],
-      tiltP:   [0, 0, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7],
-      tiltMax: [0, 0, 8, 10, 11, 12, 13, 14]
-    },
-    {
-      id: 'legend', name: 'Legend', blurb: 'Fast and tilted',
+      id: 'hard', name: 'Hard', blurb: 'Fast, moving and tilted',
       speed: 204, spacing: 290, maxWin: 1000,
       hoopW:   [85, 83, 81, 80, 79, 78, 77, 76],
       dy:      [150, 162, 174, 184, 192, 200, 208, 216],
@@ -1213,7 +1207,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     return {
       level, hoops: hs, speed: level.speed,
       ball: { x: 0, y: level.startY, vx: level.speed, vy: 0 },
-      tick: 0, next: 0, prevLy: NaN, contact: false, knockTick: -100000,
+      tick: 0, next: 0, prevLy: NaN, contact: false, knockTick: -100000, maxTicks: level.maxTicks || MAX_TICKS,
       done: false, result: null, missKind: null,
       outcomes: [], flaps: 0, rimHits: 0, impact: 0, ev: 0
     };
@@ -1311,18 +1305,20 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const h = st.hoops[st.next];
     if (h) ev |= hoopInteract(st, h, t);
     if (!st.done && b.y > WORLD.FLOOR - P.R) { st.done = true; st.result = 'floor'; ev |= EV.FLOOR; }
-    if (!st.done && st.tick >= MAX_TICKS) { st.done = true; st.result = 'miss'; st.missKind = 'timeout'; ev |= EV.MISS; }
+    if (!st.done && st.tick >= st.maxTicks) { st.done = true; st.result = 'miss'; st.missKind = 'timeout'; ev |= EV.MISS; }
     st.ev = ev;
     return ev;
   }
 
   // Validate a tap list: sorted, unique, integer ticks, first tap at 0.
-  function validTaps(taps) {
+  // a level's own time limit (a long special course has a longer one, level.maxTicks) or MAX_TICKS
+  function validTaps(taps, maxTicks) {
+    const top = maxTicks || MAX_TICKS;
     if (!Array.isArray(taps) || taps.length === 0 || taps.length > 4000) return false;
     if (taps[0] !== 0) return false;
     for (let i = 0; i < taps.length; i++) {
       const v = taps[i];
-      if (typeof v !== 'number' || v !== Math.floor(v) || v < 0 || v > MAX_TICKS) return false;
+      if (typeof v !== 'number' || v !== Math.floor(v) || v < 0 || v > top) return false;
       if (i > 0 && v <= taps[i - 1]) return false;
     }
     return true;
@@ -1385,7 +1381,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   if (typeof module === 'object' && module.exports) module.exports = P;
   else root.DunkPaytable = P;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
-  return {"PAYTABLE":[[{"rim":1.001,"swish":[1.001,1.002,1.002,1.002,1.003]},{"rim":1.003,"swish":[1.005,1.006,1.007,1.009,1.01]},{"rim":1.006,"swish":[1.011,1.014,1.016,1.018,1.021]},{"rim":1.006,"swish":[1.013,1.016,1.018,1.021,1.023]},{"rim":1.009,"swish":[1.019,1.022,1.026,1.03,1.034]},{"rim":1.015,"swish":[1.03,1.035,1.041,1.047,1.053]},{"rim":1.023,"swish":[1.047,1.056,1.066,1.075,1.085]},{"rim":1.038,"swish":[1.075,1.09,1.106,1.121,1.136]}],[{"rim":1,"swish":[1,1,1,1,1]},{"rim":1.004,"swish":[1.009,1.01,1.012,1.014,1.015]},{"rim":1.007,"swish":[1.014,1.017,1.02,1.023,1.026]},{"rim":1.012,"swish":[1.025,1.03,1.035,1.04,1.045]},{"rim":1.02,"swish":[1.041,1.049,1.057,1.065,1.073]},{"rim":1.035,"swish":[1.071,1.085,1.099,1.114,1.128]},{"rim":1.056,"swish":[1.111,1.133,1.156,1.178,1.2]},{"rim":1.087,"swish":[1.175,1.21,1.245,1.28,1.315]}],[{"rim":1.004,"swish":[1.007,1.008,1.01,1.011,1.013]},{"rim":1.008,"swish":[1.016,1.019,1.022,1.025,1.029]},{"rim":1.018,"swish":[1.035,1.042,1.049,1.056,1.063]},{"rim":1.028,"swish":[1.056,1.067,1.079,1.09,1.101]},{"rim":1.046,"swish":[1.093,1.112,1.13,1.149,1.167]},{"rim":1.077,"swish":[1.153,1.184,1.215,1.246,1.276]},{"rim":1.116,"swish":[1.233,1.28,1.326,1.373,1.419]},{"rim":1.174,"swish":[1.349,1.419,1.488,1.558,1.628]}],[{"rim":1.007,"swish":[1.015,1.018,1.021,1.024,1.027]},{"rim":1.015,"swish":[1.03,1.036,1.042,1.048,1.053]},{"rim":1.029,"swish":[1.058,1.069,1.081,1.093,1.104]},{"rim":1.046,"swish":[1.093,1.112,1.13,1.149,1.167]},{"rim":1.073,"swish":[1.147,1.176,1.206,1.235,1.265]},{"rim":1.119,"swish":[1.238,1.286,1.334,1.381,1.429]},{"rim":1.168,"swish":[1.337,1.404,1.472,1.539,1.606]},{"rim":1.222,"swish":[1.444,1.533,1.622,1.711,1.8]}]],"AVG_CLEAR":[[0.892,0.8709,0.8408,0.8068,0.7366,0.655,0.5521,0.4331],[0.8997,0.8445,0.7851,0.6855,0.5808,0.4515,0.3333,0.2186],[0.8385,0.7383,0.6354,0.5214,0.4044,0.2887,0.183,0.1116],[0.7699,0.6294,0.5232,0.4005,0.2864,0.1956,0.1182,0.0763]],"AVG_SWISH":[[0.6811,0.6476,0.6152,0.5818,0.5391,0.5003,0.4657,0.4265],[0.6456,0.6028,0.5644,0.516,0.4716,0.4353,0.3971,0.3586],[0.5463,0.4789,0.4258,0.3838,0.3474,0.3153,0.2871,0.2589],[0.5264,0.4534,0.4005,0.3613,0.3246,0.2852,0.2553,0.2308]],"AVG_RTP":[[0.8996,0.8095,0.7278,0.6307,0.5123,0.3894,0.2686,0.1637],[0.8997,0.7979,0.6767,0.5265,0.372,0.2321,0.1258,0.0562],[0.8705,0.6955,0.5206,0.3474,0.2069,0.11,0.0483,0.0186],[0.8292,0.6027,0.4085,0.2423,0.1247,0.0595,0.0231,0.0079]],"META":{"mode":"edge","guard":1,"guardFrom":2,"capGood":0.97,"capPro":null,"cap1Good":0.99,"cap1Pro":null,"target":0.9,"weights":{"rim":0.5,"swish":[1,1.2,1.4,1.6,1.8]},"generated":"2026-11-24","engine":13,"samples":24000}};
+  return {"PAYTABLE":[[{"rim":1,"swish":[1,1,1,1,1]},{"rim":1.004,"swish":[1.007,1.009,1.01,1.012,1.013]},{"rim":1.006,"swish":[1.013,1.016,1.018,1.021,1.023]},{"rim":1.012,"swish":[1.025,1.03,1.035,1.04,1.045]},{"rim":1.02,"swish":[1.041,1.049,1.057,1.066,1.074]},{"rim":1.036,"swish":[1.072,1.087,1.101,1.116,1.13]},{"rim":1.057,"swish":[1.115,1.138,1.161,1.184,1.207]},{"rim":1.093,"swish":[1.187,1.224,1.262,1.299,1.336]}],[{"rim":1.007,"swish":[1.014,1.017,1.02,1.023,1.025]},{"rim":1.015,"swish":[1.031,1.037,1.043,1.05,1.056]},{"rim":1.028,"swish":[1.056,1.068,1.079,1.09,1.102]},{"rim":1.047,"swish":[1.093,1.112,1.131,1.149,1.168]},{"rim":1.077,"swish":[1.153,1.184,1.215,1.245,1.276]},{"rim":1.116,"swish":[1.233,1.28,1.326,1.373,1.419]},{"rim":1.175,"swish":[1.351,1.421,1.491,1.561,1.632]},{"rim":1.227,"swish":[1.453,1.544,1.635,1.725,1.816]}]],"AVG_CLEAR":[[0.9001,0.8464,0.787,0.6898,0.5763,0.456,0.3291,0.2218],[0.7675,0.6293,0.5188,0.4051,0.2842,0.1882,0.1177,0.0767]],"AVG_SWISH":[[0.6436,0.6014,0.5658,0.5161,0.4727,0.4319,0.3979,0.3564],[0.5304,0.4556,0.4015,0.3607,0.3237,0.2896,0.2591,0.2298]],"AVG_RTP":[[0.9001,0.7949,0.671,0.5254,0.3685,0.2335,0.1266,0.0598],[0.8242,0.601,0.401,0.2415,0.1267,0.0572,0.0233,0.0082]],"META":{"mode":"edge","guard":1,"guardFrom":2,"capGood":0.97,"capPro":null,"cap1Good":0.99,"cap1Pro":null,"target":0.9,"weights":{"rim":0.5,"swish":[1,1.2,1.4,1.6,1.8]},"generated":"2026-11-24","engine":14,"samples":24000}};
 });
 </script>
 <script>/*
@@ -1589,33 +1585,41 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   // ring points, the same as the score in the game: a rim hit 1, a swish 1 + streak (up to 6), a perfect level +10
   const ringPoints = (o, streak) => (o === 'S' ? 1 + Math.min(streak, 5) : 1);
 
-  // The challenges. tier = the easiest tier where it counts (0 Rookie, 1 Pro, 2 All-Star, 3 Legend).
+  // The challenges. tier = the easiest mode where it counts (0 Easy, 1 Hard; engine v14 has just the two).
   // p = the chance one run makes it at that tier for a [casual, average, good] player, from the simulator
   // (they keep going until they bust); the demo uses it to simulate other entrants. Aim: an average player
   // makes one in about 4-15% of runs, a strong one in 25-50%. Measured on engine v13 (20,000 runs per skill):
   // with the rings spread out 1:1 with the speed, swishes got rarer (an average player swishes 65% of Pro's
   // level-1 rings, down from 71%), so the streak, swish and score challenges came down and "Swish every ring in
   // a level" moved to Pro. Each replaced its v12 challenge in place, so every day keeps the same kind of challenge.
+  // Engine v14 has two modes, Easy (v13's Pro rings) and Hard (v13's Legend rings); every challenge was measured
+  // again (node sim/pots.cjs, 3000 runs per skill). Hard's three drifted below the aim on Legend's rings and were
+  // replaced in place by easier ones (Clear level 4, Swish 12 rings, Swish 5 in a row), and Score 120 by Clear
+  // level 6 on Easy.
   const GOALS = [
-    { id: 'streak8', kind: 'best', n: 8, tier: 1, text: 'Swish 8 in a row', p: [0.019, 0.076, 0.336] },
-    { id: 'perfect1', kind: 'perfect', n: 1, tier: 1, text: 'Swish every ring in a level', p: [0.038, 0.116, 0.408] },
-    { id: 'clear5', kind: 'clears', n: 5, tier: 2, text: 'Clear level 5', p: [0.017, 0.082, 0.345] },
-    { id: 'score90', kind: 'score', n: 90, tier: 1, text: 'Score 90 in one run', p: [0.005, 0.06, 0.48] },
-    { id: 'swish15', kind: 'swishes', n: 15, tier: 2, text: 'Swish 15 rings in one run', p: [0.006, 0.061, 0.433] },
-    { id: 'streak6', kind: 'best', n: 6, tier: 2, text: 'Swish 6 in a row', p: [0.027, 0.075, 0.267] },
-    { id: 'score120', kind: 'score', n: 120, tier: 0, text: 'Score 120 in one run', p: [0.002, 0.039, 0.465] }
+    { id: 'streak8', kind: 'best', n: 8, tier: 0, text: 'Swish 8 in a row', p: [0.022, 0.078, 0.327] },
+    { id: 'perfect1', kind: 'perfect', n: 1, tier: 0, text: 'Swish every ring in a level', p: [0.039, 0.124, 0.396] },
+    { id: 'clear4', kind: 'clears', n: 4, tier: 1, text: 'Clear level 4', p: [0.024, 0.102, 0.37] },
+    { id: 'score90', kind: 'score', n: 90, tier: 0, text: 'Score 90 in one run', p: [0.005, 0.059, 0.468] },
+    { id: 'swish12', kind: 'swishes', n: 12, tier: 1, text: 'Swish 12 rings in one run', p: [0.008, 0.069, 0.423] },
+    { id: 'streak5', kind: 'best', n: 5, tier: 1, text: 'Swish 5 in a row', p: [0.044, 0.12, 0.357] },
+    { id: 'clear6', kind: 'clears', n: 6, tier: 0, text: 'Clear level 6', p: [0.023, 0.112, 0.387] }
   ];
-  // challenges taken out of the rotation (engine v13): no new pot gets one, but a pot that opened with one before
-  // an update is still shown and judged by it until it closes
+  // challenges taken out of the rotation (engine v13 and v14): no new pot gets one, but a pot that opened with one
+  // before an update is still shown and judged by it until it closes
   const RETIRED = [
-    { id: 'streak10', kind: 'best', n: 10, tier: 1, text: 'Swish 10 in a row' },
-    { id: 'score100', kind: 'score', n: 100, tier: 1, text: 'Score 100 in one run' },
-    { id: 'swish25', kind: 'swishes', n: 25, tier: 1, text: 'Swish 25 rings in one run' },
-    { id: 'streak8a', kind: 'best', n: 8, tier: 2, text: 'Swish 8 in a row' }
+    { id: 'clear5', kind: 'clears', n: 5, tier: 1, text: 'Clear level 5' },
+    { id: 'swish15', kind: 'swishes', n: 15, tier: 1, text: 'Swish 15 rings in one run' },
+    { id: 'streak6', kind: 'best', n: 6, tier: 1, text: 'Swish 6 in a row' },
+    { id: 'score120', kind: 'score', n: 120, tier: 0, text: 'Score 120 in one run' },
+    { id: 'streak10', kind: 'best', n: 10, tier: 0, text: 'Swish 10 in a row' },
+    { id: 'score100', kind: 'score', n: 100, tier: 0, text: 'Score 100 in one run' },
+    { id: 'swish25', kind: 'swishes', n: 25, tier: 0, text: 'Swish 25 rings in one run' },
+    { id: 'streak8a', kind: 'best', n: 8, tier: 1, text: 'Swish 8 in a row' }
   ];
   const GOAL_BY = Object.fromEntries(RETIRED.concat(GOALS).map((g) => [g.id, g]));
-  const TIER_NAMES = ['Rookie', 'Pro', 'All-Star', 'Legend'];
-  const tierText = (t) => (t >= 3 ? 'on Legend' : t > 0 ? 'on ' + TIER_NAMES[t] + ' or harder' : 'on any tier');
+  const TIER_NAMES = ['Easy', 'Hard'];
+  const tierText = (t) => (t >= 1 ? 'on Hard' : 'in either mode');
 
   // a small seeded generator (the same mulberry32 the engine uses), so every pot's challenge is fixed by its day
   function rng(seedStr) {
@@ -1697,7 +1701,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
  * SOL. A window's SOL rewards pay once the player has played NEED in that window (bets on runs plus special level
  * entries), at once if that's already true when a mission is done, or the moment it becomes true. Rewards not
  * collected when the window ends are gone. The rewards in a window add up to RATE of its NEED, and RATE is half the
- * house's smallest edge against a good player (1%: All-Star and Legend paid back 99% at checkpoint 1), counting days
+ * house's smallest edge against a good player (1%: Hard pays a good player back 99% at checkpoint 1), counting days
  * and weeks together. So a good player who plays just enough to collect everything still loses on average, and the
  * house keeps its edge however the player bets. Amounts are in whatever unit NEED is in (SOL here, lamports on the
  * server).
@@ -1832,18 +1836,30 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   return { DAY_MS, WEEK_MS, NEED, SHARE, RATE, DAILY, WEEKLY, DAILY_BY, WEEKLY_BY, dayKey, dayEnd, weekKey, weekEnd, daily, weekly, reward, facts, roll, collect, play, run, view };
 });
 </script>
-<script>/* SOL DUNK special level: shared by the browser, the server and the simulator.
+<script>/* SOL DUNK special levels: shared by the browser, the server and the simulator.
  *
- * One special a day (UTC), the same for everyone: a long level with a twist, such as every ring moving or every rim
- * leaning. Each attempt gets a fresh layout from its own provably fair seed, so nobody can learn a course by heart.
- * The player pays a fixed entry; clearing every ring pays a fixed prize. Missing any ring loses the entry.
+ * Three a day (UTC), the same three twists for everyone that day (every ring moving, every rim leaning, ...), with
+ * prizes of 2x, 3x and 5x the entry. Each attempt is a fresh course from its own provably fair seed; the player pays
+ * the entry and wins the prize for clearing every ring.
  *
- * Prizes come from the simulator (node sim/special.cjs): a good player gets back at most 97% of their entries on
- * average, an average one far less. Strong players (the simulator's "pro") can come out ahead, as on deep levels of
- * the regular tables; the server keeps accounts it limits for beating the house out of specials.
+ * Every course is set for the player (the owner asked for this): the house expects a 10% edge on everyone, from
+ * beginners to pros, instead of a fixed course that a pro clears most of the time and a beginner hardly ever. A course
+ * is built on a grade (the ring settings of a regular level, from Easy level 1 up to Hard level 8) and is 6 to 24
+ * rings long; the course set for a level d is the one a player of skill d (on the simulator's scale below) clears with
+ * a chance of TARGET / prize, as close as whole rings allow, with the length near 12.
  *
- * The special is one level made like the engine's (same physics, ring band and climb budget), with more rings and its
- * own settings; the last ring is the finish. engine.createState / step / replay play it like any other level.
+ * Levels move like a weighted staircase, one per special for each player: clear a course and that special's level
+ * goes up by UP, miss and it comes down by DOWN, with UP / DOWN = (1 - p) / p for p = TARGET / prize. A level only
+ * stops moving where the player clears p of their attempts, so over time every player gets back TARGET (90%) of their
+ * entries, however good they are and however they play: missing on purpose lowers the level only by DOWN per entry
+ * lost, and clears push it back up by UP. The simulator's scale (skill 0 novice, 1 casual, 2 average, 3 good, 4 pro,
+ * and a step past both ends) only has to put courses in order of difficulty; the staircase does the rest.
+ *
+ * Where a level starts: START for someone new, or higher if they've already shown more, from the rings they've played
+ * in regular runs (a rating over the scale, from the simulator's per-ring miss rates) or from their levels in the
+ * other specials. A strong player who hasn't shown it yet wins more than 90% while their level climbs, a weak one less
+ * while it comes down; after that it's 90% for both. The simulator's best bot ("perfect") is past the top of the
+ * scale and keeps winning, so accounts the server flags for beating the house can't enter.
  */
 (function (root, factory) {
   const S = factory(root.DunkEngine || (typeof require === 'function' ? require('./engine.cjs') : null));
@@ -1858,48 +1874,127 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   // the same as in the engine's generateLevel: where the ball starts, and how much climbing a gap can ask for
   const START_Y = 300, CLIMB_RATE = 350, DROP_TIME = 0.45, CLIMB_MARGIN = 40;
 
-  // The recipes. base = [tier, level] whose pace, spacing, ring width and height changes it starts from; n = rings;
-  // set = settings that replace the base's (as in engine levelConfig); narrow = ring width taken off (units);
-  // shape = how ring heights are chosen ('walk' like a normal level, 'zigzag' high-low, 'wave' a rolling line);
-  // lean = 'alt' tilts alternate left and right.
+  const SLOTS = [2, 3, 5];   // the day's three specials: prize as a multiple of the entry
+  const TARGET = 0.9;        // a player's expected return on any course: the house expects 10%
+  const N_MIN = 6, N_MAX = 24, N_IDEAL = 12;
+  // grades: the ring settings a course is built on, as [tier, level] of the regular game, easiest first
+  const GRADES = [[0, 1], [0, 3], [0, 5], [1, 3], [1, 4], [1, 5], [1, 6], [1, 8]];
+
+  // The twists, applied to the grade's settings (engine levelConfig). shape: how ring heights are chosen ('walk' like a
+  // normal level, 'zigzag' high-low, 'wave' a rolling line); lean 'alt': tilts alternate left and right.
   const RECIPES = [
-    { id: 'gauntlet', name: 'The gauntlet', blurb: 'Every ring moves', n: 14, base: [2, 5], set: { moveP: 1, moveAmp: 46 } },
-    { id: 'tilt', name: 'Tilt alley', blurb: 'Every rim leans, left then right', n: 16, base: [3, 4], set: { tiltP: 1, tiltMax: 14, moveP: 0.3 }, lean: 'alt' },
-    { id: 'zigzag', name: 'Zigzag', blurb: 'High ring, low ring, all the way', n: 15, base: [3, 4], set: { moveP: 0.4 }, shape: 'zigzag' },
-    { id: 'needle', name: 'Needle', blurb: 'Tight rims, nothing moves', n: 18, base: [3, 5], set: { moveP: 0, tiltP: 0 }, narrow: 14 },
-    { id: 'marathon', name: 'Marathon', blurb: 'Eighteen rings without a miss', n: 18, base: [1, 6] },
-    { id: 'wave', name: 'The wave', blurb: 'Rings ride a rolling line', n: 17, base: [3, 4], set: { moveP: 0.8, moveAmp: 44 }, shape: 'wave' },
-    { id: 'express', name: 'Express', blurb: 'A quicker ball, rings spread to match', n: 14, base: [2, 4], fast: 1.25 }
+    { id: 'gauntlet', name: 'The gauntlet', blurb: 'Every ring moves', t: { moveP: 1, moveAmpMin: 34 } },
+    { id: 'tilt', name: 'Tilt alley', blurb: 'Every rim leans, left then right', t: { tiltP: 1, tiltMaxMin: 11, moveScale: 0.5 }, lean: 'alt' },
+    { id: 'zigzag', name: 'Zigzag', blurb: 'High ring, low ring, all the way', t: { moveScale: 0.5 }, shape: 'zigzag' },
+    { id: 'needle', name: 'Needle', blurb: 'Tight rims, nothing moves', t: { moveP: 0, tiltP: 0, narrow: 10 } },
+    { id: 'wave', name: 'The wave', blurb: 'Rings ride a rolling line', t: { movePMin: 0.6, moveAmpMin: 32 }, shape: 'wave' },
+    { id: 'express', name: 'Express', blurb: 'A quicker ball, rings spread to match', t: { fast: 1.25 } }
   ];
   const BY = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
 
-  // @@PRIZES@@ written by node sim/special.cjs --write: prize (× entry) per recipe, and the share of attempts that
-  // clear it for [casual, average, good, pro] players. Don't edit by hand.
-  const PRIZES = {
-    gauntlet: { x: 3, p: [0.0272, 0.0975, 0.3151, 0.6357] },
-    tilt: { x: 3.15, p: [0.0179, 0.0726, 0.298, 0.6493] },
-    zigzag: { x: 2.1, p: [0.0676, 0.1758, 0.4471, 0.7323] },
-    needle: { x: 2.6, p: [0.0327, 0.1152, 0.3629, 0.7105] },
-    marathon: { x: 2.75, p: [0.0276, 0.0973, 0.3398, 0.66] },
-    wave: { x: 3, p: [0.0187, 0.0848, 0.3159, 0.6475] },
-    express: { x: 3.3, p: [0.0259, 0.085, 0.2866, 0.6028] }
-  }; // engine v13, 20000 attempts each, 2026-11-24
+  // the skill scale, the regular-run rating and the staircase
+  const ANCHORS = ['novice', 'casual', 'average', 'good', 'pro'];
+  const LEVEL_NAMES = ['Novice', 'Casual', 'Average', 'Good', 'Pro', 'Elite'];  // what a level reads as (Elite: past pro)
+  const D_MIN = -1, D_MAX = 5;                                                // the scale runs a step past the bots
+  const GRID = Array.from({ length: 61 }, (_, i) => Math.round(i - 10) / 10);  // -1, -0.9, ... 5, for the rating
+  const PRIOR_MU = 1.8, PRIOR_SD = 0.9;   // someone new: most likely between casual and average
+  const START = 1.8;                      // where a level starts for someone who hasn't shown more
+  const DOWN = 0.3;                       // a miss lowers that special's level by this much; a clear raises it by up(x)
+  const SLOT_MARGIN = 0.5;                // a new special starts at most this far below the player's level in another
+
+  // @@TABLES@@ written by node sim/special.cjs --write, for each bot on the ANCHORS. Don't edit by hand.
+  // reg[tier][level - 1] = ln(per-ring miss rate) per anchor; sp[recipe][grade] = [a, b, c] per anchor, with
+  // ln(chance of clearing a course of n rings) = a + b * n + c * n * n, fitted from N_MIN to N_MAX rings.
+  const TABLES = {
+    reg: [
+      [[-2.553, -3.2121, -4.0529, -5.511, -7.3992], [-2.293, -2.8733, -3.5982, -4.6669, -5.8904], [-2.0847, -2.5893, -3.241, -4.2689, -5.2856], [-1.825, -2.3047, -2.8104, -3.7038, -4.8094], [-1.5738, -1.959, -2.4324, -3.2966, -4.3155], [-1.3319, -1.6953, -2.0947, -2.8034, -3.7502], [-1.1502, -1.4359, -1.7747, -2.4278, -3.2826], [-0.9567, -1.1893, -1.5031, -2.0386, -2.8643]],
+      [[-2.0678, -2.546, -3.138, -4.1925, -5.4499], [-1.694, -2.103, -2.5937, -3.4651, -4.6242], [-1.4874, -1.8007, -2.2597, -3.0776, -4.1855], [-1.2816, -1.5802, -1.9619, -2.6561, -3.6119], [-1.1104, -1.3366, -1.6583, -2.2435, -3.0696], [-0.9149, -1.1226, -1.4066, -1.9199, -2.6181], [-0.7776, -0.9616, -1.1936, -1.6112, -2.271], [-0.6812, -0.8393, -1.039, -1.4395, -1.9957]]
+    ],
+    sp: {
+      gauntlet: [
+        [[-0.0057, -0.13207, -0.000334], [0.0096, -0.08712, 0.000249], [0.0056, -0.04254, -0.000045], [0.0102, -0.02194, 0.000062], [0.0069, -0.01098, 0.000047]],
+        [[-0.0154, -0.16398, -0.000445], [0.0133, -0.10368, -0.000094], [0.0065, -0.0591, 0.000026], [0.0128, -0.02656, -0.000017], [0.0036, -0.01113, 0.000007]],
+        [[-0.0126, -0.27581, 0.000646], [-0.0136, -0.17121, -0.000631], [0.0068, -0.11482, 0.000025], [0.0166, -0.05125, -0.000043], [0.0054, -0.02135, 0.000002]],
+        [[-0.0503, -0.29456, -0.001791], [-0.0202, -0.20715, -0.000036], [-0.0271, -0.13695, 0.000111], [-0.0168, -0.06339, 0.000103], [-0.0146, -0.02134, -0.00009]],
+        [[-0.0771, -0.35124, -0.004532], [-0.002, -0.27437, -0.000248], [-0.0372, -0.17088, -0.000567], [-0.0252, -0.08218, -0.000309], [-0.0097, -0.03397, -0.000029]],
+        [[-0.0397, -0.45961, -0.001302], [0.006, -0.34578, 0.002742], [-0.0085, -0.23494, -0.000156], [-0.0136, -0.12054, -0.000246], [0.002, -0.05474, 0.000047]],
+        [[-0.0466, -0.54247, 0.000029], [0.0044, -0.42505, 0.002354], [-0.0285, -0.29022, 0.001525], [-0.0203, -0.16717, 0.000613], [-0.0328, -0.07317, 0.000061]],
+        [[-0.0361, -0.67588, -0.005973], [0.0294, -0.5985, 0.007482], [-0.0227, -0.41364, -0.000368], [-0.0324, -0.25985, 0.000773], [-0.0463, -0.14107, 0.000083]]
+      ],
+      tilt: [
+        [[-0.0205, -0.15884, 0.001118], [-0.0205, -0.0757, -0.000522], [-0.0025, -0.0394, -0.000122], [0.0051, -0.01512, 0.000114], [0.0002, -0.00251, 0.000021]],
+        [[-0.0127, -0.20272, 0.000777], [-0.0122, -0.11624, -0.000105], [-0.003, -0.06485, -0.000089], [0.0004, -0.0228, -0.000055], [-0.0001, -0.00635, 0.000024]],
+        [[-0.0254, -0.27109, 0.001828], [-0.015, -0.15953, -0.000716], [-0.0083, -0.10064, -0.000144], [0.0006, -0.04644, 0.000161], [-0.0051, -0.01293, 0.00002]],
+        [[-0.0263, -0.30894, 0.001403], [-0.0291, -0.19747, 0.000594], [-0.0276, -0.1166, -0.000097], [-0.0249, -0.04465, -0.000181], [-0.0056, -0.01424, -0.000036]],
+        [[-0.0205, -0.33293, -0.001353], [-0.0212, -0.2146, -0.001285], [-0.0053, -0.15053, 0.000194], [-0.0227, -0.06292, -0.000142], [-0.0132, -0.02361, 0.000058]],
+        [[-0.0483, -0.35661, -0.003861], [0.0179, -0.30272, 0.001958], [-0.036, -0.17945, 0.000191], [-0.0082, -0.09135, -0.000065], [-0.0074, -0.03325, -0.000032]],
+        [[0.0169, -0.49629, 0.003416], [-0.0011, -0.34688, 0.001567], [-0.0299, -0.20579, -0.002546], [-0.003, -0.12559, 0.000151], [-0.0173, -0.04812, -0.000079]],
+        [[0.0528, -0.62618, 0.009313], [-0.032, -0.40401, -0.001663], [-0.0164, -0.30427, -0.001311], [-0.0067, -0.18325, 0.000386], [-0.0348, -0.08871, -0.000104]]
+      ],
+      zigzag: [
+        [[-0.0257, -0.07378, 0.000008], [-0.0142, -0.03387, 0.000026], [-0.0091, -0.01582, 0.000025], [0.0026, -0.00484, 0.000005], [-0.0002, -0.0004, -0.000019]],
+        [[-0.0414, -0.09133, -0.000533], [-0.0188, -0.05771, -0.000054], [-0.0116, -0.02677, -0.000085], [-0.0019, -0.0125, 0.000046], [-0.0046, -0.00388, -0.000047]],
+        [[-0.0424, -0.17088, 0.000047], [-0.0209, -0.10595, -0.000008], [-0.0363, -0.05958, -0.000002], [-0.0024, -0.02694, -0.000056], [-0.0041, -0.00953, -0.000028]],
+        [[0.078, -0.22931, 0.000048], [0.047, -0.13356, -0.00024], [0.0308, -0.08442, -0.000131], [0.0161, -0.03845, 0.000122], [0.0122, -0.01471, 0.000065]],
+        [[0.0597, -0.26616, -0.000606], [0.0537, -0.18379, 0.00037], [0.0497, -0.1217, 0.000389], [0.0101, -0.05034, -0.000078], [0.0073, -0.01919, -0.000041]],
+        [[-0.0058, -0.28735, -0.00632], [0.0387, -0.2304, 0.000903], [0.0229, -0.14456, -0.000571], [0.0209, -0.07298, -0.000052], [0.0201, -0.03375, 0.00015]],
+        [[0.0287, -0.40046, 0.001421], [0.0068, -0.26047, -0.000713], [0.0302, -0.2021, 0.000376], [0.0208, -0.09969, 0.000239], [0.0168, -0.04312, 0.000057]],
+        [[-0.0071, -0.53477, 0.007528], [0.0198, -0.40624, -0.000984], [0.0075, -0.29514, -0.000502], [0.0298, -0.18161, 0.000378], [0.0104, -0.08736, 0.000223]]
+      ],
+      needle: [
+        [[-0.0361, -0.10126, -0.000472], [0.0147, -0.06277, -0.000044], [0.0008, -0.03378, 0.000038], [0.0029, -0.01114, -0.000019], [0.0024, -0.00296, 0.00002]],
+        [[-0.0335, -0.13477, -0.00005], [-0.003, -0.07742, -0.00003], [-0.0007, -0.0439, -0.000028], [0.0095, -0.01767, 0.000133], [0.0012, -0.00399, 0.000018]],
+        [[-0.0428, -0.17366, 0.000661], [-0.0167, -0.1036, -0.000181], [-0.0064, -0.05455, -0.000133], [0.0038, -0.02263, 0.000018], [-0.0005, -0.0056, 0.000008]],
+        [[-0.004, -0.2088, -0.000038], [-0.0032, -0.13369, 0.000225], [-0.0189, -0.06733, -0.000394], [0.0059, -0.03262, 0.000068], [-0.0004, -0.00811, -0.000022]],
+        [[-0.0198, -0.2092, -0.001496], [0.0222, -0.14732, 0.00007], [0.0029, -0.08925, -0.000042], [-0.0001, -0.03839, -0.000013], [-0.0013, -0.0104, -0.000016]],
+        [[-0.0067, -0.23066, -0.001897], [0.0199, -0.16609, 0.000244], [-0.0037, -0.09639, -0.000382], [0.0037, -0.04322, -0.000144], [-0.0008, -0.01442, 0.000048]],
+        [[-0.0014, -0.26275, -0.000511], [0.0128, -0.17352, -0.000466], [-0.0015, -0.11398, -0.000014], [0.0018, -0.05852, 0.000159], [-0.0005, -0.01716, -0.000028]],
+        [[0.0441, -0.33426, 0.000689], [0.0406, -0.22279, -0.00025], [0.0245, -0.15473, -0.000067], [0.0035, -0.07711, -0.000121], [-0.004, -0.02935, -0.000057]]
+      ],
+      wave: [
+        [[-0.0098, -0.11661, -0.000098], [0.0063, -0.06442, 0.000067], [-0.0016, -0.03401, 0.000083], [0.0075, -0.01717, 0.0001], [0.0007, -0.00549, -0.000016]],
+        [[-0.0365, -0.13219, 0.000061], [-0.0051, -0.07721, -0.000249], [0.0072, -0.04807, 0.000051], [0.0016, -0.01752, -0.000023], [0.0003, -0.00629, -0.000005]],
+        [[-0.0085, -0.23834, 0.0005], [0.0034, -0.14694, -0.000143], [-0.0002, -0.08904, -0.00014], [0.0021, -0.03867, 0.000051], [0.003, -0.01581, 0.00006]],
+        [[0.0051, -0.24357, -0.001111], [0.0211, -0.16168, -0.000422], [0.0138, -0.1054, 0.000083], [0.0052, -0.04402, -0.000016], [-0.0019, -0.01316, -0.000028]],
+        [[0.023, -0.33305, 0.001407], [0.0072, -0.19847, -0.002154], [0.0127, -0.13757, -0.000517], [0.0142, -0.06604, -0.000102], [0.0033, -0.02377, -0.000054]],
+        [[0.0021, -0.36822, -0.004796], [0.0105, -0.27554, -0.002064], [0.0314, -0.20584, 0.00011], [-0.0015, -0.09781, -0.000124], [0.0053, -0.04259, 0.000024]],
+        [[0.0469, -0.53749, 0.004503], [0.0221, -0.35474, -0.000248], [0.0258, -0.25977, -0.000773], [0.0183, -0.14418, -0.000307], [0.0147, -0.06918, 0.000255]],
+        [[-0.0502, -0.64871, -0.001159], [-0.0023, -0.5062, -0.010477], [0.0445, -0.43389, 0.000928], [0.0224, -0.25952, 0.000346], [0.0045, -0.13553, -0.000189]]
+      ],
+      express: [
+        [[-0.0306, -0.12711, -0.000529], [0.0005, -0.07358, -0.000119], [0.005, -0.03756, -0.000034], [0.008, -0.01296, 0.000069], [0.0008, -0.00241, 0.000017]],
+        [[-0.0697, -0.18379, -0.002121], [-0.0038, -0.13418, 0.000221], [-0.0137, -0.07724, 0.000233], [0.0008, -0.03113, 0.000086], [0.0032, -0.01085, 0.00009]],
+        [[-0.0674, -0.34468, 0.001093], [0, -0.24411, 0.000966], [-0.0179, -0.15819, 0.000782], [-0.0166, -0.06503, -0.000259], [0.0004, -0.02843, -0.000021]],
+        [[0.0194, -0.37711, -0.000613], [0.0003, -0.26082, -0.000167], [0.0037, -0.17841, 0.000612], [0.0029, -0.08838, -0.000033], [-0.0119, -0.03754, 0.000144]],
+        [[-0.0769, -0.37871, -0.009008], [-0.0099, -0.30738, -0.000444], [-0.025, -0.21887, -0.000188], [-0.0138, -0.13015, -0.000129], [-0.0209, -0.05334, -0.000119]],
+        [[-0.033, -0.50779, -0.00717], [-0.0054, -0.41398, 0.003668], [0.0204, -0.31756, 0.00231], [-0.033, -0.16703, 0.00003], [-0.0315, -0.08406, 0.000114]],
+        [[-0.0922, -0.57507, -0.001702], [-0.0056, -0.49802, 0.003546], [-0.0325, -0.34764, -0.000531], [-0.0095, -0.2218, -0.000004], [-0.0394, -0.1115, 0.000063]],
+        [[0.0233, -0.87646, 0], [0.0496, -0.71457, 0.005092], [-0.0456, -0.50055, -0.003986], [-0.0368, -0.33029, -0.002178], [-0.0541, -0.20305, 0.000037]]
+      ]
+    }
+  }; // engine v14, 2000 attempts per cell, 2026-11-24
   // @@END@@
 
-  // the recipe's settings: the base level's, changed as the recipe says
-  function config(R) {
-    const C = E.levelConfig(R.base[0], R.base[1]);
-    if (R.set) Object.assign(C, R.set);
-    if (R.fast) { C.speed *= R.fast; C.spacing *= R.fast; C.firstX *= R.fast; } // faster, and the rings spread with it
-    if (R.narrow) C.hoopW -= R.narrow;
+  // ---------------------------------------------------------------- courses
+  function config(R, g) {
+    const [di, L] = GRADES[g], C = E.levelConfig(di, L), T = R.t || {};
+    if (T.moveScale != null) C.moveP *= T.moveScale;
+    if (T.movePMin != null) C.moveP = Math.max(C.moveP, T.movePMin);
+    if (T.moveP != null) C.moveP = T.moveP;
+    if (T.moveAmpMin != null) C.moveAmp = Math.max(C.moveAmp, T.moveAmpMin);
+    if (T.tiltP != null) C.tiltP = T.tiltP;
+    if (T.tiltMaxMin != null) C.tiltMax = Math.max(C.tiltMax, T.tiltMaxMin);
+    if (T.fast) { C.speed *= T.fast; C.spacing *= T.fast; C.firstX *= T.fast; } // faster, and the rings spread with it
+    if (T.narrow) C.hoopW -= T.narrow;
     return C;
   }
 
-  // One special level from a seed: the same shape of object as engine.generateLevel, with more rings.
-  function generate(seed, recipe) {
+  // One course from a seed: the same shape of object as engine.generateLevel. Ring i doesn't depend on n, so a
+  // course of n rings is the first n rings of a longer one (the simulator prices every length from one long run).
+  function generate(seed, recipe, g, n) {
     const R = typeof recipe === 'string' ? BY[recipe] : recipe;
-    const C = config(R), rng = E.makeRng('special|' + seed + '|' + R.id);
-    const hoops = [], n = R.n, mid = (E.Y_MIN + E.Y_MAX) / 2, half = (E.Y_MAX - E.Y_MIN) / 2;
+    const C = config(R, g), rng = E.makeRng('special|' + seed + '|' + R.id + '|' + g);
+    const hoops = [], mid = (E.Y_MIN + E.Y_MAX) / 2, half = (E.Y_MAX - E.Y_MIN) / 2;
     let x = C.firstX, prevY = START_Y;
     const wPhase = rng(), wLen = 5 + Math.floor(rng() * 3); // the wave's starting point and length (rings)
     for (let i = 0; i < n; i++) {
@@ -1929,10 +2024,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       hoops.push({ i, x, y0: y, w: C.hoopW, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 });
       prevY = y;
     }
-    return { seed: String(seed), di: R.base[0], L: 0, special: R.id, speed: C.speed, startY: START_Y, hoops, endX: x + C.spacing };
+    // the time limit grows with the course: a slow player needs up to about 2.4 s a ring (rim knocks hold the ball back)
+    return { seed: String(seed), di: GRADES[g][0], L: 0, special: R.id, grade: g, speed: C.speed, startY: START_Y, hoops, endX: x + C.spacing, maxTicks: E.TICK_HZ * Math.max(45, 20 + 3 * n) };
   }
 
-  // the day's special: every recipe once per cycle, in a shuffled order, no repeat two days running
+  // ---------------------------------------------------------------- the day's three
+  // Each twist comes up once every two days, in a shuffled order; the slots (2x, 3x, 5x) take them in turn.
   const dayKey = (ts) => new Date(ts).toISOString().slice(0, 10);
   const dayStart = (day) => Date.parse(String(day).slice(0, 10) + 'T00:00:00Z');
   const closesAt = (day) => dayStart(day) + DAY_MS;
@@ -1942,15 +2039,112 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
     return a;
   }
-  function recipeFor(day) {
-    const L = RECIPES.length, k = Math.floor((dayStart(day) - EPOCH) / DAY_MS);
-    const cycle = Math.floor(k / L), pos = ((k % L) + L) % L, a = order(cycle);
-    if (a[0] === order(cycle - 1)[L - 1]) { const t = a[0]; a[0] = a[1]; a[1] = t; }
-    return a[pos];
+  function specialsFor(day) {
+    const k = Math.floor((dayStart(day) - EPOCH) / DAY_MS), half = Math.floor(RECIPES.length / 2);
+    const a = order(Math.floor(k / 2)), from = ((k % 2) + 2) % 2 ? half : 0;
+    return SLOTS.map((x, slot) => ({ slot, x, recipe: a[from + slot] }));
   }
-  const prizeOf = (id) => (PRIZES[id] ? PRIZES[id].x : 0);
 
-  return { ENTRY, DAY_MS, START_Y, RECIPES, BY, PRIZES, config, generate, dayKey, dayStart, closesAt, recipeFor, prizeOf };
+  // ---------------------------------------------------------------- skill
+  // between the anchors, and past them by extending the nearest pair
+  const lerp = (v, s) => { const k = Math.max(0, Math.min(ANCHORS.length - 2, Math.floor(s))), t = s - k; return v[k] * (1 - t) + v[k + 1] * t; };
+  // per-ring miss rate on a regular level for skill s
+  function missReg(di, L, s) { const v = TABLES.reg[di] && TABLES.reg[di][L - 1]; return v ? Math.min(0.95, Math.max(1e-4, Math.exp(lerp(v, s)))) : 0.1; }
+  // the chance that a player of skill s passes the first n rings of a twist at a grade (n of n clears it)
+  function clearP(recipe, g, n, s) {
+    if (n <= 0) return 1;
+    const v = TABLES.sp[recipe] && TABLES.sp[recipe][g];
+    if (!v) return Math.exp(-0.1 * n);
+    return Math.min(1, Math.exp(lerp(v.map((x) => x[0] + x[1] * n + x[2] * n * n), s)));
+  }
+  const clamp = (d) => Math.max(D_MIN, Math.min(D_MAX, d));
+  const levelName = (d) => LEVEL_NAMES[Math.max(0, Math.min(LEVEL_NAMES.length - 1, Math.round(d)))];
+  // a clear raises a special's level by this much: UP / DOWN = (1 - p) / p, so the level settles where p = TARGET / x
+  const up = (x) => { const p = TARGET / x; return DOWN * (1 - p) / p; };
+
+  // A player's record: rings passed and missed on each regular level (r, 'tier|level': [passed, missed]), their level
+  // in each special (d, by slot; null until they first play it), and for show how many rings and attempts.
+  const blank = () => ({ r: {}, d: SLOTS.map(() => null), rings: 0, tries: 0 });
+  const norm = (Rt) => {
+    if (!Rt || !Rt.r) return blank();
+    if (!Array.isArray(Rt.d)) Rt.d = SLOTS.map(() => null);
+    return Rt;
+  };
+  // a regular level the bank verified (with any bet: it can only raise where a special's level starts)
+  function addLevel(Rt, di, L, passes, missed) {
+    Rt = norm(Rt);
+    const k = di + '|' + L, c = Rt.r[k] || (Rt.r[k] = [0, 0]);
+    c[0] += passes; c[1] += missed ? 1 : 0; Rt.rings += passes + (missed ? 1 : 0);
+    return Rt;
+  }
+  // the rating from regular runs: a probability over GRID, the prior times every ring passed and missed
+  function regular(Rt) {
+    const lp = GRID.map((s) => -0.5 * ((s - PRIOR_MU) / PRIOR_SD) ** 2);
+    if (Rt && Rt.r) for (const key in Rt.r) {
+      const [di, L] = key.split('|'), [pass, miss] = Rt.r[key];
+      GRID.forEach((s, i) => { const h = missReg(+di, +L, s); lp[i] += pass * Math.log(1 - h) + miss * Math.log(h); });
+    }
+    const top = Math.max(...lp), w = lp.map((v) => Math.exp(v - top)), sum = w.reduce((a, b) => a + b, 0);
+    const m = w.reduce((a, v, i) => a + v * GRID[i], 0) / sum, sd = Math.sqrt(w.reduce((a, v, i) => a + v * (GRID[i] - m) ** 2, 0) / sum);
+    return { m, sd };
+  }
+  // where a special's level starts: START, or more if regular runs (their rating less one spread) or the player's
+  // level in another special (less SLOT_MARGIN) show more
+  function startFor(Rt, slot) {
+    let d = START;
+    if (Rt && Rt.r) { const g = regular(Rt); d = Math.max(d, g.m - g.sd); }
+    if (Rt && Array.isArray(Rt.d)) Rt.d.forEach((v, k) => { if (k !== slot && v != null) d = Math.max(d, v - SLOT_MARGIN); });
+    return clamp(d);
+  }
+  // the player's level in a special now
+  const levelOf = (Rt, slot) => (Rt && Array.isArray(Rt.d) && Rt.d[slot] != null ? Rt.d[slot] : startFor(Rt, slot));
+  // an attempt at a special is over: up after a clear, down after a miss
+  function addSpecial(Rt, slot, won, rings) {
+    const d = levelOf(Rt, slot);
+    Rt = norm(Rt);
+    Rt.d[slot] = Math.round(clamp(d + (won ? up(SLOTS[slot]) : -DOWN)) * 1e4) / 1e4;
+    Rt.tries++; Rt.rings += rings | 0;
+    return Rt;
+  }
+  // for show: the player's level from regular runs, and in each special
+  function rating(Rt) {
+    const g = regular(Rt);
+    return { s: Math.round(g.m * 100) / 100, sd: Math.round(g.sd * 100) / 100, name: levelName(g.m), rings: Rt && Rt.rings ? Rt.rings : 0, tries: Rt && Rt.tries ? Rt.tries : 0,
+      levels: SLOTS.map((x, k) => Math.round(levelOf(Rt, k) * 100) / 100) };
+  }
+
+  // ---------------------------------------------------------------- the course for a level
+  // For each grade, the shortest course a player of skill d clears with a chance of at most TARGET / x; then the grade
+  // whose course is nearest N_IDEAL rings and closest to that chance. A level past the hardest full-length course gets
+  // that one; one below the easiest, shortest course gets that one.
+  function courseFor(d, recipe, x) {
+    const goal = TARGET / x;
+    let best = null;
+    for (let g = 0; g < GRADES.length; g++) {
+      let n = N_MIN;
+      while (n <= N_MAX && clearP(recipe, g, n, d) > goal) n++;
+      if (n > N_MAX) continue;
+      const c = clearP(recipe, g, n, d), score = Math.abs(n - N_IDEAL) + 40 * (goal - c) / goal;
+      if (!best || score < best.score) best = { g, n, c, score };
+    }
+    if (!best) { const g = GRADES.length - 1; best = { g, n: N_MAX, c: clearP(recipe, g, N_MAX, d) }; }
+    return { g: best.g, n: best.n, chance: Math.round(best.c * 1e4) / 1e4, rtp: Math.round(best.c * x * 1e4) / 1e4 };
+  }
+  // the day's three for a player (or for someone new): each course set for the player's level in that special; chance
+  // is how often a player at that level clears it
+  function todayFor(Rt, day) {
+    return specialsFor(day).map(({ slot, x, recipe }) => {
+      const d = levelOf(Rt, slot), c = courseFor(d, recipe.id, x);
+      return { slot, x, recipe: recipe.id, g: c.g, n: c.n, chance: c.chance, rtp: c.rtp, level: Math.round(d * 100) / 100, levelName: levelName(d) };
+    });
+  }
+
+  return {
+    ENTRY, DAY_MS, START_Y, SLOTS, TARGET, N_MIN, N_MAX, N_IDEAL, GRADES, RECIPES, BY, ANCHORS, LEVEL_NAMES, GRID,
+    D_MIN, D_MAX, PRIOR_MU, PRIOR_SD, START, DOWN, SLOT_MARGIN, TABLES,
+    config, generate, dayKey, dayStart, closesAt, specialsFor,
+    blank, addLevel, regular, startFor, levelOf, addSpecial, up, levelName, rating, courseFor, todayFor, missReg, clearP
+  };
 });
 </script>
 <script>/* SOL DUNK — browser client. Rendering, input, audio, betting flow. */
@@ -2035,7 +2229,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   // ---------------------------------------------------------------- settings / stats / wallet
   const settings = Object.assign({ sound: true, haptics: true }, store.get('settings', {}));
   const stats = Object.assign({ runs: 0, wagered: 0, returned: 0, best: 0, hoops: 0, swishes: 0, deepest: 0, history: [] }, store.get('stats', {}));
-  const prefs = Object.assign({ di: 1, bet: 0.1 }, store.get('prefs', {}));
+  const prefs = Object.assign({ di: 0, bet: 0.1 }, store.get('prefs', {}));
   const wallet = { balance: store.get('balance', CFG.demoStart), nonce: store.get('nonce', 0) };
   function saveAll() {
     store.set('settings', settings); store.set('stats', stats); store.set('prefs', prefs);
@@ -2049,6 +2243,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   const NT = E.DIFFS.length;
   const blankLv = () => E.DIFFS.map(() => Array.from({ length: NL }, () => [0, 0])); // [attempts, clears] per tier/level
   function fixProfile(p) {
+    // engine v14 has two modes (the owner asked for Easy and Hard): Easy is the old Pro and Hard the old Legend, the
+    // same rings, so their records carry over; Rookie's and All-Star's best score and deepest level join the nearest
+    if (NT === 2) {
+      if (Array.isArray(p.lv) && p.lv.length === 4) p.lv = [p.lv[1], p.lv[3]];
+      for (const k of ['best', 'deep']) if (Array.isArray(p[k]) && p[k].length === 4) p[k] = [Math.max(p[k][0] || 0, p[k][1] || 0), Math.max(p[k][2] || 0, p[k][3] || 0)];
+    }
     if (!Array.isArray(p.lv) || p.lv.length !== NT) p.lv = blankLv();
     if (!Array.isArray(p.best) || p.best.length !== NT) p.best = E.DIFFS.map(() => 0);
     if (!Array.isArray(p.deep) || p.deep.length !== NT) p.deep = E.DIFFS.map(() => 0);
@@ -2062,6 +2262,13 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     return p;
   }
   const profile = fixProfile(Object.assign({ xp: 0 }, store.get('profile', {})));
+  if (store.get('modes', 0) < 2) { // the four old tiers become the two modes (see fixProfile)
+    const M = [0, 0, 1, 1];
+    prefs.di = M[prefs.di] || 0;
+    for (const h of stats.history) if (h.di != null) h.di = M[h.di] || 0;
+    store.set('modes', 2); saveAll();
+  }
+  if (!(prefs.di >= 0 && prefs.di < NT)) prefs.di = 0;
 
   // Flappy-Dunk-style points: rim +1, swish +2, every swish in a row +1 more (up to +6). Perfect level +10.
   const ringPoints = (o, streak) => (o === 'S' ? 1 + Math.min(streak, 5) : 1);
@@ -2243,7 +2450,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     { id: 'deep4', name: 'Deep run', desc: 'Reach level 4', xp: 40, test: (r) => r.level >= 4 },
     { id: 'score50', name: 'High flyer', desc: 'Score 50 in one run', xp: 40, test: (r) => r.score >= 50 },
     { id: 'double', name: 'Double up', desc: 'Cash out at 2× or more', xp: 60, test: (r) => r.paid && r.total >= 2 },
-    { id: 'legend', name: 'Legendary', desc: 'Clear level 1 on Legend', xp: 60, test: (r) => r.di === NT - 1 && r.clears >= 1 },
+    { id: 'legend', name: 'Legendary', desc: 'Clear level 1 on Hard', xp: 60, test: (r) => r.di === NT - 1 && r.clears >= 1 },
     { id: 'deep6', name: 'Into the deep', desc: 'Reach level 6', xp: 80, test: (r) => r.level >= 6 },
     { id: 'streak10', name: 'Unstoppable', desc: 'Swish 10 in a row', xp: 100, test: (r) => r.best >= 10 },
     { id: 'swish100', name: 'Swish collector', desc: 'Swish 100 rings in total', xp: 50, test: () => profile.tot.swish >= 100 },
@@ -2558,37 +2765,49 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     return { outcomes: o.join(''), clear: r.result === 'clear' && capIndex < 0, mov: o.map((x, k) => (def.hoops[k].amp ? '1' : '0')).join('') };
   }
 
-  // ---------------------------------------------------------------- special level, demo (rules in src/special.cjs)
-  // One attempt at a time: a fresh course from its own seed (HMAC-SHA256(serverSeed, clientSeed:nonce:special)), the
-  // entry up front and the prize for clearing every ring, checked by replaying the taps, exactly as the server does.
+  // ---------------------------------------------------------------- special levels, demo (rules in src/special.cjs)
+  // Three a day, each course set for the player's level in that special (kept in the profile: up after a clear, down
+  // after a miss). One attempt at a time: a fresh course from its own seed (HMAC-SHA256(serverSeed, clientSeed:nonce:
+  // special)), the entry up front and the prize for clearing every ring, checked by replaying the taps, as the server does.
   const DemoSpecial = {
     cur: null, fee: SP.ENTRY,
-    tally() { const day = SP.dayKey(Date.now()), t = store.get('special', null); return t && t.day === day ? t : { day, tries: 0, wins: 0 }; },
-    view() {
-      const day = SP.dayKey(Date.now()), R = SP.recipeFor(day), t = this.tally(), x = SP.prizeOf(R.id);
-      return { day, recipe: { id: R.id, name: R.name, blurb: R.blurb, rings: R.n }, fee: this.fee, prize: round9(this.fee * x), x, odds: (SP.PRIZES[R.id] || { p: [] }).p, closesAt: SP.closesAt(day), me: { tries: t.tries, wins: t.wins, blocked: false } };
+    tally() {
+      const day = SP.dayKey(Date.now()), t = store.get('special', null);
+      return t && t.day === day && Array.isArray(t.tries) ? t : { day, tries: [0, 0, 0], wins: [0, 0, 0] };
     },
-    start() {
-      const v = this.view();
-      if (!(v.prize > v.fee)) throw new Error('There’s no special level today');
+    view() {
+      const day = SP.dayKey(Date.now()), t = this.tally();
+      return {
+        day, fee: this.fee, closesAt: SP.closesAt(day), target: SP.TARGET,
+        specials: SP.todayFor(profile.skill, day).map((c) => {
+          const R = SP.BY[c.recipe];
+          return { slot: c.slot, x: c.x, prize: round9(this.fee * c.x), recipe: { id: R.id, name: R.name, blurb: R.blurb }, course: { grade: c.g, rings: c.n, chance: c.chance, level: c.level, levelName: c.levelName }, me: { tries: t.tries[c.slot] || 0, wins: t.wins[c.slot] || 0 } };
+        }),
+        me: { blocked: false, skill: SP.rating(profile.skill) }
+      };
+    },
+    start(slot) {
+      const v = this.view(), sp = v.specials[slot];
+      if (!sp) throw new Error('There’s no such special level today');
       if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
       wallet.balance = round9(wallet.balance - v.fee);
       const paid = DemoMissions.play(v.fee);
-      const t = this.tally(); t.tries++; store.set('special', t);
+      const t = this.tally(); t.tries[slot]++; store.set('special', t);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
-      this.cur = { serverSeed, clientSeed, nonce, recipe: v.recipe.id, fee: v.fee, prize: v.prize, day: v.day, seed: deriveLevelSeed(serverSeed, clientSeed, nonce, 'special') };
+      const c = this.cur = { serverSeed, clientSeed, nonce, slot, recipe: sp.recipe.id, g: sp.course.grade, n: sp.course.rings, fee: v.fee, prize: sp.prize, day: v.day, seed: deriveLevelSeed(serverSeed, clientSeed, nonce, 'special') };
       saveAll();
-      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, seed: this.cur.seed, recipe: v.recipe.id, fee: v.fee, prize: v.prize, missions: { paid }, special: this.view() };
+      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, seed: c.seed, slot, recipe: c.recipe, grade: c.g, rings: c.n, chance: sp.course.chance, x: sp.x, fee: v.fee, prize: c.prize, missions: { paid }, special: this.view() };
     },
     finish(taps) {
       const c = this.cur;
       if (!c) throw new Error('No special level in progress');
       this.cur = null;
-      const r = E.replay(SP.generate(c.seed, c.recipe), taps), won = r.result === 'clear';
+      const r = E.replay(SP.generate(c.seed, c.recipe, c.g, c.n), taps), won = r.result === 'clear';
       if (won) {
         wallet.balance = round9(wallet.balance + c.prize);
-        const t = this.tally(); if (t.day === c.day) { t.wins++; store.set('special', t); }
+        const t = this.tally(); if (t.day === c.day) { t.wins[c.slot]++; store.set('special', t); }
       }
+      profile.skill = SP.addSpecial(profile.skill, c.slot, won, r.outcomes.length); // that special's level moves
       saveAll();
       return { status: won ? 'won' : 'lost', payout: won ? c.prize : 0, serverSeed: c.serverSeed, outcomes: r.outcomes, special: this.view() };
     }
@@ -2617,6 +2836,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       const a = E.applyLevel(PAY.PAYTABLE[c.di][L - 1], r.outcomes, c.total, E.DIFFS[c.di].maxWin, c.streak);
       c.total = a.total; c.streak = a.streak; c.level = L;
       c.levels.push(verifiedLevel(def, r, a.capped ? a.capIndex : -1));
+      profile.skill = SP.addLevel(profile.skill, c.di, L, a.capped ? a.capIndex + 1 : r.outcomes.length, !a.capped && r.result !== 'clear'); // rates the player for the special levels
       const pot = DemoPot.check(c);
       const status = a.capped ? 'maxwin' : r.result === 'clear' ? (L >= NL ? 'final' : 'checkpoint') : 'bust';
       let payout = 0, missions = null;
@@ -2635,7 +2855,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     missions: { view: () => DemoMissions.view(), async state() { return DemoMissions.view(); } },
     special: {
       async state() { return DemoSpecial.view(); },
-      async start() { return DemoSpecial.start(); },
+      async start(slot) { return DemoSpecial.start(slot); },
       async finish(taps) { return DemoSpecial.finish(taps); }
     }
   };
@@ -2702,12 +2922,19 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       async state() { ServerBank.mv = ServerBank.mconv(await ServerBank.api('/api/missions')); return ServerBank.mv; }
     },
     special: {
-      view(j) { const L = 1e9; return { day: j.day, recipe: j.recipe, fee: j.feeLamports / L, prize: j.prizeLamports / L, x: j.x, odds: j.odds, closesAt: j.closesAt, me: j.me || { tries: 0, wins: 0, blocked: false } }; },
+      view(j) {
+        const L = 1e9;
+        return {
+          day: j.day, fee: j.feeLamports / L, closesAt: j.closesAt, target: j.target,
+          specials: j.specials.map((x) => ({ slot: x.slot, x: x.x, prize: x.prizeLamports / L, recipe: x.recipe, course: x.course, me: x.me })),
+          me: j.me || { blocked: false, skill: null }
+        };
+      },
       async state() { return this.view(await ServerBank.api('/api/special')); },
-      async start() {
-        const clientSeed = randomHex(8), j = await ServerBank.api('/api/special/start', { clientSeed });
+      async start(slot) {
+        const clientSeed = randomHex(8), j = await ServerBank.api('/api/special/start', { clientSeed, slot });
         ServerBank.specId = j.runId;
-        return { seedHash: j.serverSeedHash, clientSeed, nonce: j.nonce, seed: j.seed, recipe: j.recipe, fee: j.feeLamports / 1e9, prize: j.prizeLamports / 1e9, missions: ServerBank.mfrom(j.missions), special: this.view(j.special) };
+        return { seedHash: j.serverSeedHash, clientSeed, nonce: j.nonce, seed: j.seed, slot: j.slot, recipe: j.recipe, grade: j.grade, rings: j.rings, chance: j.chance, x: j.prizeLamports / j.feeLamports, fee: j.feeLamports / 1e9, prize: j.prizeLamports / 1e9, missions: ServerBank.mfrom(j.missions), special: this.view(j.special) };
       },
       async finish(taps) {
         const j = await ServerBank.api('/api/special/finish', { runId: ServerBank.specId, taps });
@@ -3254,7 +3481,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   const attract = { st: null, bot: null, wait: 0, level: 1, streak: 0, acc: 0, tap: false };
   // navigation: which tab is open, the page pushed over it (if any), which page Challenges shows (ch), and what the
   // locker's live preview should show (fx: force a flame streak)
-  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null };
+  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null, sp: 0 }; // sp: the special whose page is open
   // rings from the level just played that are already behind the ball (never the unplayed ones ahead)
   function keepBehind(st) {
     if (!st) return [];
@@ -3679,23 +3906,31 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (phase === 'lobby') { if (nav.page === 'special') renderPage(true); if (nav.tab === 'challenges') renderChallenges(true); }
   }
   const oneIn = (p) => (p > 0 ? 'about 1 in ' + Math.max(1, Math.round(1 / p)) : '–');
+  // a special's page (nav.sp): a sketch of the course set for the player, the prize, Play, today's tallies, the level
+  // it's set for and the rules
   function specialHtml() {
     const s = specState;
-    if (!s) return '<div class="empty">The special level isn’t available right now. Try again in a moment.</div>';
-    const left = s.closesAt - Date.now(), o = s.odds || [], back = (p) => Math.round((p || 0) * s.x * 100);
-    const play = s.me.blocked ? '<div class="empty">The special level isn’t available on this account.</div>'
+    const c = s && s.specials ? s.specials[nav.sp] || s.specials[0] : null;
+    if (!c) return '<div class="empty">The special levels aren’t available right now. Try again in a moment.</div>';
+    const left = s.closesAt - Date.now(), pct = Math.round((s.target || SP.TARGET) * 100);
+    const play = s.me && s.me.blocked ? '<div class="empty">The special levels aren’t available on this account.</div>'
       : `<button class="btn btn-primary" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
     return `<div class="sp-card">
-        <div class="sp-head"><div class="sp-name">${s.recipe.name}</div><div class="sp-blurb">${s.recipe.blurb} · ${s.recipe.rings} rings</div></div>
+        <div class="sp-head"><div class="sp-blurb">${c.recipe.blurb} · ${c.course.rings} rings</div></div>
         <canvas class="sp-course" id="spCourse" aria-hidden="true"></canvas>
         <div class="sp-cap">A sample course. Every attempt gets a new one from its own seed.</div>
       </div>
-      <div class="sp-prize"><span class="k">Clear every ring to win</span><div class="big"><span class="num">${fmtAmt(s.prize)}</span><span class="unit">SOL</span></div><span class="x">${s.x.toFixed(2)}× your ${fmtBet(s.fee)} SOL entry</span></div>
+      <div class="sp-prize"><span class="k">Clear every ring to win</span><div class="big"><span class="num">${fmtAmt(c.prize)}</span><span class="unit">SOL</span></div><span class="x">${c.x}× your ${fmtBet(s.fee)} SOL entry</span></div>
       ${play}
-      <div class="tiles"><div><b>${s.me.tries}</b><span>Tries today</span></div><div><b>${s.me.wins}</b><span>Wins today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>Next special</span></div></div>
-      <div class="sec-h"><h3>How often it’s beaten</h3></div>
-      <div class="group sp-odds">${[['A casual player', o[0]], ['An average player', o[1]], ['A strong player', o[2]]].map(([k, p]) => `<div class="row"><span>${k}</span><b>${oneIn(p)}</b></div>`).join('')}</div>
-      <p class="pot-rules">Miss any ring and the entry is gone; clear them all and the prize is paid at once. From the simulator: a strong player gets back about ${back(o[2])}% of their entries over time, an average one about ${back(o[1])}%. A new special comes every day at midnight UTC. Its rings don’t count toward missions or the pot, but the entry counts as play for mission SOL.</p>`;
+      <div class="tiles"><div><b>${c.me.tries}</b><span>Tries today</span></div><div><b>${c.me.wins}</b><span>Wins today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>New specials</span></div></div>
+      <div class="sec-h"><h3>Set for you</h3></div>
+      <div class="group sp-odds">
+        <div class="row"><span>This course is set for</span><b>${c.course.levelName || SP.levelName(c.course.level)}</b></div>
+        <div class="row"><span>A player at that level clears it</span><b>${oneIn(c.course.chance)}</b></div>
+        <div class="row"><span>After a clear</span><b>Next one harder</b></div>
+        <div class="row"><span>After a miss</span><b>A little easier</b></div>
+      </div>
+      <p class="pot-rules">Clear every ring to win the prize; miss one and the entry is gone. Each special’s course is set for your level in it, and the level moves: up when you clear it, down a little when you don’t. It settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries whatever your level: the house keeps about ${100 - pct}% from beginners and pros alike. You start at ${SP.levelName(SP.START)}, or higher if your runs show more. New specials come every day at midnight UTC, and your levels carry over. Their rings don’t count toward missions or the pot, but entries count as play for mission SOL.</p>`;
   }
   // a sketch of a course: the rings in order, how far each one bobs, and the gold finish
   function drawCourse(el, def) {
@@ -3718,12 +3953,14 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     }
     g.fillStyle = '#ff8a2a'; g.beginPath(); g.arc(sx(0), sy(def.startY), 4.2, 0, Math.PI * 2); g.fill();
   }
+  // today's three specials in one card: a row each with its twist, length, prize and Play; tap a row for its page
   function specialCard() {
     const s = specState;
-    if (!s) return '';
-    const act = s.me.blocked ? '<span class="pill off">Not available</span>' : `<button class="pill" id="chSpPlay">Play ${fmtBet(s.fee)}</button>`;
-    return `<div class="cc"><button class="cc-open" data-page="special" aria-label="Today’s special: ${s.recipe.name}. Details"><span class="cc-k">Today’s special</span><span class="cc-n">${s.recipe.name}</span><span class="cc-s">${s.recipe.blurb} · ${s.recipe.rings} rings</span><span class="chev">${ICON.chev}</span></button>
-      <div class="cc-act"><span class="cc-v">Win <b class="num">${fmtAmt(s.prize)}</b> SOL</span>${act}</div></div>`;
+    if (!s || !s.specials) return '';
+    const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked;
+    const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></button>
+      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(c.prize)}</b> SOL</span>${blocked ? '<span class="pill off">Not available</span>' : `<button class="pill" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`}</div></div>`).join('');
+    return `<div class="cc sp-cc"><div class="cc-h"><span class="cc-k">Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftText(left) : 'New soon'}</span></div>${rows}</div>`;
   }
   function potCard() {
     const p = potState;
@@ -3747,7 +3984,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   }
   function wireChallenges() {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
-    on('chSpPlay', () => startSpecial());
+    document.querySelectorAll('#cBody .spr .pill[data-slot]').forEach((b) => b.addEventListener('click', () => startSpecial(+b.dataset.slot)));
     on('chPotEnter', enterPot);
   }
 
@@ -3773,14 +4010,14 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     enterRun(r.missions);
   }
   // a special level attempt: the entry up front, one long level, the prize for clearing every ring
-  async function startSpecial() {
+  async function startSpecial(slot) {
     if (run.busy || (phase !== 'lobby' && phase !== 'over')) return;
     Sound.unlock();
     run.busy = true;
     let r;
     try {
-      r = await bank.special.start();
-      Object.assign(run, { mode: 'special', recipe: r.recipe, prize: r.prize, di: SP.BY[r.recipe].base[0], bet: r.fee, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.seed }, RUN_FRESH);
+      r = await bank.special.start(slot);
+      Object.assign(run, { mode: 'special', slot: r.slot, recipe: r.recipe, g: r.grade, n: r.rings, x: r.x, prize: r.prize, di: SP.GRADES[r.grade][0], bet: r.fee, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.seed }, RUN_FRESH);
       run.log = []; run.told = {}; run.share = ''; run.potJust = false;
       if (r.special) specState = r.special;
     } catch (e) {
@@ -3810,7 +4047,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 
   function beginLevel(first) {
     const sp = run.mode === 'special';
-    const def = sp ? SP.generate(run.levelSeed, run.recipe) : E.generateLevel(run.levelSeed, run.di, run.level);
+    const def = sp ? SP.generate(run.levelSeed, run.recipe, run.g, run.n) : E.generateLevel(run.levelSeed, run.di, run.level);
     const prev = view.st;
     view.prevHoops = keepBehind(prev);
     view.offset = first && prev ? ball.x + 140 : ball.x + 24;
@@ -4023,7 +4260,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   function recordSpecial(payout, won) {
     stats.returned = round9(stats.returned + payout);
     stats.hoops += run.hoops; stats.swishes += run.swishes;
-    stats.history.unshift({ t: Date.now(), kind: 'special', recipe: run.recipe, di: run.di, bet: run.bet, payout, level: 1, mult: won ? run.prize / run.bet : 0, result: won ? 'won' : 'lost', seedHash: run.seedHash, serverSeed: run.serverSeed, clientSeed: run.clientSeed, nonce: run.nonce });
+    stats.history.unshift({ t: Date.now(), kind: 'special', slot: run.slot, recipe: run.recipe, g: run.g, n: run.n, di: run.di, bet: run.bet, payout, level: 1, mult: won ? run.prize / run.bet : 0, result: won ? 'won' : 'lost', seedHash: run.seedHash, serverSeed: run.serverSeed, clientSeed: run.clientSeed, nonce: run.nonce });
     stats.history.length = Math.min(stats.history.length, 30);
     // XP for the points; the special doesn't count toward missions, trophies or the pot
     const before = lvlOf(profile.xp), xp = run.score + (won ? 25 : 0);
@@ -4201,7 +4438,8 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     pr.dailies.forEach((c) => g.push(['daily', ICON.check, dailyText(c) + ' · +' + c.xp + ' XP']));
     pr.weeklies.forEach((c) => g.push(['daily', ICON.check, weeklyText(c) + ' · +' + c.xp + ' XP']));
     pr.careers.forEach((m) => g.push(['daily', ICON.flag, careerText(m) + ' · +' + m[2] + ' XP']));
-    if (!g.length && run.mode === 'special' && specState) g.push(['', ICON.trophy, `${specState.recipe.name} today: ${specState.me.wins} of ${specState.me.tries} cleared`]);
+    const sNow = run.mode === 'special' && specState && specState.specials ? specState.specials[run.slot] : null;
+    if (!g.length && sNow) g.push(['', ICON.trophy, `${sNow.recipe.name} today: ${sNow.me.wins} of ${sNow.me.tries} cleared`]);
     else if (!g.length) { // nothing new this run: show the next mission, so there's always a goal
       const m = openMissions(runFacts0())[0];
       if (m) g.push(['', ICON.target, `${m.text} · ${m.p}/${m.n}`]);
@@ -5397,7 +5635,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       const panelOpen = !ui.panel.classList.contains('hide');
       if (e.code === 'Space' && !panelOpen && !e.repeat) {
         if (phase === 'lobby') { e.preventDefault(); if (nav.tab === 'play') startRun(); return; }
-        if (phase === 'over' && armed(ui.res)) { e.preventDefault(); show(ui.res, false); if (run.mode === 'special') startSpecial(); else startRun(); return; }
+        if (phase === 'over' && armed(ui.res)) { e.preventDefault(); show(ui.res, false); if (run.mode === 'special') startSpecial(run.slot); else startRun(); return; }
       }
       e.preventDefault();
       if (!e.repeat) flapInput();
@@ -5436,7 +5674,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 
   $('cashBtn').addEventListener('click', cashOut);
   $('goBtn').addEventListener('click', keepGoing);
-  $('againBtn').addEventListener('click', () => { if (!armed(ui.res)) return; show(ui.res, false); if (run.mode === 'special') startSpecial(); else startRun(); });
+  $('againBtn').addEventListener('click', () => { if (!armed(ui.res)) return; show(ui.res, false); if (run.mode === 'special') startSpecial(run.slot); else startRun(); });
   $('lobbyBtn').addEventListener('click', () => { Sound.click(); const sp = run.mode === 'special'; backToLobby(); if (sp) setTab('challenges'); });
   $('shareBtn').addEventListener('click', shareRun);
   $('pauseBtn').addEventListener('click', () => { if (phase === 'play') pause(); else if (phase === 'paused') resume(); });
@@ -5461,7 +5699,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   $('panelClose').addEventListener('click', closePanel);
   ui.scrim.addEventListener('click', closePanel);
   // any [data-page] button opens its page, including ones drawn later (Profile rows, the Odds link, the pause card)
-  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-page]'); if (b && !b.disabled) openPage(b.dataset.page); });
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-page]'); if (b && !b.disabled) openPage(b.dataset.page, b.dataset.slot); });
   $('balBtn').addEventListener('click', () => openPage('wallet'));
   // sound and vibration: the mute capsule, the switches on Profile and the ones on the pause card are one setting each
   function syncSettings() {
@@ -5500,7 +5738,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.`) +
       row('star', 'gold', 'Score and XP', `Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, missions and trophies earn XP, which unlocks balls, wings, flames, trails, rims and courts in the Locker. Score and XP never change what a run pays.`) +
       row('mission', 'purple', 'Missions', `Three new missions every day and every week (new ones at midnight UTC, and on Mondays), and a career of six chapters, each ending in an item you can only get there. They count in every run, whatever you bet. Daily and weekly missions also pay SOL once you've played ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week (bets and special level entries); rewards earned before then wait, and go when the day or week ends.`) +
-      row('trophy', 'gold', 'Challenges', `<b>Special level</b>: one a day, the same for everyone, with a twist like every ring moving. Pay the entry, then clear every ring of a fresh course to win the prize. <b>Daily pot</b>: buy in, then meet the day's challenge in any regular run to share the pot.`) +
+      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: three a day, each with a twist like every ring moving and a prize of 2×, 3× or 5× the entry. Pay the entry, then clear every ring of a fresh course to win. Each course is set for your level in that special: harder after a clear, a little easier after a miss. <b>Daily pot</b>: buy in, then meet the day's challenge in any regular run to share the pot.`) +
       `</div>`;
   }
   // locker thumbnails, drawn with the same code as the game
@@ -5646,7 +5884,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   }
   function wirePage(kind) {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
-    if (kind === 'special') on('spPlay', () => startSpecial());
+    if (kind === 'special') on('spPlay', () => startSpecial(nav.sp));
     if (kind === 'pot') {
       on('potEnter', enterPot);
       on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
@@ -5659,7 +5897,10 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       const out = $('fairOut');
       if (!ok) { out.className = 'verify-out bad'; out.textContent = 'The revealed seed does not match the hash shown before the run.'; return; }
       const rows = [];
-      if (h.kind === 'special') rows.push(`<li><span>Special</span><span class="mono-s">${deriveLevelSeed(h.serverSeed, h.clientSeed, h.nonce, 'special').slice(0, 16)}…</span></li>`);
+      if (h.kind === 'special') {
+        rows.push(`<li><span>Special</span><span class="mono-s">${deriveLevelSeed(h.serverSeed, h.clientSeed, h.nonce, 'special').slice(0, 16)}…</span></li>`);
+        if (h.g != null && SP.GRADES[h.g]) rows.push(`<li><span>Course</span><span>${h.n} rings, ${E.DIFFS[SP.GRADES[h.g][0]].name} level ${SP.GRADES[h.g][1]} rings</span></li>`);
+      }
       else for (let L = 1; L <= h.level; L++) rows.push(`<li><span>Level ${L}</span><span class="mono-s">${deriveLevelSeed(h.serverSeed, h.clientSeed, h.nonce, L).slice(0, 16)}…</span></li>`);
       out.className = 'verify-out good';
       out.innerHTML = `<p><b>Verified.</b> The revealed seed hashes to the value you saw before the run, so the rings were fixed before your first tap.</p><ul class="list group">${rows.join('')}</ul>`;
@@ -5675,7 +5916,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 
   // ---------------------------------------------------------------- pages
   const PAGES = {
-    special: ['Today’s special', specialHtml],
+    special: [() => { const c = specState && specState.specials && specState.specials[nav.sp]; return c ? c.recipe.name : 'Special level'; }, specialHtml],
     pot: ['Daily pot', potHtml],
     week: ['This week', weekHtml],
     career: ['Career', careerHtml],
@@ -5688,8 +5929,9 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   };
   const TAB_NAME = { play: 'Play', challenges: 'Challenges', profile: 'Profile', locker: 'Locker' };
   const vPg = $('vPage');
-  function openPage(kind) {
+  function openPage(kind, slot) {
     if (!PAGES[kind]) return;
+    if (kind === 'special' && slot != null) nav.sp = +slot || 0; // which of the day's specials
     if (!ui.panel.classList.contains('hide')) closePanel();
     Sound.click();
     if (kind === 'odds' && !nav.page) oddsTier = null; // from the Play sheet or Profile: the tier you have picked
@@ -5703,14 +5945,15 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     setTimeout(() => $('pgBack').focus({ preventScroll: true }), 30);
   }
   function renderPage(keepScroll) {
-    const body = $('pgBody'), y = body.scrollTop, [t, fn] = PAGES[nav.page];
+    const body = $('pgBody'), y = body.scrollTop, [t0, fn] = PAGES[nav.page], t = typeof t0 === 'function' ? t0() : t0;
     body.innerHTML = `<div class="vcol"><h2 class="vtitle" id="pgTitle">${t.replace('&', '&amp;')}</h2>${fn()}</div>`;
     body.dataset.kind = nav.page;
     wirePage(nav.page);
     body.querySelectorAll('canvas[data-t]').forEach((c) => drawThumb(c, c.dataset.t, c.dataset.id));
-    if (nav.page === 'special' && specState) {
-      const day = specState.day, id = specState.recipe.id;
-      requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[id]) drawCourse(c, SP.generate('preview|' + day, id)); });
+    const sc = nav.page === 'special' && specState && specState.specials && specState.specials[nav.sp];
+    if (sc) {
+      const day = specState.day, slot = sc.slot;
+      requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[sc.recipe.id]) drawCourse(c, SP.generate('preview|' + day + '|' + slot, sc.recipe.id, sc.course.grade, sc.course.rings)); });
     }
     if (keepScroll) body.scrollTop = y;
   }

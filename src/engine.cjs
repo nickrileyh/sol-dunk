@@ -18,7 +18,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 13; // v13: rings spread out 1:1 with v12's faster ball (v11 came from two chats at once; v12 was both)
+  const VERSION = 14; // v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -53,7 +53,7 @@
 
   const HOOPS_PER_LEVEL = 6;
   const LEVELS = 8;
-  const MAX_TICKS = TICK_HZ * 45;   // a level can never take longer than this
+  const MAX_TICKS = TICK_HZ * 45;   // a level can never take longer than this (a special course sets its own, level.maxTicks)
   const Y_MIN = 220, Y_MAX = 500;   // rim centre band; v11: was 540, so even a bobbing ring's lowest point stays 152 above the floor
   const FIRST_HOOP_X = 300; // v13: 250 before; it grows with the speed like the spacing
   const START_Y = 300;
@@ -64,19 +64,12 @@
   // time between rims as on v10. Speed grows 4% per level and the rings spread out with it (spacing and the first
   // ring's distance grow 4% too), so every level gives the same time between rims. Deeper levels get harder through
   // tighter, moving and tilted rims and bigger height changes, not through less time to react.
+  // v14: two modes (the owner asked for only an easy and a hard mode). Easy is v13's Pro (the classic feel: static
+  // rings on level 1, moving ones from level 2, tilts from level 4) and Hard is v13's Legend (faster, tighter, moving
+  // from level 1 and tilted from level 2, up to 1000x). Rookie and All-Star are gone.
   const DIFFS = [
     {
-      id: 'rookie', name: 'Rookie', blurb: 'Wide rings, gentle pace',
-      speed: 166, spacing: 277, maxWin: 50,
-      hoopW:   [92, 91, 90, 89, 88, 87, 86, 85],   // v13: 1 narrower, so level 1 keeps the house edge with more time between rims
-      dy:      [115, 122, 129, 136, 143, 150, 157, 164],
-      moveP:   [0.45, 0.47, 0.5, 0.53, 0.57, 0.62, 0.7, 0.8],   // a few rings bob gently from level 1 (v13: a few more early on)
-      moveAmp: [26, 27, 29, 31, 34, 38, 42, 46],
-      tiltP:   [0, 0, 0, 0, 0.2, 0.3, 0.4, 0.5],
-      tiltMax: [0, 0, 0, 0, 8, 9, 10, 11]
-    },
-    {
-      id: 'pro', name: 'Pro', blurb: 'The classic feel',
+      id: 'easy', name: 'Easy', blurb: 'Wide rings, steady pace',
       speed: 178, spacing: 281, maxWin: 100,
       hoopW:   [91, 90, 89, 88, 87, 86, 85, 84],
       dy:      [120, 128, 136, 144, 152, 160, 168, 176],
@@ -86,17 +79,7 @@
       tiltMax: [0, 0, 0, 8, 10, 11, 12, 13]
     },
     {
-      id: 'allstar', name: 'All-Star', blurb: 'Moving rings',
-      speed: 192, spacing: 286, maxWin: 250,
-      hoopW:   [87, 85, 83, 82, 81, 80, 79, 78],
-      dy:      [140, 152, 164, 174, 182, 190, 198, 206],
-      moveP:   [0, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1],
-      moveAmp: [0, 35, 40, 45, 50, 55, 60, 64],
-      tiltP:   [0, 0, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7],
-      tiltMax: [0, 0, 8, 10, 11, 12, 13, 14]
-    },
-    {
-      id: 'legend', name: 'Legend', blurb: 'Fast and tilted',
+      id: 'hard', name: 'Hard', blurb: 'Fast, moving and tilted',
       speed: 204, spacing: 290, maxWin: 1000,
       hoopW:   [85, 83, 81, 80, 79, 78, 77, 76],
       dy:      [150, 162, 174, 184, 192, 200, 208, 216],
@@ -240,7 +223,7 @@
     return {
       level, hoops: hs, speed: level.speed,
       ball: { x: 0, y: level.startY, vx: level.speed, vy: 0 },
-      tick: 0, next: 0, prevLy: NaN, contact: false, knockTick: -100000,
+      tick: 0, next: 0, prevLy: NaN, contact: false, knockTick: -100000, maxTicks: level.maxTicks || MAX_TICKS,
       done: false, result: null, missKind: null,
       outcomes: [], flaps: 0, rimHits: 0, impact: 0, ev: 0
     };
@@ -338,18 +321,20 @@
     const h = st.hoops[st.next];
     if (h) ev |= hoopInteract(st, h, t);
     if (!st.done && b.y > WORLD.FLOOR - P.R) { st.done = true; st.result = 'floor'; ev |= EV.FLOOR; }
-    if (!st.done && st.tick >= MAX_TICKS) { st.done = true; st.result = 'miss'; st.missKind = 'timeout'; ev |= EV.MISS; }
+    if (!st.done && st.tick >= st.maxTicks) { st.done = true; st.result = 'miss'; st.missKind = 'timeout'; ev |= EV.MISS; }
     st.ev = ev;
     return ev;
   }
 
   // Validate a tap list: sorted, unique, integer ticks, first tap at 0.
-  function validTaps(taps) {
+  // a level's own time limit (a long special course has a longer one, level.maxTicks) or MAX_TICKS
+  function validTaps(taps, maxTicks) {
+    const top = maxTicks || MAX_TICKS;
     if (!Array.isArray(taps) || taps.length === 0 || taps.length > 4000) return false;
     if (taps[0] !== 0) return false;
     for (let i = 0; i < taps.length; i++) {
       const v = taps[i];
-      if (typeof v !== 'number' || v !== Math.floor(v) || v < 0 || v > MAX_TICKS) return false;
+      if (typeof v !== 'number' || v !== Math.floor(v) || v < 0 || v > top) return false;
       if (i > 0 && v <= taps[i - 1]) return false;
     }
     return true;

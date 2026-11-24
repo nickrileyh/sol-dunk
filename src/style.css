@@ -163,7 +163,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 
 
 /* difficulty tiers: an iOS segmented control, names only (the foot line says what the tier can win) */
-.tiers, .seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; padding: 2px; border-radius: 9px; background: var(--surface-2); }
+.tiers, .seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0; padding: 2px; border-radius: 9px; background: var(--surface-2); }
 .tiers button, .seg button {
   position: relative; display: flex; align-items: center; justify-content: center;
   height: 32px; padding: 0 2px; border-radius: 7px;
@@ -369,7 +369,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 #callout.gold .c1 { color: var(--gold); }
 #callout.green .c1 { color: var(--green); }
 
-/* ---------- the Challenges tab: the special level and the daily pot, each on its own page ---------- */
+/* ---------- the Challenges tab: cards for today's specials and the daily pot, each opening its page ---------- */
 .cc { margin-top: 12px; border-radius: 12px; background: var(--surface); overflow: hidden; }
 .vtitle + .cc { margin-top: 16px; }
 .cc-open { display: grid; grid-template-columns: minmax(0, 1fr) 14px; column-gap: 10px; width: 100%; padding: 13px 14px 0 16px; text-align: left; }
@@ -388,6 +388,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .pill[disabled] { opacity: 0.5; }
 .pill.in, .pill.ok, .pill.off { font-weight: 600; color: var(--label-2); }
 .pill.ok { color: var(--green); }
+/* today's specials: one card, a row for each with its twist and length, its prize and Play; a row opens its page */
+.cc-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 13px 14px 4px 16px; }
+.cc-t { font-size: 13px; color: var(--label-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.spr { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; margin-left: 16px; padding: 10px 14px 11px 0; }
+.spr + .spr { box-shadow: inset 0 0.5px 0 var(--sep); }
+.spr-open { min-width: 0; padding: 2px 0; text-align: left; }
+.spr-open b { display: block; font-family: var(--font-title); font-size: 18px; font-weight: 700; line-height: 1.2; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spr-open span { display: block; margin-top: 2px; font-size: 13px; color: var(--label-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spr-act { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.spr-win { font-size: 13px; color: var(--label-2); white-space: nowrap; }
+.spr-win b { font-weight: 600; color: var(--gold); font-variant-numeric: tabular-nums; }
 .sp-card { border-radius: 12px; background: var(--surface); overflow: hidden; }
 .sp-head { padding: 14px 16px 4px; }
 .sp-k { font-size: 13px; color: var(--label-2); }
@@ -499,7 +510,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .item .lock { position: absolute; top: 7px; right: 7px; width: 12px; height: 12px; color: var(--label-3); }
 .item .new { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 4px; background: var(--red); }
 .reset-note { margin: 8px 4px 0; font-size: 12px; color: var(--label-3); }
-.bests { display: grid; grid-template-columns: repeat(4, 1fr); padding: 11px 0 10px; border-radius: 12px; background: var(--surface); }
+.bests { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 11px 0 10px; border-radius: 12px; background: var(--surface); }
 .bests div { padding: 0 4px; text-align: center; }
 .bests div + div { box-shadow: inset 0.5px 0 0 var(--line); }
 .bests b { display: block; font-family: var(--font-round); font-size: 20px; font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }

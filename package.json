@@ -11,6 +11,6 @@
     "stats": "node sim/quick.cjs 400",
     "test": "cd server && npm test",
     "check": "node tools/sync_check.cjs",
-    "special": "node sim/special.cjs 20000 --write"
+    "special": "node sim/special.cjs 2000 --write"
   }
 }

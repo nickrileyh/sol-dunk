@@ -30,7 +30,7 @@ const WRITE = args.includes('--write');
 //                    (default 0.97) at every checkpoint from 2 on and --cap1-good (0.99) at checkpoint 1.
 //                    Optionally a PRO player too: --cap-pro 0.99 keeps them losing at least 1% on every level after
 //                    the first and --cap1-pro 1.01 about even at checkpoint 1. Off by default: pros clear the easy
-//                    levels so reliably that capping them shrinks the top prizes to a few x on Rookie and Pro.
+//                    levels so reliably that capping them shrinks the top prizes to a few x on Easy.
 //                    Deeper levels pay more per hoop only where the caps allow. Rounding never pays over a cap
 //                    (level 1 allows the average 0.05% over TARGET, so it can pay something at all).
 const MODE = args.includes('--mode') ? args[args.indexOf('--mode') + 1] : 'house';
@@ -121,7 +121,7 @@ function solveFor(pats, massIn, target) {
 // edge mode: per level, the largest b whose ROUNDED table keeps every constraint
 function calibrateEdge(key) {
   const PAY = [], STATS = [];
-  for (let di = 0; di < 4; di++) {
+  for (let di = 0; di < E.DIFFS.length; di++) {
     let mass = [1, 0, 0, 0, 0, 0], gmass = [1, 0, 0, 0, 0, 0], pmass = [1, 0, 0, 0, 0, 0];
     const rows = [], stats = [];
     for (let L = 1; L <= 8; L++) {
@@ -161,7 +161,7 @@ function calibrateEdge(key) {
 function calibrate(key) {
   if (MODE === 'edge') return calibrateEdge(key);
   const PAY = [], STATS = [];
-  for (let di = 0; di < 4; di++) {
+  for (let di = 0; di < E.DIFFS.length; di++) {
     let mass = [1, 0, 0, 0, 0, 0], gmass = [1, 0, 0, 0, 0, 0], rtpPrev = 1, prevB = 0;
     const rows = [], stats = [];
     for (let L = 1; L <= 8; L++) {
@@ -211,7 +211,7 @@ function calibrate(key) {
 // RTP for any skill under a given paytable, cash-out at checkpoint k (exact, no cap)
 function rtpCurve(key, PAY) {
   const res = [];
-  for (let di = 0; di < 4; di++) {
+  for (let di = 0; di < E.DIFFS.length; di++) {
     let mass = [1, 0, 0, 0, 0, 0];
     const curve = [];
     for (let L = 1; L <= 8; L++) {
@@ -228,7 +228,7 @@ function rtpCurve(key, PAY) {
 const { PAY, STATS } = calibrate('average');
 const names = E.DIFFS.map(d => d.name);
 console.log('Calibrated to average player, mode', MODE, 'target', TARGET, MODE === 'guard' ? 'guard ' + GUARD + ' from L' + GUARD_FROM : '', '\n');
-for (let di = 0; di < 4; di++) {
+for (let di = 0; di < E.DIFFS.length; di++) {
   console.log(`== ${names[di]}`);
   for (let L = 1; L <= 8; L++) {
     const t = PAY[di][L - 1], s = STATS[di][L - 1];
@@ -242,7 +242,7 @@ const curves = {};
 for (const sk of skills) {
   try { curves[sk] = rtpCurve(sk, PAY); } catch (e) { /* missing */ }
 }
-for (let di = 0; di < 4; di++) {
+for (let di = 0; di < E.DIFFS.length; di++) {
   console.log(`== ${names[di]}`);
   for (const sk of skills) if (curves[sk]) console.log('  ' + sk.padEnd(12) + curves[sk][di].map(v => (v * 100).toFixed(1).padStart(7)).join(''));
 }
@@ -250,7 +250,7 @@ for (let di = 0; di < 4; di++) {
 // the most a run can pay: every ring a swish, streak carried through all 8 levels
 console.log('\nBest possible win (every ring a swish), after each level:');
 const BEST = PAY.map((rows) => { let m = 1, st = 0; return rows.map((t) => { for (let i = 0; i < E.HOOPS_PER_LEVEL; i++) { st = Math.min(STREAK_CAP, st + 1); m *= t.swish[st - 1]; } return m; }); });
-for (let di = 0; di < 4; di++) console.log('  ' + names[di].padEnd(10) + BEST[di].map((v) => (v.toFixed(2) + 'x').padStart(9)).join(''));
+for (let di = 0; di < E.DIFFS.length; di++) console.log('  ' + names[di].padEnd(10) + BEST[di].map((v) => (v.toFixed(2) + 'x').padStart(9)).join(''));
 
 if (WRITE) {
   const meta = { mode: MODE, guard: GUARD, guardFrom: GUARD_FROM, capGood: CAP_GOOD, capPro: CAP_PRO, cap1Good: CAP1_GOOD, cap1Pro: CAP1_PRO, target: TARGET, weights: { rim: W_RIM, swish: W_SW }, generated: new Date().toISOString().slice(0, 10), engine: E.VERSION, samples: STATS[0][0].n };

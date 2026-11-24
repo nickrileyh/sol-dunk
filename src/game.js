@@ -80,7 +80,7 @@
   // ---------------------------------------------------------------- settings / stats / wallet
   const settings = Object.assign({ sound: true, haptics: true }, store.get('settings', {}));
   const stats = Object.assign({ runs: 0, wagered: 0, returned: 0, best: 0, hoops: 0, swishes: 0, deepest: 0, history: [] }, store.get('stats', {}));
-  const prefs = Object.assign({ di: 1, bet: 0.1 }, store.get('prefs', {}));
+  const prefs = Object.assign({ di: 0, bet: 0.1 }, store.get('prefs', {}));
   const wallet = { balance: store.get('balance', CFG.demoStart), nonce: store.get('nonce', 0) };
   function saveAll() {
     store.set('settings', settings); store.set('stats', stats); store.set('prefs', prefs);
@@ -94,6 +94,12 @@
   const NT = E.DIFFS.length;
   const blankLv = () => E.DIFFS.map(() => Array.from({ length: NL }, () => [0, 0])); // [attempts, clears] per tier/level
   function fixProfile(p) {
+    // engine v14 has two modes (the owner asked for Easy and Hard): Easy is the old Pro and Hard the old Legend, the
+    // same rings, so their records carry over; Rookie's and All-Star's best score and deepest level join the nearest
+    if (NT === 2) {
+      if (Array.isArray(p.lv) && p.lv.length === 4) p.lv = [p.lv[1], p.lv[3]];
+      for (const k of ['best', 'deep']) if (Array.isArray(p[k]) && p[k].length === 4) p[k] = [Math.max(p[k][0] || 0, p[k][1] || 0), Math.max(p[k][2] || 0, p[k][3] || 0)];
+    }
     if (!Array.isArray(p.lv) || p.lv.length !== NT) p.lv = blankLv();
     if (!Array.isArray(p.best) || p.best.length !== NT) p.best = E.DIFFS.map(() => 0);
     if (!Array.isArray(p.deep) || p.deep.length !== NT) p.deep = E.DIFFS.map(() => 0);
@@ -107,6 +113,13 @@
     return p;
   }
   const profile = fixProfile(Object.assign({ xp: 0 }, store.get('profile', {})));
+  if (store.get('modes', 0) < 2) { // the four old tiers become the two modes (see fixProfile)
+    const M = [0, 0, 1, 1];
+    prefs.di = M[prefs.di] || 0;
+    for (const h of stats.history) if (h.di != null) h.di = M[h.di] || 0;
+    store.set('modes', 2); saveAll();
+  }
+  if (!(prefs.di >= 0 && prefs.di < NT)) prefs.di = 0;
 
   // Flappy-Dunk-style points: rim +1, swish +2, every swish in a row +1 more (up to +6). Perfect level +10.
   const ringPoints = (o, streak) => (o === 'S' ? 1 + Math.min(streak, 5) : 1);
@@ -288,7 +301,7 @@
     { id: 'deep4', name: 'Deep run', desc: 'Reach level 4', xp: 40, test: (r) => r.level >= 4 },
     { id: 'score50', name: 'High flyer', desc: 'Score 50 in one run', xp: 40, test: (r) => r.score >= 50 },
     { id: 'double', name: 'Double up', desc: 'Cash out at 2× or more', xp: 60, test: (r) => r.paid && r.total >= 2 },
-    { id: 'legend', name: 'Legendary', desc: 'Clear level 1 on Legend', xp: 60, test: (r) => r.di === NT - 1 && r.clears >= 1 },
+    { id: 'legend', name: 'Legendary', desc: 'Clear level 1 on Hard', xp: 60, test: (r) => r.di === NT - 1 && r.clears >= 1 },
     { id: 'deep6', name: 'Into the deep', desc: 'Reach level 6', xp: 80, test: (r) => r.level >= 6 },
     { id: 'streak10', name: 'Unstoppable', desc: 'Swish 10 in a row', xp: 100, test: (r) => r.best >= 10 },
     { id: 'swish100', name: 'Swish collector', desc: 'Swish 100 rings in total', xp: 50, test: () => profile.tot.swish >= 100 },
@@ -603,37 +616,49 @@
     return { outcomes: o.join(''), clear: r.result === 'clear' && capIndex < 0, mov: o.map((x, k) => (def.hoops[k].amp ? '1' : '0')).join('') };
   }
 
-  // ---------------------------------------------------------------- special level, demo (rules in src/special.cjs)
-  // One attempt at a time: a fresh course from its own seed (HMAC-SHA256(serverSeed, clientSeed:nonce:special)), the
-  // entry up front and the prize for clearing every ring, checked by replaying the taps, exactly as the server does.
+  // ---------------------------------------------------------------- special levels, demo (rules in src/special.cjs)
+  // Three a day, each course set for the player's level in that special (kept in the profile: up after a clear, down
+  // after a miss). One attempt at a time: a fresh course from its own seed (HMAC-SHA256(serverSeed, clientSeed:nonce:
+  // special)), the entry up front and the prize for clearing every ring, checked by replaying the taps, as the server does.
   const DemoSpecial = {
     cur: null, fee: SP.ENTRY,
-    tally() { const day = SP.dayKey(Date.now()), t = store.get('special', null); return t && t.day === day ? t : { day, tries: 0, wins: 0 }; },
-    view() {
-      const day = SP.dayKey(Date.now()), R = SP.recipeFor(day), t = this.tally(), x = SP.prizeOf(R.id);
-      return { day, recipe: { id: R.id, name: R.name, blurb: R.blurb, rings: R.n }, fee: this.fee, prize: round9(this.fee * x), x, odds: (SP.PRIZES[R.id] || { p: [] }).p, closesAt: SP.closesAt(day), me: { tries: t.tries, wins: t.wins, blocked: false } };
+    tally() {
+      const day = SP.dayKey(Date.now()), t = store.get('special', null);
+      return t && t.day === day && Array.isArray(t.tries) ? t : { day, tries: [0, 0, 0], wins: [0, 0, 0] };
     },
-    start() {
-      const v = this.view();
-      if (!(v.prize > v.fee)) throw new Error('There’s no special level today');
+    view() {
+      const day = SP.dayKey(Date.now()), t = this.tally();
+      return {
+        day, fee: this.fee, closesAt: SP.closesAt(day), target: SP.TARGET,
+        specials: SP.todayFor(profile.skill, day).map((c) => {
+          const R = SP.BY[c.recipe];
+          return { slot: c.slot, x: c.x, prize: round9(this.fee * c.x), recipe: { id: R.id, name: R.name, blurb: R.blurb }, course: { grade: c.g, rings: c.n, chance: c.chance, level: c.level, levelName: c.levelName }, me: { tries: t.tries[c.slot] || 0, wins: t.wins[c.slot] || 0 } };
+        }),
+        me: { blocked: false, skill: SP.rating(profile.skill) }
+      };
+    },
+    start(slot) {
+      const v = this.view(), sp = v.specials[slot];
+      if (!sp) throw new Error('There’s no such special level today');
       if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
       wallet.balance = round9(wallet.balance - v.fee);
       const paid = DemoMissions.play(v.fee);
-      const t = this.tally(); t.tries++; store.set('special', t);
+      const t = this.tally(); t.tries[slot]++; store.set('special', t);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
-      this.cur = { serverSeed, clientSeed, nonce, recipe: v.recipe.id, fee: v.fee, prize: v.prize, day: v.day, seed: deriveLevelSeed(serverSeed, clientSeed, nonce, 'special') };
+      const c = this.cur = { serverSeed, clientSeed, nonce, slot, recipe: sp.recipe.id, g: sp.course.grade, n: sp.course.rings, fee: v.fee, prize: sp.prize, day: v.day, seed: deriveLevelSeed(serverSeed, clientSeed, nonce, 'special') };
       saveAll();
-      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, seed: this.cur.seed, recipe: v.recipe.id, fee: v.fee, prize: v.prize, missions: { paid }, special: this.view() };
+      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, seed: c.seed, slot, recipe: c.recipe, grade: c.g, rings: c.n, chance: sp.course.chance, x: sp.x, fee: v.fee, prize: c.prize, missions: { paid }, special: this.view() };
     },
     finish(taps) {
       const c = this.cur;
       if (!c) throw new Error('No special level in progress');
       this.cur = null;
-      const r = E.replay(SP.generate(c.seed, c.recipe), taps), won = r.result === 'clear';
+      const r = E.replay(SP.generate(c.seed, c.recipe, c.g, c.n), taps), won = r.result === 'clear';
       if (won) {
         wallet.balance = round9(wallet.balance + c.prize);
-        const t = this.tally(); if (t.day === c.day) { t.wins++; store.set('special', t); }
+        const t = this.tally(); if (t.day === c.day) { t.wins[c.slot]++; store.set('special', t); }
       }
+      profile.skill = SP.addSpecial(profile.skill, c.slot, won, r.outcomes.length); // that special's level moves
       saveAll();
       return { status: won ? 'won' : 'lost', payout: won ? c.prize : 0, serverSeed: c.serverSeed, outcomes: r.outcomes, special: this.view() };
     }
@@ -662,6 +687,7 @@
       const a = E.applyLevel(PAY.PAYTABLE[c.di][L - 1], r.outcomes, c.total, E.DIFFS[c.di].maxWin, c.streak);
       c.total = a.total; c.streak = a.streak; c.level = L;
       c.levels.push(verifiedLevel(def, r, a.capped ? a.capIndex : -1));
+      profile.skill = SP.addLevel(profile.skill, c.di, L, a.capped ? a.capIndex + 1 : r.outcomes.length, !a.capped && r.result !== 'clear'); // rates the player for the special levels
       const pot = DemoPot.check(c);
       const status = a.capped ? 'maxwin' : r.result === 'clear' ? (L >= NL ? 'final' : 'checkpoint') : 'bust';
       let payout = 0, missions = null;
@@ -680,7 +706,7 @@
     missions: { view: () => DemoMissions.view(), async state() { return DemoMissions.view(); } },
     special: {
       async state() { return DemoSpecial.view(); },
-      async start() { return DemoSpecial.start(); },
+      async start(slot) { return DemoSpecial.start(slot); },
       async finish(taps) { return DemoSpecial.finish(taps); }
     }
   };
@@ -747,12 +773,19 @@
       async state() { ServerBank.mv = ServerBank.mconv(await ServerBank.api('/api/missions')); return ServerBank.mv; }
     },
     special: {
-      view(j) { const L = 1e9; return { day: j.day, recipe: j.recipe, fee: j.feeLamports / L, prize: j.prizeLamports / L, x: j.x, odds: j.odds, closesAt: j.closesAt, me: j.me || { tries: 0, wins: 0, blocked: false } }; },
+      view(j) {
+        const L = 1e9;
+        return {
+          day: j.day, fee: j.feeLamports / L, closesAt: j.closesAt, target: j.target,
+          specials: j.specials.map((x) => ({ slot: x.slot, x: x.x, prize: x.prizeLamports / L, recipe: x.recipe, course: x.course, me: x.me })),
+          me: j.me || { blocked: false, skill: null }
+        };
+      },
       async state() { return this.view(await ServerBank.api('/api/special')); },
-      async start() {
-        const clientSeed = randomHex(8), j = await ServerBank.api('/api/special/start', { clientSeed });
+      async start(slot) {
+        const clientSeed = randomHex(8), j = await ServerBank.api('/api/special/start', { clientSeed, slot });
         ServerBank.specId = j.runId;
-        return { seedHash: j.serverSeedHash, clientSeed, nonce: j.nonce, seed: j.seed, recipe: j.recipe, fee: j.feeLamports / 1e9, prize: j.prizeLamports / 1e9, missions: ServerBank.mfrom(j.missions), special: this.view(j.special) };
+        return { seedHash: j.serverSeedHash, clientSeed, nonce: j.nonce, seed: j.seed, slot: j.slot, recipe: j.recipe, grade: j.grade, rings: j.rings, chance: j.chance, x: j.prizeLamports / j.feeLamports, fee: j.feeLamports / 1e9, prize: j.prizeLamports / 1e9, missions: ServerBank.mfrom(j.missions), special: this.view(j.special) };
       },
       async finish(taps) {
         const j = await ServerBank.api('/api/special/finish', { runId: ServerBank.specId, taps });
@@ -1299,7 +1332,7 @@
   const attract = { st: null, bot: null, wait: 0, level: 1, streak: 0, acc: 0, tap: false };
   // navigation: which tab is open, the page pushed over it (if any), which page Challenges shows (ch), and what the
   // locker's live preview should show (fx: force a flame streak)
-  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null };
+  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null, sp: 0 }; // sp: the special whose page is open
   // rings from the level just played that are already behind the ball (never the unplayed ones ahead)
   function keepBehind(st) {
     if (!st) return [];
@@ -1724,23 +1757,31 @@
     if (phase === 'lobby') { if (nav.page === 'special') renderPage(true); if (nav.tab === 'challenges') renderChallenges(true); }
   }
   const oneIn = (p) => (p > 0 ? 'about 1 in ' + Math.max(1, Math.round(1 / p)) : '–');
+  // a special's page (nav.sp): a sketch of the course set for the player, the prize, Play, today's tallies, the level
+  // it's set for and the rules
   function specialHtml() {
     const s = specState;
-    if (!s) return '<div class="empty">The special level isn’t available right now. Try again in a moment.</div>';
-    const left = s.closesAt - Date.now(), o = s.odds || [], back = (p) => Math.round((p || 0) * s.x * 100);
-    const play = s.me.blocked ? '<div class="empty">The special level isn’t available on this account.</div>'
+    const c = s && s.specials ? s.specials[nav.sp] || s.specials[0] : null;
+    if (!c) return '<div class="empty">The special levels aren’t available right now. Try again in a moment.</div>';
+    const left = s.closesAt - Date.now(), pct = Math.round((s.target || SP.TARGET) * 100);
+    const play = s.me && s.me.blocked ? '<div class="empty">The special levels aren’t available on this account.</div>'
       : `<button class="btn btn-primary" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
     return `<div class="sp-card">
-        <div class="sp-head"><div class="sp-name">${s.recipe.name}</div><div class="sp-blurb">${s.recipe.blurb} · ${s.recipe.rings} rings</div></div>
+        <div class="sp-head"><div class="sp-blurb">${c.recipe.blurb} · ${c.course.rings} rings</div></div>
         <canvas class="sp-course" id="spCourse" aria-hidden="true"></canvas>
         <div class="sp-cap">A sample course. Every attempt gets a new one from its own seed.</div>
       </div>
-      <div class="sp-prize"><span class="k">Clear every ring to win</span><div class="big"><span class="num">${fmtAmt(s.prize)}</span><span class="unit">SOL</span></div><span class="x">${s.x.toFixed(2)}× your ${fmtBet(s.fee)} SOL entry</span></div>
+      <div class="sp-prize"><span class="k">Clear every ring to win</span><div class="big"><span class="num">${fmtAmt(c.prize)}</span><span class="unit">SOL</span></div><span class="x">${c.x}× your ${fmtBet(s.fee)} SOL entry</span></div>
       ${play}
-      <div class="tiles"><div><b>${s.me.tries}</b><span>Tries today</span></div><div><b>${s.me.wins}</b><span>Wins today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>Next special</span></div></div>
-      <div class="sec-h"><h3>How often it’s beaten</h3></div>
-      <div class="group sp-odds">${[['A casual player', o[0]], ['An average player', o[1]], ['A strong player', o[2]]].map(([k, p]) => `<div class="row"><span>${k}</span><b>${oneIn(p)}</b></div>`).join('')}</div>
-      <p class="pot-rules">Miss any ring and the entry is gone; clear them all and the prize is paid at once. From the simulator: a strong player gets back about ${back(o[2])}% of their entries over time, an average one about ${back(o[1])}%. A new special comes every day at midnight UTC. Its rings don’t count toward missions or the pot, but the entry counts as play for mission SOL.</p>`;
+      <div class="tiles"><div><b>${c.me.tries}</b><span>Tries today</span></div><div><b>${c.me.wins}</b><span>Wins today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>New specials</span></div></div>
+      <div class="sec-h"><h3>Set for you</h3></div>
+      <div class="group sp-odds">
+        <div class="row"><span>This course is set for</span><b>${c.course.levelName || SP.levelName(c.course.level)}</b></div>
+        <div class="row"><span>A player at that level clears it</span><b>${oneIn(c.course.chance)}</b></div>
+        <div class="row"><span>After a clear</span><b>Next one harder</b></div>
+        <div class="row"><span>After a miss</span><b>A little easier</b></div>
+      </div>
+      <p class="pot-rules">Clear every ring to win the prize; miss one and the entry is gone. Each special’s course is set for your level in it, and the level moves: up when you clear it, down a little when you don’t. It settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries whatever your level: the house keeps about ${100 - pct}% from beginners and pros alike. You start at ${SP.levelName(SP.START)}, or higher if your runs show more. New specials come every day at midnight UTC, and your levels carry over. Their rings don’t count toward missions or the pot, but entries count as play for mission SOL.</p>`;
   }
   // a sketch of a course: the rings in order, how far each one bobs, and the gold finish
   function drawCourse(el, def) {
@@ -1763,12 +1804,14 @@
     }
     g.fillStyle = '#ff8a2a'; g.beginPath(); g.arc(sx(0), sy(def.startY), 4.2, 0, Math.PI * 2); g.fill();
   }
+  // today's three specials in one card: a row each with its twist, length, prize and Play; tap a row for its page
   function specialCard() {
     const s = specState;
-    if (!s) return '';
-    const act = s.me.blocked ? '<span class="pill off">Not available</span>' : `<button class="pill" id="chSpPlay">Play ${fmtBet(s.fee)}</button>`;
-    return `<div class="cc"><button class="cc-open" data-page="special" aria-label="Today’s special: ${s.recipe.name}. Details"><span class="cc-k">Today’s special</span><span class="cc-n">${s.recipe.name}</span><span class="cc-s">${s.recipe.blurb} · ${s.recipe.rings} rings</span><span class="chev">${ICON.chev}</span></button>
-      <div class="cc-act"><span class="cc-v">Win <b class="num">${fmtAmt(s.prize)}</b> SOL</span>${act}</div></div>`;
+    if (!s || !s.specials) return '';
+    const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked;
+    const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></button>
+      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(c.prize)}</b> SOL</span>${blocked ? '<span class="pill off">Not available</span>' : `<button class="pill" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`}</div></div>`).join('');
+    return `<div class="cc sp-cc"><div class="cc-h"><span class="cc-k">Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftText(left) : 'New soon'}</span></div>${rows}</div>`;
   }
   function potCard() {
     const p = potState;
@@ -1792,7 +1835,7 @@
   }
   function wireChallenges() {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
-    on('chSpPlay', () => startSpecial());
+    document.querySelectorAll('#cBody .spr .pill[data-slot]').forEach((b) => b.addEventListener('click', () => startSpecial(+b.dataset.slot)));
     on('chPotEnter', enterPot);
   }
 
@@ -1818,14 +1861,14 @@
     enterRun(r.missions);
   }
   // a special level attempt: the entry up front, one long level, the prize for clearing every ring
-  async function startSpecial() {
+  async function startSpecial(slot) {
     if (run.busy || (phase !== 'lobby' && phase !== 'over')) return;
     Sound.unlock();
     run.busy = true;
     let r;
     try {
-      r = await bank.special.start();
-      Object.assign(run, { mode: 'special', recipe: r.recipe, prize: r.prize, di: SP.BY[r.recipe].base[0], bet: r.fee, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.seed }, RUN_FRESH);
+      r = await bank.special.start(slot);
+      Object.assign(run, { mode: 'special', slot: r.slot, recipe: r.recipe, g: r.grade, n: r.rings, x: r.x, prize: r.prize, di: SP.GRADES[r.grade][0], bet: r.fee, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.seed }, RUN_FRESH);
       run.log = []; run.told = {}; run.share = ''; run.potJust = false;
       if (r.special) specState = r.special;
     } catch (e) {
@@ -1855,7 +1898,7 @@
 
   function beginLevel(first) {
     const sp = run.mode === 'special';
-    const def = sp ? SP.generate(run.levelSeed, run.recipe) : E.generateLevel(run.levelSeed, run.di, run.level);
+    const def = sp ? SP.generate(run.levelSeed, run.recipe, run.g, run.n) : E.generateLevel(run.levelSeed, run.di, run.level);
     const prev = view.st;
     view.prevHoops = keepBehind(prev);
     view.offset = first && prev ? ball.x + 140 : ball.x + 24;
@@ -2068,7 +2111,7 @@
   function recordSpecial(payout, won) {
     stats.returned = round9(stats.returned + payout);
     stats.hoops += run.hoops; stats.swishes += run.swishes;
-    stats.history.unshift({ t: Date.now(), kind: 'special', recipe: run.recipe, di: run.di, bet: run.bet, payout, level: 1, mult: won ? run.prize / run.bet : 0, result: won ? 'won' : 'lost', seedHash: run.seedHash, serverSeed: run.serverSeed, clientSeed: run.clientSeed, nonce: run.nonce });
+    stats.history.unshift({ t: Date.now(), kind: 'special', slot: run.slot, recipe: run.recipe, g: run.g, n: run.n, di: run.di, bet: run.bet, payout, level: 1, mult: won ? run.prize / run.bet : 0, result: won ? 'won' : 'lost', seedHash: run.seedHash, serverSeed: run.serverSeed, clientSeed: run.clientSeed, nonce: run.nonce });
     stats.history.length = Math.min(stats.history.length, 30);
     // XP for the points; the special doesn't count toward missions, trophies or the pot
     const before = lvlOf(profile.xp), xp = run.score + (won ? 25 : 0);
@@ -2246,7 +2289,8 @@
     pr.dailies.forEach((c) => g.push(['daily', ICON.check, dailyText(c) + ' · +' + c.xp + ' XP']));
     pr.weeklies.forEach((c) => g.push(['daily', ICON.check, weeklyText(c) + ' · +' + c.xp + ' XP']));
     pr.careers.forEach((m) => g.push(['daily', ICON.flag, careerText(m) + ' · +' + m[2] + ' XP']));
-    if (!g.length && run.mode === 'special' && specState) g.push(['', ICON.trophy, `${specState.recipe.name} today: ${specState.me.wins} of ${specState.me.tries} cleared`]);
+    const sNow = run.mode === 'special' && specState && specState.specials ? specState.specials[run.slot] : null;
+    if (!g.length && sNow) g.push(['', ICON.trophy, `${sNow.recipe.name} today: ${sNow.me.wins} of ${sNow.me.tries} cleared`]);
     else if (!g.length) { // nothing new this run: show the next mission, so there's always a goal
       const m = openMissions(runFacts0())[0];
       if (m) g.push(['', ICON.target, `${m.text} · ${m.p}/${m.n}`]);
@@ -3442,7 +3486,7 @@
       const panelOpen = !ui.panel.classList.contains('hide');
       if (e.code === 'Space' && !panelOpen && !e.repeat) {
         if (phase === 'lobby') { e.preventDefault(); if (nav.tab === 'play') startRun(); return; }
-        if (phase === 'over' && armed(ui.res)) { e.preventDefault(); show(ui.res, false); if (run.mode === 'special') startSpecial(); else startRun(); return; }
+        if (phase === 'over' && armed(ui.res)) { e.preventDefault(); show(ui.res, false); if (run.mode === 'special') startSpecial(run.slot); else startRun(); return; }
       }
       e.preventDefault();
       if (!e.repeat) flapInput();
@@ -3481,7 +3525,7 @@
 
   $('cashBtn').addEventListener('click', cashOut);
   $('goBtn').addEventListener('click', keepGoing);
-  $('againBtn').addEventListener('click', () => { if (!armed(ui.res)) return; show(ui.res, false); if (run.mode === 'special') startSpecial(); else startRun(); });
+  $('againBtn').addEventListener('click', () => { if (!armed(ui.res)) return; show(ui.res, false); if (run.mode === 'special') startSpecial(run.slot); else startRun(); });
   $('lobbyBtn').addEventListener('click', () => { Sound.click(); const sp = run.mode === 'special'; backToLobby(); if (sp) setTab('challenges'); });
   $('shareBtn').addEventListener('click', shareRun);
   $('pauseBtn').addEventListener('click', () => { if (phase === 'play') pause(); else if (phase === 'paused') resume(); });
@@ -3506,7 +3550,7 @@
   $('panelClose').addEventListener('click', closePanel);
   ui.scrim.addEventListener('click', closePanel);
   // any [data-page] button opens its page, including ones drawn later (Profile rows, the Odds link, the pause card)
-  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-page]'); if (b && !b.disabled) openPage(b.dataset.page); });
+  document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-page]'); if (b && !b.disabled) openPage(b.dataset.page, b.dataset.slot); });
   $('balBtn').addEventListener('click', () => openPage('wallet'));
   // sound and vibration: the mute capsule, the switches on Profile and the ones on the pause card are one setting each
   function syncSettings() {
@@ -3545,7 +3589,7 @@
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.`) +
       row('star', 'gold', 'Score and XP', `Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, missions and trophies earn XP, which unlocks balls, wings, flames, trails, rims and courts in the Locker. Score and XP never change what a run pays.`) +
       row('mission', 'purple', 'Missions', `Three new missions every day and every week (new ones at midnight UTC, and on Mondays), and a career of six chapters, each ending in an item you can only get there. They count in every run, whatever you bet. Daily and weekly missions also pay SOL once you've played ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week (bets and special level entries); rewards earned before then wait, and go when the day or week ends.`) +
-      row('trophy', 'gold', 'Challenges', `<b>Special level</b>: one a day, the same for everyone, with a twist like every ring moving. Pay the entry, then clear every ring of a fresh course to win the prize. <b>Daily pot</b>: buy in, then meet the day's challenge in any regular run to share the pot.`) +
+      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: three a day, each with a twist like every ring moving and a prize of 2×, 3× or 5× the entry. Pay the entry, then clear every ring of a fresh course to win. Each course is set for your level in that special: harder after a clear, a little easier after a miss. <b>Daily pot</b>: buy in, then meet the day's challenge in any regular run to share the pot.`) +
       `</div>`;
   }
   // locker thumbnails, drawn with the same code as the game
@@ -3691,7 +3735,7 @@
   }
   function wirePage(kind) {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
-    if (kind === 'special') on('spPlay', () => startSpecial());
+    if (kind === 'special') on('spPlay', () => startSpecial(nav.sp));
     if (kind === 'pot') {
       on('potEnter', enterPot);
       on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
@@ -3704,7 +3748,10 @@
       const out = $('fairOut');
       if (!ok) { out.className = 'verify-out bad'; out.textContent = 'The revealed seed does not match the hash shown before the run.'; return; }
       const rows = [];
-      if (h.kind === 'special') rows.push(`<li><span>Special</span><span class="mono-s">${deriveLevelSeed(h.serverSeed, h.clientSeed, h.nonce, 'special').slice(0, 16)}…</span></li>`);
+      if (h.kind === 'special') {
+        rows.push(`<li><span>Special</span><span class="mono-s">${deriveLevelSeed(h.serverSeed, h.clientSeed, h.nonce, 'special').slice(0, 16)}…</span></li>`);
+        if (h.g != null && SP.GRADES[h.g]) rows.push(`<li><span>Course</span><span>${h.n} rings, ${E.DIFFS[SP.GRADES[h.g][0]].name} level ${SP.GRADES[h.g][1]} rings</span></li>`);
+      }
       else for (let L = 1; L <= h.level; L++) rows.push(`<li><span>Level ${L}</span><span class="mono-s">${deriveLevelSeed(h.serverSeed, h.clientSeed, h.nonce, L).slice(0, 16)}…</span></li>`);
       out.className = 'verify-out good';
       out.innerHTML = `<p><b>Verified.</b> The revealed seed hashes to the value you saw before the run, so the rings were fixed before your first tap.</p><ul class="list group">${rows.join('')}</ul>`;
@@ -3720,7 +3767,7 @@
 
   // ---------------------------------------------------------------- pages
   const PAGES = {
-    special: ['Today’s special', specialHtml],
+    special: [() => { const c = specState && specState.specials && specState.specials[nav.sp]; return c ? c.recipe.name : 'Special level'; }, specialHtml],
     pot: ['Daily pot', potHtml],
     week: ['This week', weekHtml],
     career: ['Career', careerHtml],
@@ -3733,8 +3780,9 @@
   };
   const TAB_NAME = { play: 'Play', challenges: 'Challenges', profile: 'Profile', locker: 'Locker' };
   const vPg = $('vPage');
-  function openPage(kind) {
+  function openPage(kind, slot) {
     if (!PAGES[kind]) return;
+    if (kind === 'special' && slot != null) nav.sp = +slot || 0; // which of the day's specials
     if (!ui.panel.classList.contains('hide')) closePanel();
     Sound.click();
     if (kind === 'odds' && !nav.page) oddsTier = null; // from the Play sheet or Profile: the tier you have picked
@@ -3748,14 +3796,15 @@
     setTimeout(() => $('pgBack').focus({ preventScroll: true }), 30);
   }
   function renderPage(keepScroll) {
-    const body = $('pgBody'), y = body.scrollTop, [t, fn] = PAGES[nav.page];
+    const body = $('pgBody'), y = body.scrollTop, [t0, fn] = PAGES[nav.page], t = typeof t0 === 'function' ? t0() : t0;
     body.innerHTML = `<div class="vcol"><h2 class="vtitle" id="pgTitle">${t.replace('&', '&amp;')}</h2>${fn()}</div>`;
     body.dataset.kind = nav.page;
     wirePage(nav.page);
     body.querySelectorAll('canvas[data-t]').forEach((c) => drawThumb(c, c.dataset.t, c.dataset.id));
-    if (nav.page === 'special' && specState) {
-      const day = specState.day, id = specState.recipe.id;
-      requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[id]) drawCourse(c, SP.generate('preview|' + day, id)); });
+    const sc = nav.page === 'special' && specState && specState.specials && specState.specials[nav.sp];
+    if (sc) {
+      const day = specState.day, slot = sc.slot;
+      requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[sc.recipe.id]) drawCourse(c, SP.generate('preview|' + day + '|' + slot, sc.recipe.id, sc.course.grade, sc.course.rings)); });
     }
     if (keepScroll) body.scrollTop = y;
   }
