@@ -1,80 +1,80 @@
 Calibrated to average player, mode edge target 0.9  
 
 == Rookie
-  L1  rim x1.000  swish x1.001 1.001 1.001 1.001 1.001   avg clear 89.6%  pass 98.2%  swish 78%  rtp 0.9003  lvl-edge 10.0%
-  L2  rim x1.003  swish x1.005 1.006 1.007 1.009 1.010   avg clear 86.6%  pass 97.6%  swish 75%  rtp 0.8099  lvl-edge 10.1%
-  L3  rim x1.005  swish x1.010 1.012 1.014 1.016 1.017   avg clear 82.7%  pass 96.9%  swish 72%  rtp 0.716  lvl-edge 11.6%
-  L4  rim x1.007  swish x1.013 1.016 1.018 1.021 1.023   avg clear 77.9%  pass 95.9%  swish 69%  rtp 0.6075  lvl-edge 15.2%
-  L5  rim x1.010  swish x1.019 1.023 1.027 1.031 1.035   avg clear 70.3%  pass 94.3%  swish 65%  rtp 0.4806  lvl-edge 20.9%
-  L6  rim x1.015  swish x1.030 1.036 1.041 1.047 1.053   avg clear 62.0%  pass 92.4%  swish 62%  rtp 0.3539  lvl-edge 26.4%
-  L7  rim x1.023  swish x1.046 1.055 1.064 1.073 1.082   avg clear 51.5%  pass 89.6%  swish 58%  rtp 0.2342  lvl-edge 33.8%
-  L8  rim x1.039  swish x1.078 1.094 1.110 1.126 1.141   avg clear 41.0%  pass 86.3%  swish 53%  rtp 0.1434  lvl-edge 38.8%
+  L1  rim x1.000  swish x1.000 1.000 1.000 1.000 1.000   avg clear 89.7%  pass 98.2%  swish 78%  rtp 0.8966  lvl-edge 10.3%
+  L2  rim x1.003  swish x1.005 1.006 1.007 1.008 1.010   avg clear 86.6%  pass 97.6%  swish 75%  rtp 0.8067  lvl-edge 10.0%
+  L3  rim x1.005  swish x1.010 1.013 1.015 1.017 1.019   avg clear 82.8%  pass 96.9%  swish 72%  rtp 0.7175  lvl-edge 11.1%
+  L4  rim x1.007  swish x1.013 1.016 1.018 1.021 1.023   avg clear 78.0%  pass 96.0%  swish 69%  rtp 0.6098  lvl-edge 15.0%
+  L5  rim x1.010  swish x1.020 1.023 1.027 1.031 1.035   avg clear 70.2%  pass 94.3%  swish 65%  rtp 0.4827  lvl-edge 20.8%
+  L6  rim x1.015  swish x1.029 1.035 1.041 1.047 1.052   avg clear 61.9%  pass 92.4%  swish 62%  rtp 0.3542  lvl-edge 26.6%
+  L7  rim x1.023  swish x1.046 1.055 1.064 1.073 1.082   avg clear 51.7%  pass 89.6%  swish 57%  rtp 0.235  lvl-edge 33.7%
+  L8  rim x1.038  swish x1.077 1.092 1.107 1.123 1.138   avg clear 41.0%  pass 86.3%  swish 53%  rtp 0.1429  lvl-edge 39.2%
 == Pro
-  L1  rim x1.001  swish x1.001 1.002 1.002 1.002 1.002   avg clear 89.3%  pass 98.1%  swish 74%  rtp 0.9002  lvl-edge 10.0%
-  L2  rim x1.004  swish x1.009 1.010 1.012 1.014 1.015   avg clear 81.8%  pass 96.7%  swish 70%  rtp 0.7784  lvl-edge 13.5%
-  L3  rim x1.009  swish x1.017 1.021 1.024 1.028 1.031   avg clear 74.6%  pass 95.3%  swish 66%  rtp 0.6475  lvl-edge 16.8%
-  L4  rim x1.014  swish x1.029 1.035 1.041 1.046 1.052   avg clear 64.0%  pass 92.9%  swish 62%  rtp 0.4899  lvl-edge 24.3%
-  L5  rim x1.022  swish x1.045 1.054 1.063 1.072 1.081   avg clear 53.6%  pass 90.1%  swish 57%  rtp 0.3355  lvl-edge 31.5%
-  L6  rim x1.037  swish x1.075 1.090 1.105 1.120 1.135   avg clear 42.2%  pass 86.7%  swish 53%  rtp 0.2075  lvl-edge 38.1%
-  L7  rim x1.055  swish x1.109 1.131 1.153 1.175 1.197   avg clear 31.2%  pass 82.4%  swish 48%  rtp 0.1094  lvl-edge 47.3%
-  L8  rim x1.086  swish x1.172 1.207 1.241 1.276 1.310   avg clear 21.1%  pass 77.0%  swish 44%  rtp 0.0501  lvl-edge 54.2%
+  L1  rim x1.001  swish x1.001 1.001 1.002 1.002 1.002   avg clear 89.3%  pass 98.1%  swish 74%  rtp 0.9  lvl-edge 10.0%
+  L2  rim x1.004  swish x1.009 1.010 1.012 1.014 1.015   avg clear 81.8%  pass 96.7%  swish 70%  rtp 0.7785  lvl-edge 13.5%
+  L3  rim x1.009  swish x1.017 1.021 1.024 1.027 1.031   avg clear 74.6%  pass 95.3%  swish 66%  rtp 0.6471  lvl-edge 16.9%
+  L4  rim x1.014  swish x1.029 1.034 1.040 1.046 1.052   avg clear 64.1%  pass 92.9%  swish 62%  rtp 0.4903  lvl-edge 24.2%
+  L5  rim x1.023  swish x1.045 1.054 1.063 1.073 1.082   avg clear 53.6%  pass 90.1%  swish 57%  rtp 0.3368  lvl-edge 31.3%
+  L6  rim x1.038  swish x1.075 1.090 1.105 1.121 1.136   avg clear 42.4%  pass 86.7%  swish 53%  rtp 0.2101  lvl-edge 37.6%
+  L7  rim x1.054  swish x1.109 1.130 1.152 1.174 1.196   avg clear 31.4%  pass 82.5%  swish 48%  rtp 0.1108  lvl-edge 47.3%
+  L8  rim x1.085  swish x1.170 1.205 1.239 1.273 1.307   avg clear 20.8%  pass 76.9%  swish 44%  rtp 0.0497  lvl-edge 55.2%
 == All-Star
-  L1  rim x1.004  swish x1.008 1.009 1.011 1.012 1.014   avg clear 81.7%  pass 96.7%  swish 65%  rtp 0.855  lvl-edge 14.5%
-  L2  rim x1.010  swish x1.021 1.025 1.029 1.033 1.038   avg clear 68.7%  pass 93.9%  swish 58%  rtp 0.6599  lvl-edge 22.8%
-  L3  rim x1.021  swish x1.042 1.050 1.059 1.067 1.075   avg clear 57.3%  pass 91.1%  swish 52%  rtp 0.4702  lvl-edge 28.7%
-  L4  rim x1.035  swish x1.070 1.084 1.097 1.111 1.125   avg clear 46.7%  pass 88.0%  swish 48%  rtp 0.3095  lvl-edge 34.2%
-  L5  rim x1.053  swish x1.105 1.126 1.147 1.169 1.190   avg clear 35.4%  pass 83.9%  swish 44%  rtp 0.1786  lvl-edge 42.3%
-  L6  rim x1.082  swish x1.165 1.198 1.231 1.264 1.297   avg clear 25.5%  pass 79.4%  swish 41%  rtp 0.0937  lvl-edge 47.5%
-  L7  rim x1.121  swish x1.242 1.290 1.338 1.387 1.435   avg clear 16.2%  pass 73.4%  swish 37%  rtp 0.041  lvl-edge 56.3%
-  L8  rim x1.186  swish x1.373 1.448 1.522 1.597 1.671   avg clear 9.3%  pass 67.0%  swish 34%  rtp 0.0158  lvl-edge 61.6%
+  L1  rim x1.004  swish x1.008 1.009 1.011 1.013 1.014   avg clear 81.8%  pass 96.7%  swish 64%  rtp 0.8559  lvl-edge 14.4%
+  L2  rim x1.010  swish x1.020 1.025 1.029 1.033 1.037   avg clear 68.8%  pass 94.0%  swish 58%  rtp 0.661  lvl-edge 22.8%
+  L3  rim x1.021  swish x1.042 1.051 1.059 1.068 1.076   avg clear 57.2%  pass 91.1%  swish 52%  rtp 0.4707  lvl-edge 28.8%
+  L4  rim x1.035  swish x1.071 1.085 1.099 1.114 1.128   avg clear 46.2%  pass 87.9%  swish 48%  rtp 0.3073  lvl-edge 34.7%
+  L5  rim x1.054  swish x1.107 1.129 1.150 1.172 1.193   avg clear 35.4%  pass 84.0%  swish 44%  rtp 0.1786  lvl-edge 41.9%
+  L6  rim x1.082  swish x1.164 1.197 1.229 1.262 1.295   avg clear 25.7%  pass 79.5%  swish 41%  rtp 0.0938  lvl-edge 47.5%
+  L7  rim x1.121  swish x1.242 1.290 1.338 1.387 1.435   avg clear 16.1%  pass 73.4%  swish 37%  rtp 0.0409  lvl-edge 56.5%
+  L8  rim x1.180  swish x1.360 1.432 1.504 1.576 1.648   avg clear 9.5%  pass 67.1%  swish 33%  rtp 0.0154  lvl-edge 62.2%
 == Legend
-  L1  rim x1.009  swish x1.019 1.022 1.026 1.030 1.033   avg clear 71.8%  pass 94.6%  swish 62%  rtp 0.7958  lvl-edge 20.4%
-  L2  rim x1.020  swish x1.040 1.048 1.056 1.065 1.073   avg clear 55.4%  pass 90.5%  swish 55%  rtp 0.5477  lvl-edge 31.2%
-  L3  rim x1.037  swish x1.074 1.088 1.103 1.118 1.133   avg clear 44.5%  pass 87.3%  swish 50%  rtp 0.3524  lvl-edge 35.6%
-  L4  rim x1.056  swish x1.113 1.136 1.158 1.181 1.203   avg clear 33.9%  pass 83.3%  swish 46%  rtp 0.2021  lvl-edge 42.7%
-  L5  rim x1.085  swish x1.170 1.204 1.239 1.273 1.307   avg clear 24.1%  pass 78.6%  swish 41%  rtp 0.1029  lvl-edge 49.1%
-  L6  rim x1.125  swish x1.249 1.299 1.349 1.398 1.448   avg clear 15.7%  pass 73.1%  swish 37%  rtp 0.0447  lvl-edge 56.6%
-  L7  rim x1.188  swish x1.376 1.451 1.527 1.602 1.677   avg clear 9.4%  pass 66.9%  swish 34%  rtp 0.0175  lvl-edge 60.8%
-  L8  rim x1.258  swish x1.516 1.619 1.722 1.825 1.928   avg clear 5.5%  pass 61.2%  swish 30%  rtp 0.0061  lvl-edge 65.0%
+  L1  rim x1.010  swish x1.019 1.023 1.027 1.031 1.034   avg clear 71.7%  pass 94.6%  swish 62%  rtp 0.798  lvl-edge 20.2%
+  L2  rim x1.020  swish x1.040 1.048 1.057 1.065 1.073   avg clear 55.1%  pass 90.5%  swish 55%  rtp 0.546  lvl-edge 31.6%
+  L3  rim x1.038  swish x1.075 1.091 1.106 1.121 1.136   avg clear 44.2%  pass 87.2%  swish 50%  rtp 0.3513  lvl-edge 35.7%
+  L4  rim x1.057  swish x1.113 1.136 1.159 1.181 1.204   avg clear 34.0%  pass 83.4%  swish 45%  rtp 0.2029  lvl-edge 42.3%
+  L5  rim x1.085  swish x1.170 1.204 1.238 1.272 1.306   avg clear 23.9%  pass 78.5%  swish 41%  rtp 0.1022  lvl-edge 49.6%
+  L6  rim x1.128  swish x1.256 1.308 1.359 1.410 1.462   avg clear 15.8%  pass 73.2%  swish 37%  rtp 0.0459  lvl-edge 55.1%
+  L7  rim x1.183  swish x1.366 1.439 1.512 1.585 1.658   avg clear 9.2%  pass 66.8%  swish 34%  rtp 0.0169  lvl-edge 63.1%
+  L8  rim x1.253  swish x1.505 1.606 1.707 1.809 1.910   avg clear 5.8%  pass 61.4%  swish 31%  rtp 0.006  lvl-edge 64.4%
 
 RTP by skill if you cash out at checkpoint 1..8 (no cap):
 == Rookie
-  novice         61.9   36.4   19.4    9.4    3.9    1.3    0.3    0.1
-  casual         80.1   62.0   46.0   32.0   19.5   10.5    4.7    1.8
-  average        90.0   81.0   71.6   60.7   48.1   35.4   23.4   14.3
-  average_val    90.0   81.3   71.7   60.5   47.9   35.4   23.4   13.8
-  good           96.9   96.5   96.8   96.9   96.9   97.0   96.9   97.0
-  pro            99.5  103.1  110.3  119.9  135.7  161.4  206.6  305.0
-  perfect       100.6  106.8  118.2  135.4  166.5  226.9  363.8  799.1
+  novice         61.8   36.7   19.8    9.6    4.0    1.4    0.4    0.1
+  casual         80.1   62.1   46.3   32.1   19.6   10.6    4.7    1.8
+  average        89.7   80.7   71.7   61.0   48.3   35.4   23.5   14.3
+  average_val    89.8   80.9   71.6   60.6   48.4   35.8   23.9   14.1
+  good           96.4   96.0   97.0   96.9   97.0   97.0   97.0   97.0
+  pro            98.9  102.7  110.8  120.2  136.1  161.1  205.2  299.9
+  perfect       100.0  106.2  118.8  136.2  167.4  226.9  363.9  787.6
 == Pro
-  novice         61.8   32.7   15.0    5.4    1.6    0.3    0.1    0.0
-  casual         78.2   55.8   36.2   20.1    9.5    3.8    1.1    0.3
-  average        90.0   77.8   64.7   49.0   33.6   20.7   10.9    5.0
-  average_val    89.9   76.9   63.7   48.2   33.0   20.8   10.8    4.7
-  good           98.0   96.9   96.9   96.9   96.8   96.9   96.9   96.9
-  pro           100.7  106.6  119.7  142.5  181.7  261.3  409.3  770.2
-  perfect       101.1  110.5  132.7  179.8  286.2  607.0 1747.0 8295.2
+  novice         61.9   32.9   15.2    5.6    1.7    0.4    0.1    0.0
+  casual         78.3   56.1   36.6   20.6    9.8    4.0    1.2    0.3
+  average        90.0   77.8   64.7   49.0   33.7   21.0   11.1    5.0
+  average_val    90.0   77.1   64.1   48.5   33.2   21.0   10.8    4.8
+  good           98.0   96.8   97.0   96.9   97.0   97.0   97.0   97.0
+  pro           100.6  106.5  119.4  141.9  182.1  262.1  409.0  752.0
+  perfect       101.0  110.4  132.6  179.5  287.4  612.7 1754.3 8259.3
 == All-Star
-  novice         53.1   22.0    7.5    1.9    0.4    0.1    0.0    0.0
-  casual         72.1   43.0   22.0    9.7    3.5    1.0    0.2    0.0
-  average        85.5   66.0   47.0   30.9   17.9    9.4    4.1    1.6
-  average_val    86.0   66.9   48.5   32.0   18.4    9.8    4.2    1.7
-  good           99.0   97.0   96.9   97.0   97.0   96.8   97.0   96.8
-  pro           104.9  117.4  144.8  199.0  301.8  528.3 1090.5 2894.3
-  perfect       107.0  133.7  205.8  410.1 1114.7 4792.034749.8564596.0
+  novice         53.4   22.1    7.6    2.0    0.4    0.1    0.0    0.0
+  casual         72.2   42.8   22.1    9.8    3.5    1.0    0.2    0.0
+  average        85.6   66.1   47.1   30.7   17.9    9.4    4.1    1.5
+  average_val    86.1   67.0   48.6   32.6   18.9   10.2    4.5    1.7
+  good           99.0   96.9   96.9   96.8   96.9   97.0   97.0   97.0
+  pro           104.9  117.1  145.1  200.7  308.9  533.7 1108.4 2760.7
+  perfect       107.1  133.0  205.7  416.8 1148.1 4891.035487.5527262.9
 == Legend
-  novice         44.0   13.7    3.5    0.7    0.1    0.0    0.0    0.0
-  casual         63.6   31.1   13.3    4.8    1.3    0.3    0.1    0.0
-  average        79.6   54.8   35.2   20.2   10.3    4.5    1.8    0.6
-  average_val    80.3   54.6   35.3   20.1   10.3    4.8    1.9    0.7
-  good           99.0   97.0   97.0   96.8   97.0   97.0   97.0   97.0
-  pro           109.3  133.0  185.3  284.5  503.8  993.9 2403.6 6968.8
-  perfect       117.4  178.3  367.0 1035.1 4443.831668.0464544.413181088.9
+  novice         44.7   14.0    3.6    0.7    0.1    0.0    0.0    0.0
+  casual         63.8   31.0   13.3    4.7    1.3    0.3    0.0    0.0
+  average        79.8   54.6   35.1   20.3   10.2    4.6    1.7    0.6
+  average_val    80.8   55.0   36.0   20.6   10.4    4.9    1.8    0.6
+  good           99.0   97.0   97.0   97.0   97.0   97.0   97.0   96.9
+  pro           109.9  133.7  189.3  290.1  513.4 1045.9 2454.0 7042.1
+  perfect       117.9  179.1  374.2 1059.9 4512.733925.3461381.712103086.8
 
 Best possible win (every ring a swish), after each level:
-  Rookie        1.01x    1.07x    1.18x    1.35x    1.66x    2.27x    3.64x    8.04x
-  Pro           1.01x    1.11x    1.33x    1.80x    2.87x    6.14x   18.06x   91.27x
-  All-Star      1.07x    1.34x    2.07x    4.19x   11.89x   56.60x  494.25x10759.72x
-  Legend        1.17x    1.79x    3.79x   11.49x   57.28x  528.02x11744.79x603236.09x
+  Rookie        1.00x    1.06x    1.19x    1.36x    1.67x    2.27x    3.64x    7.91x
+  Pro           1.01x    1.10x    1.33x    1.80x    2.88x    6.20x   18.15x   90.46x
+  All-Star      1.07x    1.33x    2.07x    4.26x   12.28x   57.90x  505.55x10127.56x
+  Legend        1.18x    1.80x    3.87x   11.79x   58.51x  571.33x11868.55x576232.71x
 
 wrote src/paytable.cjs and sim/out/calibration.json
