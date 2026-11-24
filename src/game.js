@@ -309,7 +309,22 @@
         [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, t + 0.04 + i * 0.03, 0.7, 'triangle', 0.045));
       },
       levelUp() { if (!on()) return; const t = ac.currentTime; [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => { tone(f, t + i * 0.075, 0.32, 'triangle', 0.06); tone(f * 2, t + i * 0.075, 0.18, 'sine', 0.02); }); },
-      unlock() { if (!on()) return; const t = ac.currentTime; tone(1318.5, t, 0.55, 'sine', 0.07); tone(1975.5, t + 0.09, 0.7, 'sine', 0.05); tone(2637, t + 0.18, 0.5, 'sine', 0.025); }
+      unlock() { if (!on()) return; const t = ac.currentTime; tone(1318.5, t, 0.55, 'sine', 0.07); tone(1975.5, t + 0.09, 0.7, 'sine', 0.05); tone(2637, t + 0.18, 0.5, 'sine', 0.025); },
+      goal() { if (!on()) return; const t = ac.currentTime; tone(1567.98, t, 0.2, 'sine', 0.045); tone(2093, t + 0.09, 0.34, 'sine', 0.04); },
+      // the arena: k from 0 (a murmur) to 1 (a roar)
+      cheer(k) {
+        if (!on()) return; const t = ac.currentTime, d = 0.6 + 0.8 * k;
+        hiss(t, d, 650, 1400, 0.55, 0.035 + 0.06 * k, 'bandpass');
+        hiss(t + 0.03, d * 0.85, 1500, 2700, 0.9, 0.018 + 0.035 * k, 'bandpass');
+        hiss(t + 0.02, d * 0.8, 280, 520, 0.8, 0.025 + 0.035 * k, 'bandpass');
+      },
+      applause(k) {
+        if (!on()) return; const t = ac.currentTime, n = Math.round(24 + 44 * k), span = 0.8 + 0.9 * k;
+        for (let i = 0; i < n; i++) {
+          const u = Math.random(), at = t + 0.05 + u * span, a = (0.016 + 0.026 * k) * (1 - 0.75 * u);
+          hiss(at, 0.03 + Math.random() * 0.02, rnd(1000, 2600), rnd(650, 1300), 1.5, a, 'bandpass');
+        }
+      }
     };
   })();
   function buzz(ms) { if (settings.haptics && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } }
@@ -680,6 +695,65 @@
     setTimeout(nextCallout, 800);
   }
   function clearCallouts() { CALL.q.length = 0; }
+
+  // Goals reached during a run (daily challenges, achievements) get a small notice at the bottom the moment
+  // they happen. They are awarded when the run ends, whatever happens next, as before.
+  const NOTE = { el: $('notice'), q: [], busy: false, timer: 0 };
+  function notice(kind, icon, title, sub) { NOTE.q.push({ kind, icon, title, sub }); if (!NOTE.busy) nextNotice(); }
+  function nextNotice() {
+    const n = NOTE.q.shift(), el = NOTE.el;
+    if (!n) { NOTE.busy = false; return; }
+    NOTE.busy = true;
+    el.className = n.kind;
+    el.innerHTML = `<span class="ni">${n.icon}</span><span class="nb"><span class="nt">${n.title}</span><span class="ns">${n.sub}</span></span>`;
+    void el.offsetWidth; el.classList.add('show');
+    Sound.goal(); buzz(8);
+    NOTE.timer = setTimeout(() => { el.classList.remove('show'); NOTE.timer = setTimeout(nextNotice, 380); }, 2400);
+  }
+  function clearNotices() { NOTE.q.length = 0; clearTimeout(NOTE.timer); NOTE.el.classList.remove('show'); NOTE.busy = false; }
+  // what a daily challenge would stand at if the run ended now
+  function dailyNow(c, r) { const v = r[c.k] || 0; return Math.min(c.n, DAILY_BY[c.k].sum ? c.p + v : Math.max(c.p, v)); }
+  function liveGoals() {
+    if (!run.told || phase === 'lobby') return;
+    const r = runFacts(0);
+    for (const c of dailySet()) {
+      if (c.done || run.told['d:' + c.k] || dailyNow(c, r) < c.n) continue;
+      run.told['d:' + c.k] = 1; notice('n-daily', ICON.check, 'Daily challenge done', dailyText(c) + ' · +' + c.xp + ' XP');
+    }
+    for (const a of ACH) {
+      if (profile.ach[a.id] || run.told[a.id] || a.id === 'double' || a.id === 'swish100' || !a.test(r)) continue;
+      run.told[a.id] = 1; notice('n-ach', ICON.medal, a.name, a.desc + ' · +' + a.xp + ' XP');
+    }
+  }
+  // the next daily goal, shown under each level's banner
+  function goalLine() {
+    const r = runFacts(0);
+    for (const c of dailySet()) { if (!c.done && !run.told['d:' + c.k]) { const p = dailyNow(c, r); if (p < c.n) return dailyText(c) + ' · ' + p + '/' + c.n; } }
+    return '';
+  }
+
+  // Every ring of the run as pips (one group per level): swish, on fire, full heat, rim, and the ring that ended it.
+  const PIP = { S: 's', F: 'f', N: 'n', R: 'r', X: 'x' };
+  function recapHtml() { return (run.log || []).map((lv) => '<span class="lv">' + lv.map((o) => `<i class="${PIP[o]}"></i>`).join('') + '</span>').join(''); }
+  function shareText(head) {
+    const em = { S: '🏀', F: '🔥', N: '💥', R: '⚪', X: '❌' };
+    const url = CFG.shareUrl || (/^https?:/.test(location.protocol) && !/claude|usercontent|localhost/.test(location.host) ? location.origin + location.pathname : 'https://nickrileyh.github.io/sol-dunk/');
+    return [`SOL DUNK · ${E.DIFFS[run.di].name}`, head, `Score ${run.score} · best streak ${run.best}`, ...(run.log || []).map((lv) => lv.map((o) => em[o]).join('')), url].join('\n');
+  }
+  async function copyText(t) {
+    try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(t); return true; } } catch (e) { /* fall back */ }
+    try {
+      const ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', '');
+      Object.assign(ta.style, { position: 'fixed', top: '0', left: '0', opacity: '0', userSelect: 'text', webkitUserSelect: 'text' });
+      document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok;
+    } catch (e) { return false; }
+  }
+  async function shareRun() {
+    if (!run.share || !armed(ui.res)) return;
+    Sound.click();
+    if (navigator.share) { try { await navigator.share({ text: run.share }); return; } catch (e) { if (e && e.name === 'AbortError') return; } }
+    toast((await copyText(run.share)) ? 'Run copied. Paste it anywhere to share.' : 'Sharing isn\'t available here.');
+  }
   function flash(col, a) { if (REDUCED) return; view.flashCol = col; view.flash = Math.max(view.flash, a); }
 
   // lobby: level ring on the profile capsule and today's challenge strip
@@ -783,6 +857,7 @@
     try {
       const r = await bank.start(prefs.di, bet);
       Object.assign(run, { di: prefs.di, bet, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.levelSeed }, RUN_FRESH);
+      run.log = []; run.told = {}; run.share = ''; // every ring of the run, and the goals already announced
       $('lobbyErr').textContent = '';
     } catch (e) {
       $('lobbyErr').textContent = e.message; run.busy = false;
@@ -794,7 +869,7 @@
     show(ui.lobby, false); show(ui.res, false); show(ui.cp, false);
     ball.lastVis = 0; // a new run lets the old flame die down quietly
     setHudMode(true); setBalance();
-    clearCallouts(); potShown = run.bet; setStreakHud();
+    clearCallouts(); clearNotices(); potShown = run.bet; setStreakHud();
     beginLevel(true);
   }
 
@@ -809,10 +884,10 @@
     ball.glide = { fx: ball.x, fy: ball.y, tx: view.offset, ty: def.startY, t: 0, d: 0.55 };
     ball.fall = null; ball.hidden = false;
     phase = 'ready';
-    run.lvlSw = 0;
+    run.lvlSw = 0; run.log.push([]);
     profile.lv[run.di][run.level - 1][0]++;
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
-    if (run.level > 1) banner('Level ' + run.level, '', 1200);
+    if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
     showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', run.level === 1 && newPlayer() ? 'Drop down through each ring' : '');
   }
 
@@ -865,18 +940,20 @@
     let capped = false;
     if (run.total >= cap) { run.total = cap; capped = true; }
     const pts = ringPoints(o, run.streak);
+    run.log[run.log.length - 1].push(o === 'S' ? (run.streak >= 5 ? 'N' : run.streak >= 3 ? 'F' : 'S') : 'R');
     scoreFx(o, h, st, m, run.streak, pts);
     view.pulse = 1;
     setPot(true); setPips(st); setHeat(run.streak); bumpScore();
     if (o === 'S') {
       setStreakHud('pump');
       const s = run.streak;
-      if (s === 3) { callout('ON FIRE', 'Swish streak ×3', 'fire'); flash(heatRgb(0), 0.1); buzz([10, 25, 14]); }
-      else if (s === 5) { callout('SUPERNOVA', 'Max streak bonus', 'nova'); flash(heatRgb(1), 0.13); buzz([12, 25, 12, 25, 18]); }
-      else if (s >= 10 && s % 5 === 0) { callout(s === 10 ? 'UNSTOPPABLE' : s + ' IN A ROW', s + ' swishes in a row', 'nova'); flash(heatRgb(1), 0.14); }
+      if (s === 3) { callout('ON FIRE', 'Swish streak ×3', 'fire'); flash(heatRgb(0), 0.1); buzz([10, 25, 14]); Sound.cheer(0.25); }
+      else if (s === 5) { callout('SUPERNOVA', 'Max streak bonus', 'nova'); flash(heatRgb(1), 0.13); buzz([12, 25, 12, 25, 18]); Sound.cheer(0.55); }
+      else if (s >= 10 && s % 5 === 0) { callout(s === 10 ? 'UNSTOPPABLE' : s + ' IN A ROW', s + ' swishes in a row', 'nova'); flash(heatRgb(1), 0.14); Sound.cheer(0.85); }
     } else if (was > 1) setStreakHud('broke'); // a 2+ streak was burning: douse() plays the hiss
     addPoints(pts);
     if (capped) { endWin('maxwin'); return true; }
+    liveGoals();
     return false;
   }
   function addPoints(n) {
@@ -884,7 +961,7 @@
     const b = profile.best[run.di];
     if (!run.newBest && b > 0 && run.score > b) {
       run.newBest = true;
-      callout('NEW BEST', 'Beat your best of ' + b, 'gold'); Sound.best(); buzz([8, 30, 8]);
+      callout('NEW BEST', 'Beat your best of ' + b, 'gold'); Sound.best(); Sound.cheer(0.4); buzz([8, 30, 8]);
     }
   }
 
@@ -898,9 +975,10 @@
     if (run.lvlSw === NH) {
       run.perfect++;
       callout('PERFECT LEVEL', `${NH} of ${NH} swishes · +${PERFECT_BONUS}`, 'gold');
-      flash('255,214,10', 0.14); Sound.perfect(); confetti(ball.x, ball.y - 30, 40);
+      flash('255,214,10', 0.14); Sound.perfect(); Sound.applause(0.45); confetti(ball.x, ball.y - 30, 40);
       addPoints(PERFECT_BONUS); view.pulse = 1;
     }
+    if (run.level < NL) liveGoals();
     ball.glide = null;
     ball.fall = { vx: Math.max(120, run.st.ball.vx), vy: -240, hover: true, t: 0 };
     if (run.level >= NL) { endWin('final'); return; }
@@ -914,7 +992,8 @@
   function onBust(kind, h) {
     phase = 'over';
     run.lost = true; setHeat(0); // the flame goes out with the run
-    clearCallouts();
+    clearCallouts(); clearNotices();
+    if (run.log && run.log.length) run.log[run.log.length - 1].push('X');
     if (run.streak > 1) setStreakHud('broke');
     const lostPot = run.bet * run.total;
     if (h) hoopVis(h).flash = -1;
@@ -939,7 +1018,7 @@
       run.serverSeed = r.serverSeed || '';
       run.busy = false;
       phase = 'over';
-      hideStreak();
+      hideStreak(); clearNotices();
       winFx(1);
       record(r.payout, 'cashout');
       show(ui.cp, false);
@@ -949,7 +1028,7 @@
 
   function endWin(kind) {
     phase = 'over';
-    clearCallouts(); hideStreak();
+    clearCallouts(); clearNotices(); hideStreak();
     const L = run.level;
     bank.level(L, run.taps.slice()).then((r) => {
       if (r.status !== kind || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
@@ -1012,6 +1091,7 @@
     const L = run.level, pot = run.bet * run.total;
     $('cpKicker').textContent = 'Checkpoint ' + L + ' of ' + (NL - 1);
     $('cpTitle').innerHTML = 'Level ' + L + ' cleared' + (run.lvlSw === NH ? '<span class="cp-badge">PERFECT</span>' : '');
+    $('cpRecap').innerHTML = recapHtml();
     countUp($('cpPot'), run.bet * (run.lvlStart || 1), pot, fmtSol, 750);
     $('cpMult').textContent = fmtMult(run.total) + ' · +' + fmtDelta(pot - run.bet) + ' SOL profit';
     // what the next level can pay (every ring swished, streak carried) and whether the streak carries over
@@ -1051,6 +1131,8 @@
     if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtSol(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
     $('resAmount').className = 'big ' + cls;
     $('resSub').textContent = sub;
+    $('resRecap').innerHTML = recapHtml();
+    run.share = shareText(cls === 'win' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
     $('resStats').innerHTML = [[run.score, nb ? 'New best' : 'Score', nb], [run.hoops, 'Rings'], [run.best, 'Best streak']]
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
     $('againAmt').textContent = fmtBet(prefs.bet) + ' SOL';
@@ -1060,6 +1142,23 @@
     refreshLobby();
   }
   function gainChip(cls, icon, text, i) { return `<span class="gain ${cls}" style="animation-delay:${(0.35 + i * 0.09).toFixed(2)}s">${icon}<span>${text}</span></span>`; }
+  // a new ball, wing or flame: its picture, and one tap to use it
+  function unlockChip(u, i) {
+    const on = profile.eq[u.t] === u.id;
+    return `<button class="gain unlock${on ? ' on' : ''}" data-t="${u.t}" data-id="${u.id}" style="animation-delay:${(0.35 + i * 0.09).toFixed(2)}s" aria-label="Use the new ${itemName(u)}"><canvas width="48" height="48"></canvas><span>New ${itemName(u)}</span><em>${on ? 'In use' : 'Use'}</em></button>`;
+  }
+  function wireUnlockChips() {
+    document.querySelectorAll('#resGains .gain.unlock').forEach((b) => {
+      const t = b.dataset.t, id = b.dataset.id;
+      drawThumb(b.querySelector('canvas'), t, id);
+      b.addEventListener('click', () => {
+        if (!armed(ui.res)) return;
+        profile.eq[t] = id; saveAll(); Sound.click(); buzz(8);
+        if (t === 'flame') applyFlameTheme();
+        document.querySelectorAll(`#resGains .gain.unlock[data-t="${t}"]`).forEach((x) => { const on = x.dataset.id === id; x.classList.toggle('on', on); x.querySelector('em').textContent = on ? 'In use' : 'Use'; });
+      });
+    });
+  }
   let xpTimers = [];
   function showProgress(pr) {
     const box = $('resXp'), fill = $('xpFill');
@@ -1083,20 +1182,21 @@
       Sound.levelUp(); buzz([10, 40, 10]);
     }, 1100));
     const g = [];
-    pr.unlocks.forEach((u) => g.push(['unlock', ICON.spark, 'New ' + itemName(u)]));
+    pr.unlocks.forEach((u) => g.push(['unlock', '', 'New ' + itemName(u), u]));
     pr.achs.forEach((x) => g.push(['ach', ICON.medal, x.name + ' · +' + x.xp + ' XP']));
     pr.dailies.forEach((c) => g.push(['daily', ICON.check, dailyText(c) + ' · +' + c.xp + ' XP']));
     if (!g.length) { // nothing new this run: show the next daily challenge, so there's always a goal
       const c = dailySet().find((x) => !x.done);
       if (c) g.push(['', ICON.target, `${dailyText(c)} · ${c.p}/${c.n}`]);
     }
-    const room = vh < 720 ? 3 : 4, more = g.length > room ? g.length - (room - 1) : 0;
-    $('resGains').innerHTML = g.slice(0, more ? room - 1 : room).map((x, i) => gainChip(x[0], x[1], x[2], i)).join('') +
+    const room = (vh < 720 ? 3 : 4) - (pr.unlocks.length ? 1 : 0), more = g.length > room ? g.length - (room - 1) : 0;
+    $('resGains').innerHTML = g.slice(0, more ? room - 1 : room).map((x, i) => (x[3] ? unlockChip(x[3], i) : gainChip(x[0], x[1], x[2], i))).join('') +
       (more ? gainChip('', ICON.spark, '+' + more + ' more', room - 1) : '');
+    wireUnlockChips();
     if (pr.achs.length || pr.unlocks.length || pr.dailies.length) xpTimers.push(setTimeout(() => Sound.unlock(), up ? 1500 : 500));
   }
   function backToLobby() {
-    show(ui.res, false); show(ui.cp, false); hidePrompt();
+    show(ui.res, false); show(ui.cp, false); hidePrompt(); clearNotices();
     setHudMode(false);
     phase = 'lobby';
     run.st = null; run.streak = 0; view.st = null; view.prevHoops = []; ball.lastVis = 0;
@@ -1197,6 +1297,8 @@
   }
   function winFx(k) {
     Sound.cash(); buzz([10, 30, 10, 30, 60]);
+    const big = clamp(Math.log(Math.max(1, run.total)) / Math.log(20), 0, 1); // 1× murmur, 20×+ a roar
+    Sound.applause(Math.max(0.25, big, (k || 1) - 1)); if (big > 0.3 || k > 1) Sound.cheer(Math.max(big, 0.5));
     const n = Math.round(26 * (k || 1));
     for (let i = 0; i < n; i++) spawn({ x: ball.x + rnd(-20, 20), y: ball.y + rnd(-20, 10), vx: rnd(-220, 220), vy: rnd(-560, -220), g: 1000, life: rnd(1.2, 1.9), max: 1.9, size: rnd(7, 10), color: i % 2 ? '#f5c542' : '#ffd36b', kind: 4, rot: rnd(0, 6), vr: rnd(-8, 8) });
     confetti(ball.x, ball.y - 40, Math.round(36 * (k || 1)));
@@ -1975,6 +2077,7 @@
   $('goBtn').addEventListener('click', keepGoing);
   $('againBtn').addEventListener('click', () => { if (!armed(ui.res)) return; show(ui.res, false); startRun(); });
   $('lobbyBtn').addEventListener('click', () => { Sound.click(); backToLobby(); });
+  $('shareBtn').addEventListener('click', shareRun);
   $('pauseBtn').addEventListener('click', () => { if (phase === 'play') pause(); else if (phase === 'paused') resume(); });
 
   // ---------------------------------------------------------------- panels

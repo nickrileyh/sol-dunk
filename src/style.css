@@ -227,6 +227,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .actions .btn { height: 64px; flex-direction: column; gap: 2px; line-height: 1.1; }
 .actions .btn small { font-size: 12.5px; font-weight: 650; opacity: 0.62; font-variant-numeric: tabular-nums; }
 .stack { display: grid; gap: 10px; }
+.pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.btn svg { width: 18px; height: 18px; flex: none; margin-top: -2px; }
 .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 22px 0 18px; padding: 12px 0 11px; border-radius: 16px; background: var(--surface); }
 .tiles div { padding: 0 4px; }
 .tiles div + div { box-shadow: inset 0.5px 0 0 rgba(255, 255, 255, 0.12); }
@@ -347,19 +349,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 #callout.green .c1 { background-image: linear-gradient(180deg, #e6ffe9 5%, #30d158 60%, #1fa347 95%); filter: drop-shadow(0 0 14px rgba(48, 209, 88, 0.45)); }
 
 /* ---------- lobby: daily challenge strip ---------- */
-.daily {
+#dailyBtn {
   position: relative; display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 8px;
   width: 100%; height: 44px; padding: 0 12px 2px; margin: 0 0 10px; border-radius: 16px; background: var(--surface); text-align: left;
 }
-.daily .d-ic { display: flex; color: var(--yellow); }
-.daily .d-ic svg { width: 17px; height: 17px; }
-.daily .d-t { font-size: 13px; font-weight: 600; color: var(--label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.daily .d-p { font-size: 12px; font-weight: 700; color: var(--label-2); }
-.daily::after { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--label-3); border-top: 2px solid var(--label-3); transform: rotate(45deg); margin-right: 2px; }
-.daily .d-bar { position: absolute; left: 12px; right: 12px; bottom: 6px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
-.daily .d-bar i { display: block; height: 100%; width: 0; border-radius: 2px; background: var(--yellow); transition: width 0.5s; }
-.daily.done .d-ic { color: var(--green); }
-.daily.done .d-bar i { background: var(--green); }
+#dailyBtn .d-ic { display: flex; color: var(--yellow); }
+#dailyBtn .d-ic svg { width: 17px; height: 17px; }
+#dailyBtn .d-t { font-size: 13px; font-weight: 600; color: var(--label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#dailyBtn .d-p { font-size: 12px; font-weight: 700; color: var(--label-2); }
+#dailyBtn::after { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--label-3); border-top: 2px solid var(--label-3); transform: rotate(45deg); margin-right: 2px; }
+#dailyBtn .d-bar { position: absolute; left: 12px; right: 12px; bottom: 6px; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+#dailyBtn .d-bar i { display: block; height: 100%; width: 0; border-radius: 2px; background: var(--yellow); transition: width 0.5s; }
+#dailyBtn.done .d-ic { color: var(--green); }
+#dailyBtn.done .d-bar i { background: var(--green); }
 
 /* ---------- checkpoint: what's next ---------- */
 .next { margin: 20px 2px 16px; padding: 14px 2px 0; box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.14); text-align: left; }
@@ -372,6 +374,35 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .nx-r { margin-top: 7px; font-size: 12px; color: var(--label-3); font-variant-numeric: tabular-nums; }
 .nx-s:empty, .nx-r:empty, .nx-f:empty { display: none; }
 .cp-badge { display: inline-block; margin-left: 6px; padding: 2px 7px; border-radius: 8px; font-size: 11px; font-weight: 800; letter-spacing: 0.04em; vertical-align: 4px; background: rgba(255, 214, 10, 0.18); color: var(--yellow); }
+
+/* ---------- run recap: every ring, one group per level ---------- */
+.recap { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px 12px; max-width: 300px; margin: 14px auto 0; }
+.recap:empty { display: none; }
+.recap.cp { margin: -6px auto 12px; }
+.recap .lv { display: flex; gap: 3px; }
+.recap i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.12); }
+.recap i.s { background: #ffffff; }
+.recap i.f { background: rgb(var(--heat)); box-shadow: 0 0 6px rgba(var(--heat), 0.75); }
+.recap i.n { background: rgb(var(--nova-hi)); box-shadow: 0 0 6px rgba(var(--nova), 0.85); }
+.recap i.r { background: none; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.5); }
+.recap i.x { background: var(--red); box-shadow: 0 0 6px rgba(255, 90, 78, 0.6); }
+.recap:not(:empty) + .tiles { margin-top: 16px; }
+
+/* ---------- goals reached mid-run ---------- */
+#notice {
+  position: fixed; left: 50%; bottom: calc(var(--safe-b) + 18px); z-index: 6; pointer-events: none;
+  display: flex; align-items: center; gap: 10px; max-width: calc(100% - 28px); padding: 8px 16px 8px 8px; border-radius: 24px;
+  background: rgba(14, 18, 30, 0.74); -webkit-backdrop-filter: saturate(150%) blur(18px); backdrop-filter: saturate(150%) blur(18px);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 12px 32px rgba(0, 0, 0, 0.45);
+  opacity: 0; transform: translate(-50%, 14px) scale(0.98); transition: opacity 0.3s, transform 0.4s cubic-bezier(.2, .9, .2, 1);
+}
+#notice.show { opacity: 1; transform: translate(-50%, 0); }
+#notice .ni { width: 30px; height: 30px; border-radius: 15px; display: grid; place-items: center; flex: none; background: rgba(245, 197, 66, 0.16); color: var(--gold); }
+#notice.n-daily .ni { background: rgba(47, 211, 107, 0.16); color: var(--green); }
+#notice .ni svg { width: 17px; height: 17px; }
+#notice .nb { display: flex; flex-direction: column; min-width: 0; }
+#notice .nt { font-size: 13.5px; font-weight: 700; color: var(--label); white-space: nowrap; }
+#notice .ns { font-size: 12px; font-weight: 550; color: var(--label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- result: progression ---------- */
 .xp { margin: -4px 0 12px; text-align: left; }
@@ -388,6 +419,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .gain.unlock svg { color: rgb(var(--heat-hi)); }
 .gain.daily svg { color: var(--green); }
 .gain.lvl { background: rgba(255, 214, 10, 0.16); color: var(--yellow); }
+button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--label); cursor: pointer; padding: 4px 6px 4px 5px; }
+.gain.unlock canvas { width: 22px; height: 22px; flex: none; }
+.gain.unlock em { margin-left: 3px; padding: 2px 8px; border-radius: 9px; font-style: normal; font-weight: 700; background: var(--surface-3); color: var(--label); }
+.gain.unlock.on em { background: rgba(47, 211, 107, 0.16); color: var(--green); }
 @keyframes gainIn { from { opacity: 0; transform: translateY(6px) scale(0.96); } to { opacity: 1; transform: none; } }
 
 /* ---------- profile panel ---------- */
@@ -456,7 +491,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   .score { font-size: 42px; }
 }
 @media (max-height: 660px) {
-  .daily { height: 40px; margin-bottom: 8px; }
+  #dailyBtn { height: 40px; margin-bottom: 8px; }
   .big { font-size: 58px; }
   .tiles { margin: 16px 0 14px; }
   .next { margin: 16px 2px 12px; }
@@ -473,7 +508,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   .next { margin: 16px 2px 12px; padding: 12px 2px 0; }
 }
 @media (max-height: 600px) {
-  .daily { display: none; }
+  #dailyBtn { display: none; }
   .tiles { padding: 9px 0 8px; }
   .tiles b { font-size: 24px; }
 }
@@ -482,6 +517,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   .score.bump { animation: none; }
   #callout.show { animation: callFade 1.3s linear forwards; }
   .streak.pump, .streak.broke, .gain, .delta.go { animation: none; }
+  #notice { transition: opacity 0.2s; transform: translate(-50%, 0); }
   .streak.broke { opacity: 0; }
   .sheet, .card, .panel { transition: opacity 0.15s; }
 }

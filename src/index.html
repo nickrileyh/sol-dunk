@@ -50,6 +50,7 @@
 <div id="prompt" aria-hidden="true"><div class="ring"></div><div class="t" id="promptText">Tap to fly</div><div class="s" id="promptSub"></div></div>
 <div id="banner" aria-live="polite"><div class="b1" id="bannerT"></div><div class="b2" id="bannerS"></div></div>
 <div id="callout" aria-live="polite"><div class="c1" id="callT"></div><div class="c2" id="callS"></div></div>
+<div id="notice" role="status" aria-live="polite"></div>
 
 <section id="lobby" class="sheet" aria-label="Place a bet">
   <h1 class="title">SOL DUNK</h1>
@@ -84,6 +85,7 @@
 <section id="checkpoint" class="card hide" aria-label="Checkpoint" tabindex="-1">
   <div class="kicker" id="cpKicker">Checkpoint</div>
   <div class="card-title" id="cpTitle">Level 1 cleared</div>
+  <div class="recap cp" id="cpRecap" aria-hidden="true"></div>
   <div class="big"><span class="sol-ico"></span><span id="cpPot">0.0000</span><span class="unit">SOL</span></div>
   <div class="under" id="cpMult">1.00×</div>
   <div class="next" id="cpNext">
@@ -100,6 +102,7 @@
   <div class="card-title" id="resTitle">Cashed out</div>
   <div class="big" id="resAmount"><span class="sol-ico"></span><span id="resNum">+0</span><span class="unit">SOL</span></div>
   <div class="under muted" id="resSub"></div>
+  <div class="recap" id="resRecap" aria-hidden="true"></div>
   <div class="tiles" id="resStats"></div>
   <div class="xp" id="resXp">
     <div class="xp-h"><span id="xpLvl">Level 1</span><span class="num" id="xpGain"></span></div>
@@ -108,7 +111,10 @@
   <div class="gains" id="resGains"></div>
   <div class="stack">
     <button class="btn btn-primary" id="againBtn">Play again <span class="num" id="againAmt"></span></button>
-    <button class="btn btn-plain" id="lobbyBtn">Change bet</button>
+    <div class="pair">
+      <button class="btn btn-plain" id="lobbyBtn">Change bet</button>
+      <button class="btn btn-plain" id="shareBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M5 12.5v6A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-6"/></svg>Share</button>
+    </div>
   </div>
 </section>
 
