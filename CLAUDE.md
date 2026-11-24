@@ -57,7 +57,8 @@ Never publish a build you haven't pushed, and don't push a game change without p
 - Rim hits shouldn't carry the ball forward strongly: after a knock, the forward push fades back in (engine `RECOVER`).
 - As the ball speeds up, the rings spread out with it, so deeper levels never leave less time between rims (engine v9). Make deep levels harder in other ways.
 - The ball and rim tube are 10% larger than in v9 (engine v10). Rings widen only enough to keep the gap the ball fits through the same, so the difficulty didn't change.
+- Rings never sit too low: ring centres stay between y 220 and 500, so even a bobbing ring's lowest point is 152 units above the floor (engine v11; the limit was 540).
 - The house keeps an edge deep into a run, against strong players too: never price a level so that good players come out ahead at any checkpoint. Elite players are covered by the challenge pots instead of smaller prizes.
 - Challenge pots (the owner asked for them): alongside regular play, players can buy an entry into the day's pot; everyone who completes the challenge in a run splits it, and the house keeps 10% of every entry, so it earns from every player however skilled. In the demo the other entrants are simulated and labelled so.
-- Fair rims: a ball that touches the rim with its centre over the opening drops in; it only bounces out when it comes down on or past the end of the rim (engine v11, `SETTLE_*`). Keep the difficulty in the pace and the geometry, not in unlucky bounces.
+- Fair rims: a ball that touches the rim with its centre over the opening drops in; it only bounces out when it comes down on or past the end of the rim (engine v12, `SETTLE_*`). Keep the difficulty in the pace and the geometry, not in unlucky bounces.
 - The ball is drawn at exactly its hitbox size, and rings at exactly their collision size.

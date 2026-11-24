@@ -27,7 +27,7 @@
   // The challenges. tier = the easiest tier where it counts (0 Rookie, 1 Pro, 2 All-Star, 3 Legend).
   // p = the chance one run makes it at that tier for a [casual, average, good] player, from the simulator
   // (they keep going until they bust); the demo uses it to simulate other entrants. Aim: an average player
-  // makes one in about 4-15% of runs, a strong one in 25-50%. Measured on engine v11: its fair rims made
+  // makes one in about 4-15% of runs, a strong one in 25-50%. Measured on engine v12: its fair rims made
   // "Clear level 4" on All-Star too easy (28% / 60%) and "Swish every ring in two levels" too hard (2% / 18%),
   // so those became "Clear level 5" and "Score 120 in one run" (any tier).
   const GOALS = [

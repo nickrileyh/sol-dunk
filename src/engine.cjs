@@ -18,7 +18,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 11;
+  const VERSION = 12; // v11 came from two chats at once (fair rims and pace; the lower ring band); v12 is both
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -54,7 +54,7 @@
   const HOOPS_PER_LEVEL = 6;
   const LEVELS = 8;
   const MAX_TICKS = TICK_HZ * 45;   // a level can never take longer than this
-  const Y_MIN = 220, Y_MAX = 540;   // rim centre band
+  const Y_MIN = 220, Y_MAX = 500;   // rim centre band; v11: was 540, so even a bobbing ring's lowest point stays 152 above the floor
   const FIRST_HOOP_X = 250;
   const START_Y = 300;
 

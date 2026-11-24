@@ -31,10 +31,11 @@ Open the server URL in the Phantom or Solflare in-app browser (or desktop with t
 
 ## How a run is kept honest
 
-- **Deterministic engine** (`src/engine.cjs`, v11): fixed 120 Hz physics, integer tap ticks, seeded PRNG, no implementation-dependent math. The same taps always give the same outcome in every browser and on the server.
+- **Deterministic engine** (`src/engine.cjs`, v12): fixed 120 Hz physics, integer tap ticks, seeded PRNG, no implementation-dependent math. The same taps always give the same outcome in every browser and on the server.
 - **Rim contact** (v7–v8): a firm knock bounces; gentle contact just rolls. Friction scales with how hard the hit was. After a knock the forward push fades back in over 0.45 s, so a back-rim hit clanks and drops (often in) instead of the ball ploughing on. The push is steady while the ball sits on a rim, so it can't balance on the edge. Rim effects fire once per knock.
-- **Fair rims** (v11): once the ball has touched a ring, while its centre is over the opening (and less than 100 units above it), the rim soaks up its forward speed (it fades at 5/s) and the forward push waits, so a ball that lands mostly inside drops in instead of rolling on over the back rim. Measured on Pro level 1, a ball whose centre lands 8 or more units inside the end of the rim now rims out about 1% of the time (it was 11–41%); within 4 units of the end about 30% (was 95%); on or past the end it still bounces out. Rim-outs now come from drops that are visibly late.
-- **Pace** (v9): the ball gets 4% faster each level and the rings spread out 4% with it, so every level leaves the same time between rims (about 1.4 s on Pro since v11). Deeper levels get harder through tighter, moving and tilted rings and bigger height changes, not through less time to react. The client's camera pulls back 3.5% a level so the next ring stays in view.
+- **Fair rims** (v12): once the ball has touched a ring, while its centre is over the opening (and less than 100 units above it), the rim soaks up its forward speed (it fades at 5/s) and the forward push waits, so a ball that lands mostly inside drops in instead of rolling on over the back rim. Measured on Pro level 1, a ball whose centre lands 8 or more units inside the end of the rim now rims out about 1% of the time (it was 11–41%); within 4 units of the end about 60% (was 95%); on or past the end it still bounces out. Rim-outs now come from drops that are visibly late.
+- **Pace** (v9): the ball gets 4% faster each level and the rings spread out 4% with it, so every level leaves the same time between rims (about 1.4 s on Pro since v12). Deeper levels get harder through tighter, moving and tilted rings and bigger height changes, not through less time to react. The client's camera pulls back 3.5% a level so the next ring stays in view.
+- **Ring heights** (v11): ring centres stay between y 220 and 500 (540 before), so even a bobbing ring's lowest point is 152 units above the floor instead of 112, leaving room to recover after the drop. The owner said some rings sat too low.
 - **Provably fair layouts**: before a run the server commits to `sha256(serverSeed)`. Each level's rings come from `HMAC-SHA256(serverSeed, clientSeed:nonce:level)`. The seed is revealed when the run ends, so anyone can check `GET /api/run/:id`.
 - **Server replay**: the client sends its tap ticks at the end of each level. The server replays them, applies the paytable and the max-win cap, and only then pays. A level submitted faster than real time voids the run.
 
@@ -48,24 +49,24 @@ npm run calibrate    # solves the tables and writes src/paytable.cjs
 npm run build
 ```
 
-The bot (`src/bot.cjs`) plans each drop with a trajectory solve, then adds human-style error: tap jitter, aim error, misreading moving rings, and occasional lapses. "Average" passes about 98% of Pro level-1 rings and swishes about 74% of them.
+The bot (`src/bot.cjs`) plans each drop with a trajectory solve, then adds human-style error: tap jitter, aim error, misreading moving rings, and occasional lapses. "Average" passes about 98% of Pro level-1 rings and swishes about 71% of them.
 
-**Calibration rule (edge mode):** the house keeps an edge at every checkpoint against average and good players. An average player who cashes out at the first checkpoint gets back at most 90% (10% house edge), and every later level keeps at least a 10% edge against them. A good player gets back at most 99% at the first checkpoint and 97% at any later one, so strong players can't profit by going deep. Rounding the tables to three decimals never pays over a cap. On All-Star and Legend the good-player cap binds at the first checkpoint, so the average player gets back less there.
+**Calibration rule (edge mode):** the house keeps an edge at every checkpoint against average and good players. An average player who cashes out at the first checkpoint gets back at most 90% (10% house edge), and every later level keeps at least a 10% edge against them. A good player gets back at most 99% at the first checkpoint and 97% at any later one, so strong players can't profit by going deep. Rounding the tables to three decimals never pays over a cap. On Legend the good-player cap binds at the first checkpoint, so the average player gets back 86% there.
 
-Engine v10 made the ball and rim tube 10% larger; rings widen only enough to keep the gap the ball fits through the same, so the difficulty is unchanged.
+Engine v10 made the ball and rim tube 10% larger; rings widen only enough to keep the gap the ball fits through the same, so the difficulty is unchanged. Engine v11 keeps every ring at least 152 units above the floor; that barely changed difficulty (clear rates moved 0.14 points on average, 0.5 at most), and the tables were re-simulated and recalibrated for it.
 
-Engine v11 made rims fair (see above). That makes rim hits drop in more often, so the ball is 20% faster and the rings 5% further apart (about 12% less time between rims) to keep the clear rates, and the house edge, where they were. The bot's aim error grows with ball speed, not with how long it has between rings.
+Engine v12 made rims fair (see above). That makes rim hits drop in more often, so the ball is 20% faster and the rings 5% further apart (about 12% less time between rims) to keep the clear rates, and the house edge, where they were. The bot's aim error grows with ball speed, not with how long it has between rings.
 
 Return to player when cashing out after checkpoint 1 / 2 / 3 / 8, from the simulation (no cap):
 
 | Tier | Average | Good | Pro | Best possible win |
 |---|---|---|---|---|
-| Rookie | 90 / 81 / 72 / 16% | 97 / 97 / 97 / 97% | 101 / 105 / 111 / 254% | 9× |
-| Pro | 90 / 80 / 68 / 7% | 97 / 97 / 97 / 97% | 100 / 106 / 115 / 530% | 74× |
-| All-Star | 90 / 75 / 59 / 3% | 99 / 97 / 97 / 97% | 103 / 110 / 126 / 1087% | 250× (cap) |
-| Legend | 86 / 65 / 45 / 1% | 99 / 97 / 97 / 97% | 105 / 119 / 145 / 2576% | 1000× (cap) |
+| Rookie | 90 / 81 / 72 / 16% | 97 / 97 / 97 / 97% | 101 / 105 / 111 / 251% | 8× |
+| Pro | 90 / 80 / 68 / 7% | 97 / 97 / 97 / 97% | 100 / 106 / 115 / 529% | 74× |
+| All-Star | 90 / 75 / 59 / 3% | 99 / 97 / 97 / 97% | 103 / 110 / 125 / 1107% | 250× (cap) |
+| Legend | 86 / 65 / 45 / 1% | 99 / 97 / 97 / 97% | 105 / 118 / 144 / 2441% | 1000× (cap) |
 
-Pros (the bot one step below perfect play) still beat the house deep into a run. `--cap-pro 0.99 --cap1-pro 1.01` keeps them behind at every checkpoint too, but because they clear the easy levels so reliably, the best possible win drops to about 1.9× on Rookie, 4.9× on Pro, 19× on All-Star and 93× on Legend (engine v11). Head-to-head play with a rake is the usual way to take an edge from everyone without that.
+Pros (the bot one step below perfect play) still beat the house deep into a run. `--cap-pro 0.99 --cap1-pro 1.01` keeps them behind at every checkpoint too, but because they clear the easy levels so reliably, the best possible win drops to about 1.9× on Rookie, 4.9× on Pro, 20× on All-Star and 93× on Legend (engine v12). Head-to-head play with a rake is the usual way to take an edge from everyone without that.
 
 Full tables for all six skill levels, including pro and perfect bots, are in `sim/out/calibration_final.txt`.
 
