@@ -378,9 +378,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 #callout.green .c1 { color: var(--green); }
 
 /* ---------- the Challenges tab: the special level and the daily pot, each on its own page ---------- */
-.ch-seg { grid-template-columns: 1fr 1fr; margin: 16px 0 4px; }
-.ch-seg .dot { position: absolute; top: 12px; right: 12px; width: 7px; height: 7px; border-radius: 4px; background: var(--red); }
-.ch-page { padding-top: 14px; }
+.cc { margin-top: 12px; border-radius: 12px; background: var(--surface); overflow: hidden; }
+.vtitle + .cc { margin-top: 16px; }
+.cc-open { display: grid; grid-template-columns: minmax(0, 1fr) 14px; column-gap: 10px; width: 100%; padding: 13px 14px 0 16px; text-align: left; }
+.cc-open > span:not(.chev) { grid-column: 1; min-width: 0; }
+.cc-open .chev { grid-column: 2; grid-row: 1 / 4; align-self: center; width: 14px; height: 14px; color: var(--label-3); }
+.cc-k { font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--label-2); }
+.cc-n { margin-top: 2px; font-family: var(--font-title); font-size: 22px; font-weight: 700; line-height: 1.2; letter-spacing: 0.005em; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-s { margin-top: 1px; font-size: 14px; line-height: 1.35; color: var(--label-2); }
+.cc-act { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 0 16px; padding: 11px 14px 12px 0; box-shadow: inset 0 0.5px 0 var(--sep); }
+.cc-v { min-width: 0; font-size: 15px; color: var(--label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-v b { font-weight: 600; color: var(--label); }
+.cc-v b.gold { color: var(--gold); }
+/* the App Store's Get button: a grey capsule with the action in the tint colour */
+.pill { flex: none; display: inline-flex; align-items: center; height: 30px; padding: 0 16px; border-radius: 15px; background: var(--surface-2); font-size: 15px; font-weight: 700; color: var(--orange); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pill:active { background: rgba(118, 118, 128, 0.4); }
+.pill[disabled] { opacity: 0.5; }
+.pill.in, .pill.ok, .pill.off { font-weight: 600; color: var(--label-2); }
+.pill.ok { color: var(--green); }
 .sp-card { border-radius: 12px; background: var(--surface); overflow: hidden; }
 .sp-head { padding: 14px 16px 4px; }
 .sp-k { font-size: 13px; color: var(--label-2); }
@@ -392,13 +407,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .sp-prize .k { display: block; font-size: 13px; color: var(--label-2); }
 .sp-prize .big { margin: 4px 0 0; }
 .sp-prize .x { display: block; margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--gold); }
-.ch-page .btn { width: 100%; margin-top: 16px; }
-.ch-page .tiles { margin: 16px 0 0; text-align: center; }
+.vcol > .tiles { margin: 16px 0 0; text-align: center; }
+.vtitle + .sp-card, .vtitle + .pot-goal { margin-top: 18px; }
 .sp-odds { margin-top: 10px; }
 .sp-odds .row { min-height: 44px; font-size: 15px; color: var(--label); }
 .sp-odds .row b { font-weight: 400; color: var(--label-2); font-variant-numeric: tabular-nums; }
-.ch-page .pot-rules { margin-top: 14px; }
-.ch-page .pot-goal { margin-top: 0; }
 #potCap.prize::before { content: "Win"; margin-right: 4px; font-size: 0.8em; font-weight: 600; color: var(--label-2); }
 /* missions: the SOL a mission pays, and the play that unlocks a window's SOL */
 .mxp { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
@@ -508,7 +521,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 #tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 11;
   height: calc(var(--tab-h) + var(--safe-b)); padding: 0 8px var(--safe-b);
-  display: grid; grid-template-columns: repeat(5, minmax(0, 96px)); justify-content: center;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 128px)); justify-content: center;
   background: rgba(18, 18, 20, 0.86);
   -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
   box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.16);
@@ -566,7 +579,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   padding: calc(var(--safe-t) + 10px) 16px calc(var(--safe-b) + var(--tab-h) + 28px);
   -webkit-user-select: text; user-select: text;
 }
-.vcol { max-width: 560px; margin: 0 auto; }
+.vcol { max-width: calc(max(var(--col), 400px) - 32px); margin: 0 auto; } /* one column for every page, the Play tab's and the top bar's */
 .vtitle { padding-right: 150px; }
 .vsub { margin: 6px 0 0; font-size: 15px; line-height: 1.4; color: var(--label-2); }
 .sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 28px 2px 8px; }
@@ -595,7 +608,6 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .mxp { font-size: 12.5px; font-weight: 700; color: var(--gold); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .mrow.done .mt b { color: var(--label-2); }
 .mrow.done .mxp { color: var(--green); }
-.mnote { margin: 10px 4px 0; font-size: 12.5px; line-height: 1.45; color: var(--label-3); }
 
 /* career: the chapter you're on, its reward, then the others */
 .chap { border-radius: 12px; background: var(--surface); overflow: hidden; }
@@ -624,8 +636,14 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .chli .cr canvas { width: 26px; height: 26px; border-radius: 7px; }
 .chli.locked .cr canvas { opacity: 0.35; filter: grayscale(0.8); }
 
-/* ---------- Locker: the large title, the live arena in its window, then the collection ---------- */
+/* ---------- Locker (from Profile): a navigation bar with its back button, the arena in its window, then the collection ---------- */
 #vLocker { padding-bottom: 0; }
+.navrow { position: relative; z-index: 1; flex: none; display: flex; align-items: center; justify-content: center; height: 40px; }
+.navrow .back { position: absolute; left: -8px; top: 0; display: inline-flex; align-items: center; height: 40px; padding: 0 10px 0 0; font-size: 17px; color: var(--orange); }
+.navrow .back svg { width: 24px; height: 24px; }
+.navrow .back:active { opacity: 0.55; }
+.navtitle { margin: 0; font-family: var(--font-title); font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 #lkHero { margin-bottom: 14px; }
 .lk-cats { flex: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; padding: 2px; border-radius: 12px; background: var(--surface-2); }
 .lk-cats button {
@@ -666,23 +684,23 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .lk-grid .item .lock { z-index: 1; }
 
 /* ---------- Profile ---------- */
-.pcard { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 16px; align-items: center; margin-top: 12px; padding: 16px; border-radius: 12px; background: var(--surface); text-align: left; width: 100%; }
+.pcard { display: grid; grid-template-columns: 64px minmax(0, 1fr) 14px; gap: 14px; align-items: center; margin-top: 16px; padding: 14px 14px 14px 16px; border-radius: 12px; background: var(--surface); text-align: left; width: 100%; }
+.pcard:active { background: rgba(255, 255, 255, 0.14); }
+.pcard .chev { width: 14px; height: 14px; color: var(--label-3); }
 .pav { position: relative; width: 76px; height: 76px; border-radius: 38px; display: grid; place-items: center; color: var(--av-ink, #fff);
   background: var(--av, var(--orange)); }
 .pav svg { width: 40px; height: 40px; }
+.pcard .pav { width: 64px; height: 64px; border-radius: 32px; }
+.pcard .pav svg { width: 34px; height: 34px; }
 .pid { min-width: 0; }
-.pname { display: block; font-family: var(--font-title); font-weight: 700; font-size: 24px; line-height: 1.15; letter-spacing: -0.01em; color: var(--label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ptitle { display: inline-flex; align-items: center; gap: 5px; margin-top: 6px; font-size: 13px; font-weight: 650; color: var(--gold); }
+.pname { display: block; font-family: var(--font-title); font-weight: 700; font-size: 22px; line-height: 1.15; letter-spacing: -0.01em; color: var(--label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ptitle { display: inline-flex; align-items: center; gap: 5px; margin-top: 3px; font-size: 13px; font-weight: 600; color: var(--gold); }
 .ptitle svg { width: 13px; height: 13px; }
-.pedit { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; height: 30px; padding: 0 12px; border-radius: 15px; background: var(--surface-2); font-size: 13px; font-weight: 600; color: var(--orange); }
-.pedit svg { width: 14px; height: 14px; }
-.plevel { margin-top: 10px; padding: 14px 16px 15px; border-radius: 12px; background: var(--surface); }
-.plevel .lv-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.plevel .lv-n { font-family: var(--font-title); font-weight: 700; font-size: 20px; line-height: 1.1; }
-.plevel .lv-x { font-size: 13px; font-weight: 600; color: var(--label-2); font-variant-numeric: tabular-nums; }
-.plevel .xp-bar { margin-top: 10px; }
-.plevel .lv-u { margin-top: 9px; font-size: 12.5px; color: var(--label-3); }
-.plevel .lv-u b { color: var(--label-2); font-weight: 650; }
+/* the level and its XP, under the name */
+.plv { display: flex; justify-content: space-between; gap: 8px; margin-top: 9px; font-size: 13px; font-weight: 600; color: var(--label); }
+.plv .num { font-weight: 400; color: var(--label-2); }
+.pxp { display: block; height: 4px; margin-top: 5px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.pxp i { display: block; height: 100%; border-radius: 2px; background: var(--gold); }
 .vscroll .bests { margin-top: 10px; }
 .trophies { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tro { padding: 14px 8px 12px; border-radius: 12px; background: var(--surface); text-align: center; }
@@ -694,6 +712,9 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .tro:not(.got) b { color: var(--label-2); }
 .vscroll .list { border-radius: 12px; background: var(--surface); }
 .menu-list { border-radius: 12px; background: var(--surface); overflow: hidden; }
+.vcol > .menu-list, .vcol > .group + .menu-list { margin-top: 22px; }
+.vcol > .pcard + .menu-list { margin-top: 22px; }
+.menu-list .mv .dot { display: inline-block; width: 9px; height: 9px; border-radius: 5px; background: var(--red); vertical-align: middle; }
 .menu-list > button, .mrow-sw { position: relative; display: grid; grid-template-columns: 29px minmax(0, 1fr) auto 14px; gap: 12px; align-items: center; width: 100%; min-height: 48px; padding: 0 14px; text-align: left; font-size: 17px; font-weight: 400; color: var(--label); }
 .mrow-sw { grid-template-columns: 29px minmax(0, 1fr) auto; padding-right: 12px; }
 .menu-list > * + *::before { content: ""; position: absolute; left: 55px; right: 0; top: 0; height: 0.5px; background: var(--sep); } /* iOS separators start after the icon */
@@ -705,6 +726,8 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .menu-list .mi-how { background: var(--orange); } .menu-list .mi-odds { background: #5e5ce6; } .menu-list .mi-wallet { background: var(--green); }
 .menu-list .mi-trophies { background: var(--gold); color: #000; } .menu-list .mi-runs { background: #0a84ff; }
 .menu-list .mi-sound { background: #ff375f; } .menu-list .mi-haptics { background: #bf5af2; }
+.menu-list .mi-locker { background: var(--orange); } .menu-list .mi-stats { background: #0a84ff; } .menu-list .mi-settings { background: #8e8e93; }
+.menu-list .mi-week { background: #30b0c7; } .menu-list .mi-career { background: #5e5ce6; }
 .menu-list .mi svg { width: 17px; height: 17px; }
 .menu-list .chev { width: 14px; height: 14px; color: var(--label-3); }
 .empty { padding: 16px; border-radius: 12px; background: var(--surface); font-size: 14px; color: var(--label-2); }
@@ -713,7 +736,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .view.page { z-index: 8; }
 .view.page.hide { transform: translateX(32px); }
 .view.page .vscroll { padding-top: calc(var(--safe-t) + 54px); }
-.pg-head { position: absolute; left: 0; right: 0; top: 0; z-index: 2; pointer-events: none; padding: calc(var(--safe-t) + 10px) max(8px, calc((100% - 576px) / 2)) 0; }
+.pg-head { position: absolute; left: 0; right: 0; top: 0; z-index: 2; pointer-events: none; padding: calc(var(--safe-t) + 10px) max(8px, calc((100% - max(var(--col), 400px)) / 2 + 8px)) 0; }
 .pg-head .back { height: 40px; padding: 0 12px 0 2px; gap: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; font-size: 17px; font-weight: 400; color: var(--orange); }
 .pg-head .back svg { width: 24px; height: 24px; }
 .pg-head .back:active { opacity: 0.55; transform: none; }
@@ -734,7 +757,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .tbl + .prose { margin-top: 12px; }
 .vtitle + .tiles { margin-top: 20px; }
 .vcol > .btn, .vcol > .actions { margin-top: 14px; }
-.vsub + .trophies, .vsub + .runs, .vsub + .empty { margin-top: 18px; }
+.vsub + .trophies, .vsub + .runs, .vsub + .empty, .vsub + .group, .vsub + .chap { margin-top: 16px; }
 .vtitle + .empty { margin-top: 20px; }
 /* recent runs: how it ended, tier, bet and when, then what it made */
 .runs { border-radius: 12px; background: var(--surface); overflow: hidden; }
@@ -785,7 +808,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   .controls .group { margin: 10px 0 10px; }
   #callout .c1 { font-size: 40px; }
 }
-@media (max-width: 374px) {
+@media (max-width: 389px) { /* phones narrower than 390 px: a smaller large title, so "Challenges" clears the balance */
   .ltitle, .vtitle { font-size: 30px; }
 }
 @media (max-width: 359px) { /* small phones: a shorter title line, and the balance without its Demo tag */
@@ -876,10 +899,9 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 </section>
 
 <section id="vChallenges" class="view hide" aria-label="Challenges"><div class="vscroll" id="cBody"></div></section>
-<section id="vMissions" class="view hide" aria-label="Missions"><div class="vscroll" id="mBody"></div></section>
 <section id="vProfile" class="view hide" aria-label="Profile"><div class="vscroll" id="pBody"></div></section>
 <section id="vLocker" class="sheet home locker hide" aria-label="Locker">
-  <h2 class="ltitle">Locker</h2>
+  <div class="navrow"><button class="back" id="lkBack"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5.5 8.5 12l6.5 6.5"/></svg>Profile</button><h2 class="navtitle">Locker</h2></div>
   <div class="hero" id="lkHero" aria-hidden="true"></div>
   <div class="lk-cats" id="lkCats" role="tablist" aria-label="Item type"></div>
   <div class="lk-info" id="lkInfo" aria-live="polite"></div>
@@ -894,9 +916,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 <nav id="tabbar" role="tablist" aria-label="Sections">
   <button role="tab" data-tab="play" id="tabPlay" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M3.6 12h16.8M12 3.4v17.2M6.1 5.9c2.4 1.6 3.4 3.8 3.4 6.1s-1 4.5-3.4 6.1M17.9 5.9c-2.4 1.6-3.4 3.8-3.4 6.1s1 4.5 3.4 6.1"/></svg><span>Play</span></button>
   <button role="tab" data-tab="challenges" id="tabChallenges" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.6 3.8h8.8v5.4a4.4 4.4 0 0 1-8.8 0z"/><path d="M7.6 5.6H4.8v1.2a3.3 3.3 0 0 0 3.1 3.3M16.4 5.6h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 13.6v3.6M8.4 20.2h7.2M9.8 20.2l.6-3h3.2l.6 3"/></svg><span>Challenges</span><i class="badge" id="badgeC"></i></button>
-  <button role="tab" data-tab="missions" id="tabMissions" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="4.6"/><circle class="fill" cx="12" cy="12" r="1.3"/></svg><span>Missions</span><i class="badge" id="badgeM"></i></button>
-  <button role="tab" data-tab="locker" id="tabLocker" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.6 3.4c.5 1.9 1.8 3 3.4 3s2.9-1.1 3.4-3l2.8.9c-.4 2.6.1 4.8 1.4 6.4v9.8H4.4v-9.8c1.3-1.6 1.8-3.8 1.4-6.4z"/><path d="M9.6 13.6h4.8"/></svg><span>Locker</span><i class="badge" id="badgeL"></i></button>
-  <button role="tab" data-tab="profile" id="tabProfile" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20.4c.8-3.9 3.7-6.1 7.4-6.1s6.6 2.2 7.4 6.1"/></svg><span>Profile</span></button>
+  <button role="tab" data-tab="profile" id="tabProfile" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20.4c.8-3.9 3.7-6.1 7.4-6.1s6.6 2.2 7.4 6.1"/></svg><span>Profile</span><i class="badge" id="badgeP"></i></button>
 </nav>
 
 <section id="pauseCard" class="card hide" aria-label="Paused" tabindex="-1">
@@ -3177,7 +3197,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   const attract = { st: null, bot: null, wait: 0, level: 1, streak: 0, acc: 0, tap: false };
   // navigation: which tab is open, the page pushed over it (if any), which page Challenges shows (ch), and what the
   // locker's live preview should show (fx: force a flame streak)
-  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null, ch: 'special' };
+  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null };
   // rings from the level just played that are already behind the ball (never the unplayed ones ahead)
   function keepBehind(st) {
     if (!st) return [];
@@ -3194,6 +3214,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     potCap: $('potCap'), mult: $('hudMult'), delta: $('potDelta')
   };
   const ICON = {
+    shirt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 3.4c.5 1.9 1.8 3 3.4 3s2.9-1.1 3.4-3l2.8.9c-.4 2.6.1 4.8 1.4 6.4v9.8H4.4v-9.8c1.3-1.6 1.8-3.8 1.4-6.4z"/><path d="M9.6 13.6h4.8"/></svg>',
     trophy: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 2.5h10V4h3.5v2.6a4.6 4.6 0 0 1-4.3 4.6A5.6 5.6 0 0 1 13.2 14v3h3.3v4.5h-9V17h3.3v-3a5.6 5.6 0 0 1-3-2.8 4.6 4.6 0 0 1-4.3-4.6V4H7V2.5Zm10 3.4v3.4a2.6 2.6 0 0 0 1.5-2.4v-1H17ZM7 5.9H5.5v1a2.6 2.6 0 0 0 1.5 2.4V5.9Z"/></svg>',
     flame: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 23c-4.4 0-8-3.1-8-7.5 0-3.3 2-5.6 3.7-7.4.6-.6 1.6-.2 1.6.7 0 1.4.9 2.6 2.1 2.6 1.1 0 1.8-.9 1.8-2.1 0-2.3-1.2-4.2-1.2-6.6 0-.9 1-1.5 1.7-1C17 3.9 20 8.4 20 14.5 20 19.6 16.4 23 12 23Z"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
@@ -3498,9 +3519,11 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     }
   }
   const leftText = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; };
-  // the pot's page on the Challenges tab, kept current while it's open
+  // the pot's card on the Challenges tab and its page, kept current while they're open
   function renderPotRow() {
-    if (nav.tab === 'challenges' && nav.ch === 'pot' && phase === 'lobby') renderChallenges(true);
+    if (phase !== 'lobby') return;
+    if (nav.page === 'pot') renderPage(true);
+    if (nav.tab === 'challenges') renderChallenges(true);
   }
   // where the run stands on the pot challenge (null if you're not in it, it's done, or this tier doesn't count)
   function potLevels() {
@@ -3546,8 +3569,9 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       ${p.simulated ? `<div class="pot-demo"><p>Demo: the other entrants are simulated, from how often players at different skill levels make the challenge.</p><button class="btn btn-plain" id="potClose">Close this pot now</button></div>` : ''}`;
   }
 
-  // ---------------------------------------------------------------- Challenges tab: the special level and the daily pot
-  // Each on its own page, picked with the switch at the top. The lobby's row is a way in to today's special.
+  // ---------------------------------------------------------------- Challenges tab: today's special, the daily pot and the missions
+  // One short page: a card for each challenge with its name, prize and button (the details are on its page, a tap
+  // away), then today's missions, with this week's and the career a tap away.
   let specState = null, specBusy = false;
   async function refreshSpecial() {
     if (specBusy) return;
@@ -3555,7 +3579,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     try { specState = await bank.special.state(); } catch (e) { specState = specState || null; }
     specBusy = false;
     syncBadges();
-    if (nav.tab === 'challenges' && phase === 'lobby') renderChallenges(true);
+    if (phase === 'lobby') { if (nav.page === 'special') renderPage(true); if (nav.tab === 'challenges') renderChallenges(true); }
   }
   const oneIn = (p) => (p > 0 ? 'about 1 in ' + Math.max(1, Math.round(1 / p)) : '–');
   function specialHtml() {
@@ -3565,7 +3589,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     const play = s.me.blocked ? '<div class="empty">The special level isn’t available on this account.</div>'
       : `<button class="btn btn-go" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
     return `<div class="sp-card">
-        <div class="sp-head"><div class="sp-k">Today’s special</div><div class="sp-name">${s.recipe.name}</div><div class="sp-blurb">${s.recipe.blurb} · ${s.recipe.rings} rings</div></div>
+        <div class="sp-head"><div class="sp-name">${s.recipe.name}</div><div class="sp-blurb">${s.recipe.blurb} · ${s.recipe.rings} rings</div></div>
         <canvas class="sp-course" id="spCourse" aria-hidden="true"></canvas>
         <div class="sp-cap">A sample course. Every attempt gets a new one from its own seed.</div>
       </div>
@@ -3597,34 +3621,37 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     }
     g.fillStyle = '#ff8a2a'; g.beginPath(); g.arc(sx(0), sy(def.startY), 4.2, 0, Math.PI * 2); g.fill();
   }
+  function specialCard() {
+    const s = specState;
+    if (!s) return '';
+    const act = s.me.blocked ? '<span class="pill off">Not available</span>' : `<button class="pill" id="chSpPlay">Play ${fmtBet(s.fee)}</button>`;
+    return `<div class="cc"><button class="cc-open" data-page="special" aria-label="Today’s special: ${s.recipe.name}. Details"><span class="cc-k">Today’s special</span><span class="cc-n">${s.recipe.name}</span><span class="cc-s">${s.recipe.blurb} · ${s.recipe.rings} rings</span><span class="chev">${ICON.chev}</span></button>
+      <div class="cc-act"><span class="cc-v">Win <b class="num">${fmtSol(s.prize)}</b> SOL</span>${act}</div></div>`;
+  }
+  function potCard() {
+    const p = potState;
+    if (!p) return '';
+    const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
+    const act = done ? '<span class="pill ok">Made it</span>' : inn ? '<span class="pill in">You’re in</span>' : `<button class="pill" id="chPotEnter">Enter ${fmtBet(p.fee)}</button>`;
+    return `<div class="cc"><button class="cc-open" data-page="pot" aria-label="Daily pot: ${p.goal.text}. Details"><span class="cc-k">Daily pot</span><span class="cc-n">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span><span class="chev">${ICON.chev}</span></button>
+      <div class="cc-act"><span class="cc-v"><b class="num gold">${fmtBal(p.pool)}</b> SOL pot · ${p.entrants} in</span>${act}</div></div>`;
+  }
   function renderChallenges(keep) {
     const body = $('cBody'), y = body.scrollTop;
-    const dot = specState && prefs.specSeen !== specState.day && nav.ch !== 'special' ? '<i class="dot"></i>' : '';
-    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2>
-      <div class="seg ch-seg" aria-label="Challenge">${[['special', 'Special level'], ['pot', 'Daily pot']].map(([c, t]) => `<button data-ch="${c}" aria-pressed="${nav.ch === c}">${t}${c === 'special' ? dot : ''}</button>`).join('')}</div>
-      <div class="ch-page" id="chPage">${nav.ch === 'pot' ? potHtml() : specialHtml()}</div></div>`;
+    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2>${specialCard()}${potCard()}${missionsHtml()}</div>`;
     if (keep) body.scrollTop = y;
     wireChallenges();
-    if (nav.ch === 'special' && specState) {
-      if (prefs.specSeen !== specState.day) { prefs.specSeen = specState.day; saveAll(); syncBadges(); }
-      const day = specState.day, id = specState.recipe.id;
-      requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[id]) drawCourse(c, SP.generate('preview|' + day, id)); });
-    }
+    if (specState && prefs.specSeen !== specState.day) { prefs.specSeen = specState.day; saveAll(); syncBadges(); }
+  }
+  async function enterPot(e) {
+    const b = e.currentTarget; b.disabled = true;
+    try { potState = await bank.pot.enter(); setBalance(); Sound.click(); buzz(8); toast('You’re in. Make it in any run ' + potState.goal.sub + '.'); renderPotRow(); }
+    catch (err) { const el = nav.page === 'pot' ? $('potErr') : null; if (el) el.textContent = err.message; else toast(err.message); b.disabled = false; }
   }
   function wireChallenges() {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
-    document.querySelectorAll('#cBody [data-ch]').forEach((b) => b.addEventListener('click', () => {
-      if (nav.ch === b.dataset.ch) return;
-      nav.ch = b.dataset.ch; Sound.click(); renderChallenges(); $('cBody').scrollTop = 0;
-      if (nav.ch === 'pot') refreshPot(); else refreshSpecial();
-    }));
-    on('spPlay', () => startSpecial());
-    on('potEnter', async (e) => {
-      e.currentTarget.disabled = true;
-      try { potState = await bank.pot.enter(); setBalance(); renderChallenges(true); Sound.click(); buzz(8); toast('You’re in. Make it in any run ' + potState.goal.sub + '.'); }
-      catch (err) { const el = $('potErr'); if (el) el.textContent = err.message; e.currentTarget.disabled = false; }
-    });
-    on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderChallenges(true); refreshPot(); });
+    on('chSpPlay', () => startSpecial());
+    on('chPotEnter', enterPot);
   }
 
   // ---------------------------------------------------------------- run flow
@@ -3661,7 +3688,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       if (r.special) specState = r.special;
     } catch (e) {
       run.busy = false;
-      const el = $('spErr');
+      const el = nav.page === 'special' ? $('spErr') : null;
       if (el && phase === 'lobby') el.textContent = e.message; else toast(e.message);
       if (phase === 'over') { backToLobby(); setTab('challenges'); }
       return;
@@ -3671,7 +3698,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     enterRun(r.missions);
   }
   function enterRun(missions) {
-    closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vM, false); show(vP, false); show(vC, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
+    closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vP, false); show(vC, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
     ball.lastVis = 0; // a new run lets the old flame die down quietly
     setHudMode(true); setBalance();
     clearCallouts(); clearNotices(); potShown = run.bet; setStreakHud();
@@ -5181,6 +5208,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       else if (nav.page) closePage();
       else if (phase === 'play') pause();
       else if (phase === 'paused') resume();
+      else if (phase === 'lobby' && nav.tab === 'locker') setTab('profile');
       else if (phase === 'lobby' && nav.tab !== 'play') setTab('play');
     }
   });
@@ -5383,13 +5411,24 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     if (m < 60 * 24) return Math.round(m / 60) + ' h ago';
     return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
+  function statsHtml() {
+    const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–', net = stats.returned - stats.wagered;
+    return `<div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : '−'}${fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
+      <div class="sec-h"><h3>Best scores</h3></div>
+      <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
+      <div class="sec-h"><h3>Recent runs</h3>${stats.history.length ? '<span>Newest first</span>' : ''}</div>
+      ${runsHtml()}`;
+  }
+  function settingsHtml() {
+    const sw = (k, ic, name) => `<div class="mrow-sw"><span class="mi mi-${k}">${ic}</span><span class="mn" id="sw-${k}">${name}</span><button class="switch" role="switch" data-set="${k}" aria-checked="${!!settings[k]}" aria-labelledby="sw-${k}"></button></div>`;
+    return `<div class="menu-list">${sw('sound', ICON.sound, 'Sound')}${sw('haptics', ICON.buzz, 'Vibration')}</div>`;
+  }
   function runsHtml() {
     if (!stats.history.length) return '<div class="empty">Your runs will show up here.</div>';
     const spName = (h) => (SP.BY[h.recipe] ? SP.BY[h.recipe].name : 'Special level');
     const what = (h) => (h.kind === 'special' ? (h.result === 'won' ? 'Cleared ' + spName(h) + ' · ' + fmtMult(h.mult) : 'Missed ' + spName(h))
       : h.result === 'bust' ? 'Out on level ' + h.level : h.result === 'maxwin' ? 'Max win · ' + fmtMult(h.mult) : h.result === 'final' ? 'All ' + NL + ' levels · ' + fmtMult(h.mult) : 'Cashed out at ' + fmtMult(h.mult));
-    return `<p class="vsub">${stats.history.length === 1 ? 'Your last run.' : 'Your last ' + stats.history.length + ' runs, newest first.'}</p>
-      <div class="runs">${stats.history.map((h) => {
+    return `<div class="runs">${stats.history.map((h) => {
         const p = h.payout - h.bet;
         return `<div class="rr"><span class="rr-t"><b>${what(h)}</b><span>${h.kind === 'special' ? 'Special level' : E.DIFFS[h.di].name} · ${fmtBet(h.bet)} SOL · ${agoText(h.t)}</span></span><span class="rr-v num ${p >= 0 ? 'pos' : 'neg'}">${p >= 0 ? '+' : '−'}${fmtSol(Math.abs(p))}<span class="unit">SOL</span></span></div>`;
       }).join('')}</div>`;
@@ -5399,6 +5438,11 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   }
   function wirePage(kind) {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
+    if (kind === 'special') on('spPlay', () => startSpecial());
+    if (kind === 'pot') {
+      on('potEnter', enterPot);
+      on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
+    }
     if (kind === 'odds') document.querySelectorAll('#oddsSeg button').forEach((b) => b.addEventListener('click', () => { oddsTier = +b.dataset.t; Sound.click(); renderPage(true); }));
     on('fairVerify', () => {
       const h = stats.history[0];
@@ -5423,13 +5467,18 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 
   // ---------------------------------------------------------------- pages
   const PAGES = {
-    how: ['How to play', howHtml],
-    odds: ['Odds & fairness', oddsHtml],
-    wallet: ['Wallet', walletHtml],
+    special: ['Today’s special', specialHtml],
+    pot: ['Daily pot', potHtml],
+    week: ['This week', weekHtml],
+    career: ['Career', careerHtml],
     trophies: ['Trophies', trophiesHtml],
-    runs: ['Recent runs', runsHtml]
+    stats: ['Stats', statsHtml],
+    wallet: ['Wallet', walletHtml],
+    settings: ['Settings', settingsHtml],
+    how: ['How to play', howHtml],
+    odds: ['Odds & fairness', oddsHtml]
   };
-  const TAB_NAME = { play: 'Play', challenges: 'Challenges', missions: 'Missions', locker: 'Locker', profile: 'Profile' };
+  const TAB_NAME = { play: 'Play', challenges: 'Challenges', profile: 'Profile', locker: 'Locker' };
   const vPg = $('vPage');
   function openPage(kind) {
     if (!PAGES[kind]) return;
@@ -5450,26 +5499,35 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     body.innerHTML = `<div class="vcol"><h2 class="vtitle" id="pgTitle">${t.replace('&', '&amp;')}</h2>${fn()}</div>`;
     body.dataset.kind = nav.page;
     wirePage(nav.page);
+    body.querySelectorAll('canvas[data-t]').forEach((c) => drawThumb(c, c.dataset.t, c.dataset.id));
+    if (nav.page === 'special' && specState) {
+      const day = specState.day, id = specState.recipe.id;
+      requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[id]) drawCourse(c, SP.generate('preview|' + day, id)); });
+    }
     if (keepScroll) body.scrollTop = y;
   }
   function closePage(quiet) {
     if (!nav.page) return;
     nav.page = null;
     show(vPg, false); document.body.classList.remove('page-open');
-    nav.cover = nav.tab === 'missions' || nav.tab === 'profile' || nav.tab === 'challenges';
-    if (nav.tab === 'profile' && phase === 'lobby') renderProfileView(); // the wallet row and run counts may have moved
+    nav.cover = nav.tab === 'profile' || nav.tab === 'challenges';
+    if (phase === 'lobby') { // what the page changed (the wallet, an entry) shows on the tab underneath
+      if (nav.tab === 'profile') renderProfileView();
+      if (nav.tab === 'challenges') renderChallenges(true);
+    }
     sheetTopC = -1;
     if (!quiet) Sound.click();
     if (phase === 'paused') setTimeout(() => $('resumeBtn').focus({ preventScroll: true }), 30);
   }
   $('pgBack').addEventListener('click', () => closePage());
 
-  // ---------------------------------------------------------------- navigation: Play, Challenges, Missions, Locker, Profile
-  // Five tabs along the bottom, in the lobby only. Play is the bet sheet over the live arena; the Locker keeps the
-  // arena on show above the collection, so whatever you pick (or tap to try) flies there at once; Challenges,
-  // Missions and Profile are full pages, and the arena stops drawing behind them.
-  const TABS = ['play', 'challenges', 'missions', 'locker', 'profile'];
-  const vM = $('vMissions'), vP = $('vProfile'), vL = $('vLocker'), vC = $('vChallenges');
+  // ---------------------------------------------------------------- navigation: Play, Challenges, Profile
+  // Three tabs along the bottom, in the lobby only. Play is the bet under the live arena; Challenges and Profile are
+  // full pages, and the arena stops drawing behind them. The Locker opens from Profile (it stays under the Profile
+  // tab, with a back button) and keeps the arena on show above the collection, so whatever you pick flies there.
+  const TABS = ['play', 'challenges', 'profile', 'locker'];
+  const vP = $('vProfile'), vL = $('vLocker'), vC = $('vChallenges');
+  const tabOf = (t) => (t === 'locker' ? 'profile' : t);
   function setTab(t, quiet) {
     if (!TABS.includes(t)) t = 'play';
     const was = nav.tab;
@@ -5481,29 +5539,30 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
     nav.tab = t; document.body.dataset.tab = t;
     if (was !== t) { document.body.classList.add('instant'); requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove('instant'))); }
     document.querySelectorAll('#tabbar [data-tab]').forEach((b) => {
-      const on = b.dataset.tab === t;
+      const on = b.dataset.tab === tabOf(t);
       b.setAttribute('aria-selected', String(on));
-      if (on && was !== t && !quiet) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
+      if (on && tabOf(was) !== tabOf(t) && !quiet) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
     });
     const inLobby = phase === 'lobby';
     show(ui.lobby, inLobby && t === 'play');
     show(vL, inLobby && t === 'locker');
-    show(vM, t === 'missions'); show(vP, t === 'profile'); show(vC, t === 'challenges');
-    nav.cover = t === 'missions' || t === 'profile' || t === 'challenges';
+    show(vP, t === 'profile'); show(vC, t === 'challenges');
+    nav.cover = t === 'profile' || t === 'challenges';
     sheetTopC = -1;
-    if (t === 'challenges') { renderChallenges(); $('cBody').scrollTop = 0; refreshSpecial(); refreshPot(); }
-    if (t === 'missions') { renderMissions(); $('mBody').scrollTop = 0; if (profile.mNew) { profile.mNew = 0; saveAll(); } }
+    if (t === 'challenges') { if (profile.mNew) { profile.mNew = 0; saveAll(); } renderChallenges(); $('cBody').scrollTop = 0; refreshSpecial(); refreshPot(); }
     if (t === 'locker') renderLocker();
-    if (t === 'profile') { renderProfileView(); $('pBody').scrollTop = 0; }
+    if (t === 'profile') { renderProfileView(); if (was !== 'locker') $('pBody').scrollTop = 0; }
     lockerFx();
     syncBadges();
     if (!quiet && was !== t) { Sound.click(); buzz(6); }
   }
+  // dots: Challenges for a special you haven't seen or missions finished since you last looked, Profile for new items
   function syncBadges() {
-    $('badgeM').classList.toggle('on', profile.mNew > 0 && nav.tab !== 'missions');
-    $('badgeC').classList.toggle('on', !!specState && prefs.specSeen !== specState.day && nav.tab !== 'challenges');
-    $('badgeL').classList.toggle('on', profile.fresh.length > 0 && nav.tab !== 'locker');
+    const newSpecial = !!specState && prefs.specSeen !== specState.day;
+    $('badgeC').classList.toggle('on', (newSpecial || profile.mNew > 0) && nav.tab !== 'challenges');
+    $('badgeP').classList.toggle('on', profile.fresh.length > 0 && nav.tab !== 'locker');
   }
+  $('lkBack').addEventListener('click', () => setTab('profile'));
   document.querySelectorAll('#tabbar [data-tab]').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
   // full pages: the top bar turns to material once the page scrolls under it, as on iOS
   document.querySelectorAll('.view > .vscroll').forEach((el) => el.addEventListener('scroll', () => el.parentElement.classList.toggle('scrolled', el.scrollTop > 6), { passive: true }));
@@ -5523,9 +5582,21 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       <div class="bar"><i style="width:${(Math.min(1, got / need) * 100).toFixed(1)}%"></i></div></div>`;
   }
   const rewardOf = (C) => { const [t, id] = C.reward.split(':'); return { t, id, u: UNLOCK_BY[C.reward] }; };
-  function renderMissions() {
-    const mv = mview(), d = mv.daily, w = mv.weekly, cs = careerState(), C = CAREER[cs.ch];
-    const dDone = d.filter((c) => c.done).length, wDone = w.filter((c) => c.done).length;
+  function missionsHtml() {
+    const mv = mview(), d = mv.daily, w = mv.weekly, cs = careerState();
+    const wDone = w.filter((c) => c.done).length;
+    const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi mi-${page}">${ic}</span><span class="mn">${name}</span><span class="mv">${val}</span><span class="chev">${ICON.chev}</span></button>`;
+    return `<div class="sec-h"><h3>Daily missions</h3><span>${ICON.clock}New in ${untilMidnight()}</span></div>
+      <div class="group">${needRow(mv, 'day')}${d.map((c) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>
+      <div class="menu-list">${row('week', ICON.target, 'This week', wDone + ' of ' + w.length + ' done')}${row('career', ICON.flag, 'Career', CAREER[cs.ch] ? 'Chapter ' + (cs.ch + 1) + ' of ' + CAREER.length : 'All done')}</div>`;
+  }
+  function weekHtml() {
+    const mv = mview(), w = mv.weekly;
+    return `<p class="vsub">New missions in ${untilMonday()}.</p>
+      <div class="group">${needRow(mv, 'week')}${w.map((c) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>`;
+  }
+  function careerHtml() {
+    const cs = careerState(), C = CAREER[cs.ch];
     let career;
     if (C) {
       const r = rewardOf(C), n = cs.done.filter(Boolean).length;
@@ -5541,17 +5612,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
       const r = rewardOf(K), st = i < cs.ch ? 'done' : i === cs.ch ? 'now' : 'locked';
       return `<div class="chli ${st}"><span class="cs">${st === 'done' ? ICON.check : st === 'now' ? ICON.target : ICON.lock}</span><b>${i + 1}. ${K.name}</b><span class="cr">${COS[r.t][r.id].name}<canvas width="52" height="52" data-t="${r.t}" data-id="${r.id}"></canvas></span></div>`;
     }).join('');
-    $('mBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Missions</h2>
-      <p class="vsub">Earn XP to level up and unlock new gear. Every run counts, whatever you bet. Daily and weekly missions pay SOL too, once you've played that day's or week's amount.</p>
-      <div class="sec-h"><h3>Today</h3><span>${ICON.clock}New in ${untilMidnight()}</span></div>
-      <div class="group">${needRow(mv, 'day')}${d.map((c) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>
-      <div class="sec-h"><h3>This week</h3><span>${ICON.clock}New in ${untilMonday()}</span></div>
-      <div class="group">${needRow(mv, 'week')}${w.map((c) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>
-      <p class="mnote">${dDone} of ${d.length} done today, ${wDone} of ${w.length} this week.</p>
-      <div class="sec-h"><h3>Career</h3><span>${Math.min(cs.ch, CAREER.length)} of ${CAREER.length} chapters</span></div>
-      ${career}
-      <div class="chlist">${chapters}</div></div>`;
-    $('mBody').querySelectorAll('canvas[data-t]').forEach((c) => drawThumb(c, c.dataset.t, c.dataset.id));
+    return `<p class="vsub">Chapters at your own pace, for XP and items you can only get here.</p>${career}<div class="chlist">${chapters}</div>`;
   }
 
   // ---------------------------------------------------------------- Locker tab
@@ -5631,26 +5692,18 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   // away), settings (wallet, sound, vibration) and help (how to play, odds & fairness).
   function renderProfileView() {
     const v = lvlOf(profile.xp), T = TITLE_BY[profile.card.title] || TITLES[0];
-    const nextU = UNLOCKS.filter((u) => u.lvl && u.lvl > v.l).sort((a, b) => a.lvl - b.lvl)[0];
-    const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–', net = stats.returned - stats.wagered;
-    const got = ACH.filter((a) => profile.ach[a.id]).length;
+    const got = ACH.filter((a) => profile.ach[a.id]).length, fresh = profile.fresh.length > 0;
     const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi mi-${page}">${ic}</span><span class="mn">${name}</span><span class="mv num">${val || ''}</span><span class="chev">${ICON.chev}</span></button>`;
-    const sw = (k, ic, name) => `<div class="mrow-sw"><span class="mi mi-${k}">${ic}</span><span class="mn" id="sw-${k}">${name}</span><button class="switch" role="switch" data-set="${k}" aria-checked="${!!settings[k]}" aria-labelledby="sw-${k}"></button></div>`;
     $('pBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Profile</h2>
       <button class="pcard" id="pfCard" aria-label="Edit your player card"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
-        <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span><br><span class="pedit">${ICON.pencil}Edit card</span></span></button>
-      <div class="plevel"><div class="lv-h"><span class="lv-n">Level ${v.l}</span><span class="lv-x">${v.into} / ${v.need} XP</span></div>
-        <div class="xp-bar"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></div>
-        ${nextU ? `<div class="lv-u">Next unlock: <b>${itemName(nextU)}</b> at level ${nextU.lvl}</div>` : ''}</div>
-      <div class="sec-h"><h3>Stats</h3><span>${stats.runs === 1 ? '1 run' : stats.runs + ' runs'}</span></div>
-      <div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : '−'}${fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
-      <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
-      <div class="menu-list">${row('trophies', ICON.medal, 'Trophies', got + ' of ' + ACH.length)}${row('runs', ICON.clock, 'Recent runs', stats.history.length || '')}</div>
-      <div class="sec-h"><h3>Settings</h3></div>
-      <div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${sw('sound', ICON.sound, 'Sound')}${sw('haptics', ICON.buzz, 'Vibration')}</div>
-      <div class="sec-h"><h3>Help</h3></div>
-      <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.chart, 'Odds &amp; fairness')}</div></div>`;
+        <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span>
+          <span class="plv"><span>Level ${v.l}</span><span class="num">${v.into} / ${v.need} XP</span></span><span class="pxp"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></span></span>
+        <span class="chev">${ICON.chev}</span></button>
+      <div class="menu-list"><button id="pfLocker"><span class="mi mi-locker">${ICON.shirt}</span><span class="mn">Locker</span><span class="mv">${fresh ? '<i class="dot" aria-label="New items"></i>' : ''}</span><span class="chev">${ICON.chev}</span></button>${row('trophies', ICON.medal, 'Trophies', got + ' of ' + ACH.length)}${row('stats', ICON.chart, 'Stats', stats.runs === 1 ? '1 run' : stats.runs + ' runs')}</div>
+      <div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${row('settings', ICON.gear, 'Settings')}</div>
+      <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.shield, 'Odds &amp; fairness')}</div></div>`;
     $('pfCard').addEventListener('click', () => openPanel('card'));
+    $('pfLocker').addEventListener('click', () => setTab('locker'));
   }
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   // the player card editor: name, emblem, colour and title

@@ -1,6 +1,6 @@
 """Missions that pay SOL, end to end in the demo: progress from every run, SOL that waits until the day's play reaches
 its need (the result card says how much more), paid the moment a bet gets there (a notice, the balance), and the
-Missions page marking it paid. Screenshots to ./shots/missions_*.png. Usage: python3 tools/missions_flow.py"""
+daily missions on the Challenges tab marking it paid. Screenshots to ./shots/missions_*.png. Usage: python3 tools/missions_flow.py"""
 import asyncio, json
 from playwright.async_api import async_playwright
 from _paths import URL, SHOTS, CHROME
@@ -64,16 +64,15 @@ async def main():
             await page.wait_for_timeout(100)
         await page.wait_for_timeout(2200)
         await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
-        await page.click('#tabMissions'); await page.wait_for_timeout(600)
-        txt = await page.evaluate("document.getElementById('mBody').innerText")
-        check('SOL paid' in txt and 'SOL rewards unlocked today' in txt, 'the Missions page shows the SOL paid and the day unlocked')
+        await page.click('#tabChallenges'); await page.wait_for_timeout(600)
+        txt = await page.evaluate("document.getElementById('cBody').innerText")
+        check('SOL paid' in txt and 'SOL rewards unlocked today' in txt, 'the daily missions on Challenges show the SOL paid and the day unlocked')
         await page.screenshot(path=OUT + 'page.png')
         # the special level's entry counts as play too
         p0 = (await mv())['played']['day']
         await page.click('#tabChallenges'); await page.wait_for_timeout(500)
-        await page.click('#cBody [data-ch="special"]'); await page.wait_for_timeout(400)
         fee = await page.evaluate('__solDunk.special().fee')
-        await page.click('#spPlay'); await page.wait_for_timeout(600)
+        await page.click('#chSpPlay'); await page.wait_for_timeout(600)
         check(abs((await mv())['played']['day'] - (p0 + fee)) < 1e-9, 'a special level entry counts as play')
         check(not errs, 'no page errors ' + json.dumps(errs))
         await b.close()

@@ -19,16 +19,21 @@ async def main():
         await page.screenshot(path=OUT + 'page_odds.png')
         await page.evaluate("document.getElementById('pgBody').scrollTop = 1e4"); await page.wait_for_timeout(250); await page.screenshot(path=OUT + 'page_odds_end.png')
         await page.click('#pgBack'); await page.wait_for_timeout(400)
-        # the other tabs: Missions, the Locker's six shelves, Profile and the player card editor
-        await page.click('#tabMissions'); await page.wait_for_timeout(500); await page.screenshot(path=OUT + 'tab_missions.png')
-        await page.evaluate("document.getElementById('mBody').scrollTop = 1e4"); await page.wait_for_timeout(250); await page.screenshot(path=OUT + 'tab_missions_end.png')
-        await page.click('#tabLocker'); await page.wait_for_timeout(900)
+        # the other tabs: Challenges (and the pages it opens), Profile, the Locker's six shelves and the player card editor
+        await page.click('#tabChallenges'); await page.wait_for_timeout(700); await page.screenshot(path=OUT + 'tab_challenges.png')
+        await page.evaluate("document.getElementById('cBody').scrollTop = 1e4"); await page.wait_for_timeout(250); await page.screenshot(path=OUT + 'tab_challenges_end.png')
+        await page.evaluate("document.getElementById('cBody').scrollTop = 0"); await page.wait_for_timeout(150)
+        for name in ['special', 'pot', 'week', 'career']:
+            await page.click(f'#cBody [data-page="{name}"]'); await page.wait_for_timeout(600)
+            await page.screenshot(path=OUT + 'page_' + name + '.png')
+            await page.click('#pgBack'); await page.wait_for_timeout(400)
+        await page.click('#tabProfile'); await page.wait_for_timeout(500); await page.screenshot(path=OUT + 'tab_profile.png')
+        await page.click('#pfLocker'); await page.wait_for_timeout(900)
         for cat in ['ball', 'wing', 'flame', 'trail', 'rim', 'court']:
             await page.click(f'#lkCats [data-cat="{cat}"]'); await page.wait_for_timeout(700); await page.screenshot(path=OUT + 'locker_' + cat + '.png')
-        await page.click('#tabProfile'); await page.wait_for_timeout(500); await page.screenshot(path=OUT + 'tab_profile.png')
-        await page.evaluate("document.getElementById('pBody').scrollTop = 1e4"); await page.wait_for_timeout(250); await page.screenshot(path=OUT + 'tab_profile_end.png')
-        # the pages Profile opens: trophies, recent runs, how to play (odds & fairness is above, the wallet below)
-        for name in ['trophies', 'runs', 'how']:
+        await page.click('#lkBack'); await page.wait_for_timeout(500)
+        # the pages Profile opens: trophies, stats, settings, how to play (odds & fairness is above, the wallet below)
+        for name in ['trophies', 'stats', 'settings', 'how']:
             await page.click(f'#pBody [data-page="{name}"]'); await page.wait_for_timeout(500)
             await page.screenshot(path=OUT + 'page_' + name + '.png')
             await page.click('#pgBack'); await page.wait_for_timeout(400)

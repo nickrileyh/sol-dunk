@@ -1241,7 +1241,7 @@
   const attract = { st: null, bot: null, wait: 0, level: 1, streak: 0, acc: 0, tap: false };
   // navigation: which tab is open, the page pushed over it (if any), which page Challenges shows (ch), and what the
   // locker's live preview should show (fx: force a flame streak)
-  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null, ch: 'special' };
+  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null };
   // rings from the level just played that are already behind the ball (never the unplayed ones ahead)
   function keepBehind(st) {
     if (!st) return [];
@@ -1258,6 +1258,7 @@
     potCap: $('potCap'), mult: $('hudMult'), delta: $('potDelta')
   };
   const ICON = {
+    shirt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8.6 3.4c.5 1.9 1.8 3 3.4 3s2.9-1.1 3.4-3l2.8.9c-.4 2.6.1 4.8 1.4 6.4v9.8H4.4v-9.8c1.3-1.6 1.8-3.8 1.4-6.4z"/><path d="M9.6 13.6h4.8"/></svg>',
     trophy: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 2.5h10V4h3.5v2.6a4.6 4.6 0 0 1-4.3 4.6A5.6 5.6 0 0 1 13.2 14v3h3.3v4.5h-9V17h3.3v-3a5.6 5.6 0 0 1-3-2.8 4.6 4.6 0 0 1-4.3-4.6V4H7V2.5Zm10 3.4v3.4a2.6 2.6 0 0 0 1.5-2.4v-1H17ZM7 5.9H5.5v1a2.6 2.6 0 0 0 1.5 2.4V5.9Z"/></svg>',
     flame: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 23c-4.4 0-8-3.1-8-7.5 0-3.3 2-5.6 3.7-7.4.6-.6 1.6-.2 1.6.7 0 1.4.9 2.6 2.1 2.6 1.1 0 1.8-.9 1.8-2.1 0-2.3-1.2-4.2-1.2-6.6 0-.9 1-1.5 1.7-1C17 3.9 20 8.4 20 14.5 20 19.6 16.4 23 12 23Z"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
@@ -1562,9 +1563,11 @@
     }
   }
   const leftText = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; };
-  // the pot's page on the Challenges tab, kept current while it's open
+  // the pot's card on the Challenges tab and its page, kept current while they're open
   function renderPotRow() {
-    if (nav.tab === 'challenges' && nav.ch === 'pot' && phase === 'lobby') renderChallenges(true);
+    if (phase !== 'lobby') return;
+    if (nav.page === 'pot') renderPage(true);
+    if (nav.tab === 'challenges') renderChallenges(true);
   }
   // where the run stands on the pot challenge (null if you're not in it, it's done, or this tier doesn't count)
   function potLevels() {
@@ -1610,8 +1613,9 @@
       ${p.simulated ? `<div class="pot-demo"><p>Demo: the other entrants are simulated, from how often players at different skill levels make the challenge.</p><button class="btn btn-plain" id="potClose">Close this pot now</button></div>` : ''}`;
   }
 
-  // ---------------------------------------------------------------- Challenges tab: the special level and the daily pot
-  // Each on its own page, picked with the switch at the top. The lobby's row is a way in to today's special.
+  // ---------------------------------------------------------------- Challenges tab: today's special, the daily pot and the missions
+  // One short page: a card for each challenge with its name, prize and button (the details are on its page, a tap
+  // away), then today's missions, with this week's and the career a tap away.
   let specState = null, specBusy = false;
   async function refreshSpecial() {
     if (specBusy) return;
@@ -1619,7 +1623,7 @@
     try { specState = await bank.special.state(); } catch (e) { specState = specState || null; }
     specBusy = false;
     syncBadges();
-    if (nav.tab === 'challenges' && phase === 'lobby') renderChallenges(true);
+    if (phase === 'lobby') { if (nav.page === 'special') renderPage(true); if (nav.tab === 'challenges') renderChallenges(true); }
   }
   const oneIn = (p) => (p > 0 ? 'about 1 in ' + Math.max(1, Math.round(1 / p)) : '–');
   function specialHtml() {
@@ -1629,7 +1633,7 @@
     const play = s.me.blocked ? '<div class="empty">The special level isn’t available on this account.</div>'
       : `<button class="btn btn-go" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
     return `<div class="sp-card">
-        <div class="sp-head"><div class="sp-k">Today’s special</div><div class="sp-name">${s.recipe.name}</div><div class="sp-blurb">${s.recipe.blurb} · ${s.recipe.rings} rings</div></div>
+        <div class="sp-head"><div class="sp-name">${s.recipe.name}</div><div class="sp-blurb">${s.recipe.blurb} · ${s.recipe.rings} rings</div></div>
         <canvas class="sp-course" id="spCourse" aria-hidden="true"></canvas>
         <div class="sp-cap">A sample course. Every attempt gets a new one from its own seed.</div>
       </div>
@@ -1661,34 +1665,37 @@
     }
     g.fillStyle = '#ff8a2a'; g.beginPath(); g.arc(sx(0), sy(def.startY), 4.2, 0, Math.PI * 2); g.fill();
   }
+  function specialCard() {
+    const s = specState;
+    if (!s) return '';
+    const act = s.me.blocked ? '<span class="pill off">Not available</span>' : `<button class="pill" id="chSpPlay">Play ${fmtBet(s.fee)}</button>`;
+    return `<div class="cc"><button class="cc-open" data-page="special" aria-label="Today’s special: ${s.recipe.name}. Details"><span class="cc-k">Today’s special</span><span class="cc-n">${s.recipe.name}</span><span class="cc-s">${s.recipe.blurb} · ${s.recipe.rings} rings</span><span class="chev">${ICON.chev}</span></button>
+      <div class="cc-act"><span class="cc-v">Win <b class="num">${fmtSol(s.prize)}</b> SOL</span>${act}</div></div>`;
+  }
+  function potCard() {
+    const p = potState;
+    if (!p) return '';
+    const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
+    const act = done ? '<span class="pill ok">Made it</span>' : inn ? '<span class="pill in">You’re in</span>' : `<button class="pill" id="chPotEnter">Enter ${fmtBet(p.fee)}</button>`;
+    return `<div class="cc"><button class="cc-open" data-page="pot" aria-label="Daily pot: ${p.goal.text}. Details"><span class="cc-k">Daily pot</span><span class="cc-n">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span><span class="chev">${ICON.chev}</span></button>
+      <div class="cc-act"><span class="cc-v"><b class="num gold">${fmtBal(p.pool)}</b> SOL pot · ${p.entrants} in</span>${act}</div></div>`;
+  }
   function renderChallenges(keep) {
     const body = $('cBody'), y = body.scrollTop;
-    const dot = specState && prefs.specSeen !== specState.day && nav.ch !== 'special' ? '<i class="dot"></i>' : '';
-    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2>
-      <div class="seg ch-seg" aria-label="Challenge">${[['special', 'Special level'], ['pot', 'Daily pot']].map(([c, t]) => `<button data-ch="${c}" aria-pressed="${nav.ch === c}">${t}${c === 'special' ? dot : ''}</button>`).join('')}</div>
-      <div class="ch-page" id="chPage">${nav.ch === 'pot' ? potHtml() : specialHtml()}</div></div>`;
+    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2>${specialCard()}${potCard()}${missionsHtml()}</div>`;
     if (keep) body.scrollTop = y;
     wireChallenges();
-    if (nav.ch === 'special' && specState) {
-      if (prefs.specSeen !== specState.day) { prefs.specSeen = specState.day; saveAll(); syncBadges(); }
-      const day = specState.day, id = specState.recipe.id;
-      requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[id]) drawCourse(c, SP.generate('preview|' + day, id)); });
-    }
+    if (specState && prefs.specSeen !== specState.day) { prefs.specSeen = specState.day; saveAll(); syncBadges(); }
+  }
+  async function enterPot(e) {
+    const b = e.currentTarget; b.disabled = true;
+    try { potState = await bank.pot.enter(); setBalance(); Sound.click(); buzz(8); toast('You’re in. Make it in any run ' + potState.goal.sub + '.'); renderPotRow(); }
+    catch (err) { const el = nav.page === 'pot' ? $('potErr') : null; if (el) el.textContent = err.message; else toast(err.message); b.disabled = false; }
   }
   function wireChallenges() {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
-    document.querySelectorAll('#cBody [data-ch]').forEach((b) => b.addEventListener('click', () => {
-      if (nav.ch === b.dataset.ch) return;
-      nav.ch = b.dataset.ch; Sound.click(); renderChallenges(); $('cBody').scrollTop = 0;
-      if (nav.ch === 'pot') refreshPot(); else refreshSpecial();
-    }));
-    on('spPlay', () => startSpecial());
-    on('potEnter', async (e) => {
-      e.currentTarget.disabled = true;
-      try { potState = await bank.pot.enter(); setBalance(); renderChallenges(true); Sound.click(); buzz(8); toast('You’re in. Make it in any run ' + potState.goal.sub + '.'); }
-      catch (err) { const el = $('potErr'); if (el) el.textContent = err.message; e.currentTarget.disabled = false; }
-    });
-    on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderChallenges(true); refreshPot(); });
+    on('chSpPlay', () => startSpecial());
+    on('chPotEnter', enterPot);
   }
 
   // ---------------------------------------------------------------- run flow
@@ -1725,7 +1732,7 @@
       if (r.special) specState = r.special;
     } catch (e) {
       run.busy = false;
-      const el = $('spErr');
+      const el = nav.page === 'special' ? $('spErr') : null;
       if (el && phase === 'lobby') el.textContent = e.message; else toast(e.message);
       if (phase === 'over') { backToLobby(); setTab('challenges'); }
       return;
@@ -1735,7 +1742,7 @@
     enterRun(r.missions);
   }
   function enterRun(missions) {
-    closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vM, false); show(vP, false); show(vC, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
+    closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vP, false); show(vC, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
     ball.lastVis = 0; // a new run lets the old flame die down quietly
     setHudMode(true); setBalance();
     clearCallouts(); clearNotices(); potShown = run.bet; setStreakHud();
@@ -3245,6 +3252,7 @@
       else if (nav.page) closePage();
       else if (phase === 'play') pause();
       else if (phase === 'paused') resume();
+      else if (phase === 'lobby' && nav.tab === 'locker') setTab('profile');
       else if (phase === 'lobby' && nav.tab !== 'play') setTab('play');
     }
   });
@@ -3447,13 +3455,24 @@
     if (m < 60 * 24) return Math.round(m / 60) + ' h ago';
     return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
+  function statsHtml() {
+    const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–', net = stats.returned - stats.wagered;
+    return `<div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : '−'}${fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
+      <div class="sec-h"><h3>Best scores</h3></div>
+      <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
+      <div class="sec-h"><h3>Recent runs</h3>${stats.history.length ? '<span>Newest first</span>' : ''}</div>
+      ${runsHtml()}`;
+  }
+  function settingsHtml() {
+    const sw = (k, ic, name) => `<div class="mrow-sw"><span class="mi mi-${k}">${ic}</span><span class="mn" id="sw-${k}">${name}</span><button class="switch" role="switch" data-set="${k}" aria-checked="${!!settings[k]}" aria-labelledby="sw-${k}"></button></div>`;
+    return `<div class="menu-list">${sw('sound', ICON.sound, 'Sound')}${sw('haptics', ICON.buzz, 'Vibration')}</div>`;
+  }
   function runsHtml() {
     if (!stats.history.length) return '<div class="empty">Your runs will show up here.</div>';
     const spName = (h) => (SP.BY[h.recipe] ? SP.BY[h.recipe].name : 'Special level');
     const what = (h) => (h.kind === 'special' ? (h.result === 'won' ? 'Cleared ' + spName(h) + ' · ' + fmtMult(h.mult) : 'Missed ' + spName(h))
       : h.result === 'bust' ? 'Out on level ' + h.level : h.result === 'maxwin' ? 'Max win · ' + fmtMult(h.mult) : h.result === 'final' ? 'All ' + NL + ' levels · ' + fmtMult(h.mult) : 'Cashed out at ' + fmtMult(h.mult));
-    return `<p class="vsub">${stats.history.length === 1 ? 'Your last run.' : 'Your last ' + stats.history.length + ' runs, newest first.'}</p>
-      <div class="runs">${stats.history.map((h) => {
+    return `<div class="runs">${stats.history.map((h) => {
         const p = h.payout - h.bet;
         return `<div class="rr"><span class="rr-t"><b>${what(h)}</b><span>${h.kind === 'special' ? 'Special level' : E.DIFFS[h.di].name} · ${fmtBet(h.bet)} SOL · ${agoText(h.t)}</span></span><span class="rr-v num ${p >= 0 ? 'pos' : 'neg'}">${p >= 0 ? '+' : '−'}${fmtSol(Math.abs(p))}<span class="unit">SOL</span></span></div>`;
       }).join('')}</div>`;
@@ -3463,6 +3482,11 @@
   }
   function wirePage(kind) {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
+    if (kind === 'special') on('spPlay', () => startSpecial());
+    if (kind === 'pot') {
+      on('potEnter', enterPot);
+      on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
+    }
     if (kind === 'odds') document.querySelectorAll('#oddsSeg button').forEach((b) => b.addEventListener('click', () => { oddsTier = +b.dataset.t; Sound.click(); renderPage(true); }));
     on('fairVerify', () => {
       const h = stats.history[0];
@@ -3487,13 +3511,18 @@
 
   // ---------------------------------------------------------------- pages
   const PAGES = {
-    how: ['How to play', howHtml],
-    odds: ['Odds & fairness', oddsHtml],
-    wallet: ['Wallet', walletHtml],
+    special: ['Today’s special', specialHtml],
+    pot: ['Daily pot', potHtml],
+    week: ['This week', weekHtml],
+    career: ['Career', careerHtml],
     trophies: ['Trophies', trophiesHtml],
-    runs: ['Recent runs', runsHtml]
+    stats: ['Stats', statsHtml],
+    wallet: ['Wallet', walletHtml],
+    settings: ['Settings', settingsHtml],
+    how: ['How to play', howHtml],
+    odds: ['Odds & fairness', oddsHtml]
   };
-  const TAB_NAME = { play: 'Play', challenges: 'Challenges', missions: 'Missions', locker: 'Locker', profile: 'Profile' };
+  const TAB_NAME = { play: 'Play', challenges: 'Challenges', profile: 'Profile', locker: 'Locker' };
   const vPg = $('vPage');
   function openPage(kind) {
     if (!PAGES[kind]) return;
@@ -3514,26 +3543,35 @@
     body.innerHTML = `<div class="vcol"><h2 class="vtitle" id="pgTitle">${t.replace('&', '&amp;')}</h2>${fn()}</div>`;
     body.dataset.kind = nav.page;
     wirePage(nav.page);
+    body.querySelectorAll('canvas[data-t]').forEach((c) => drawThumb(c, c.dataset.t, c.dataset.id));
+    if (nav.page === 'special' && specState) {
+      const day = specState.day, id = specState.recipe.id;
+      requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[id]) drawCourse(c, SP.generate('preview|' + day, id)); });
+    }
     if (keepScroll) body.scrollTop = y;
   }
   function closePage(quiet) {
     if (!nav.page) return;
     nav.page = null;
     show(vPg, false); document.body.classList.remove('page-open');
-    nav.cover = nav.tab === 'missions' || nav.tab === 'profile' || nav.tab === 'challenges';
-    if (nav.tab === 'profile' && phase === 'lobby') renderProfileView(); // the wallet row and run counts may have moved
+    nav.cover = nav.tab === 'profile' || nav.tab === 'challenges';
+    if (phase === 'lobby') { // what the page changed (the wallet, an entry) shows on the tab underneath
+      if (nav.tab === 'profile') renderProfileView();
+      if (nav.tab === 'challenges') renderChallenges(true);
+    }
     sheetTopC = -1;
     if (!quiet) Sound.click();
     if (phase === 'paused') setTimeout(() => $('resumeBtn').focus({ preventScroll: true }), 30);
   }
   $('pgBack').addEventListener('click', () => closePage());
 
-  // ---------------------------------------------------------------- navigation: Play, Challenges, Missions, Locker, Profile
-  // Five tabs along the bottom, in the lobby only. Play is the bet sheet over the live arena; the Locker keeps the
-  // arena on show above the collection, so whatever you pick (or tap to try) flies there at once; Challenges,
-  // Missions and Profile are full pages, and the arena stops drawing behind them.
-  const TABS = ['play', 'challenges', 'missions', 'locker', 'profile'];
-  const vM = $('vMissions'), vP = $('vProfile'), vL = $('vLocker'), vC = $('vChallenges');
+  // ---------------------------------------------------------------- navigation: Play, Challenges, Profile
+  // Three tabs along the bottom, in the lobby only. Play is the bet under the live arena; Challenges and Profile are
+  // full pages, and the arena stops drawing behind them. The Locker opens from Profile (it stays under the Profile
+  // tab, with a back button) and keeps the arena on show above the collection, so whatever you pick flies there.
+  const TABS = ['play', 'challenges', 'profile', 'locker'];
+  const vP = $('vProfile'), vL = $('vLocker'), vC = $('vChallenges');
+  const tabOf = (t) => (t === 'locker' ? 'profile' : t);
   function setTab(t, quiet) {
     if (!TABS.includes(t)) t = 'play';
     const was = nav.tab;
@@ -3545,29 +3583,30 @@
     nav.tab = t; document.body.dataset.tab = t;
     if (was !== t) { document.body.classList.add('instant'); requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.remove('instant'))); }
     document.querySelectorAll('#tabbar [data-tab]').forEach((b) => {
-      const on = b.dataset.tab === t;
+      const on = b.dataset.tab === tabOf(t);
       b.setAttribute('aria-selected', String(on));
-      if (on && was !== t && !quiet) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
+      if (on && tabOf(was) !== tabOf(t) && !quiet) { b.classList.remove('pop'); void b.offsetWidth; b.classList.add('pop'); }
     });
     const inLobby = phase === 'lobby';
     show(ui.lobby, inLobby && t === 'play');
     show(vL, inLobby && t === 'locker');
-    show(vM, t === 'missions'); show(vP, t === 'profile'); show(vC, t === 'challenges');
-    nav.cover = t === 'missions' || t === 'profile' || t === 'challenges';
+    show(vP, t === 'profile'); show(vC, t === 'challenges');
+    nav.cover = t === 'profile' || t === 'challenges';
     sheetTopC = -1;
-    if (t === 'challenges') { renderChallenges(); $('cBody').scrollTop = 0; refreshSpecial(); refreshPot(); }
-    if (t === 'missions') { renderMissions(); $('mBody').scrollTop = 0; if (profile.mNew) { profile.mNew = 0; saveAll(); } }
+    if (t === 'challenges') { if (profile.mNew) { profile.mNew = 0; saveAll(); } renderChallenges(); $('cBody').scrollTop = 0; refreshSpecial(); refreshPot(); }
     if (t === 'locker') renderLocker();
-    if (t === 'profile') { renderProfileView(); $('pBody').scrollTop = 0; }
+    if (t === 'profile') { renderProfileView(); if (was !== 'locker') $('pBody').scrollTop = 0; }
     lockerFx();
     syncBadges();
     if (!quiet && was !== t) { Sound.click(); buzz(6); }
   }
+  // dots: Challenges for a special you haven't seen or missions finished since you last looked, Profile for new items
   function syncBadges() {
-    $('badgeM').classList.toggle('on', profile.mNew > 0 && nav.tab !== 'missions');
-    $('badgeC').classList.toggle('on', !!specState && prefs.specSeen !== specState.day && nav.tab !== 'challenges');
-    $('badgeL').classList.toggle('on', profile.fresh.length > 0 && nav.tab !== 'locker');
+    const newSpecial = !!specState && prefs.specSeen !== specState.day;
+    $('badgeC').classList.toggle('on', (newSpecial || profile.mNew > 0) && nav.tab !== 'challenges');
+    $('badgeP').classList.toggle('on', profile.fresh.length > 0 && nav.tab !== 'locker');
   }
+  $('lkBack').addEventListener('click', () => setTab('profile'));
   document.querySelectorAll('#tabbar [data-tab]').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
   // full pages: the top bar turns to material once the page scrolls under it, as on iOS
   document.querySelectorAll('.view > .vscroll').forEach((el) => el.addEventListener('scroll', () => el.parentElement.classList.toggle('scrolled', el.scrollTop > 6), { passive: true }));
@@ -3587,9 +3626,21 @@
       <div class="bar"><i style="width:${(Math.min(1, got / need) * 100).toFixed(1)}%"></i></div></div>`;
   }
   const rewardOf = (C) => { const [t, id] = C.reward.split(':'); return { t, id, u: UNLOCK_BY[C.reward] }; };
-  function renderMissions() {
-    const mv = mview(), d = mv.daily, w = mv.weekly, cs = careerState(), C = CAREER[cs.ch];
-    const dDone = d.filter((c) => c.done).length, wDone = w.filter((c) => c.done).length;
+  function missionsHtml() {
+    const mv = mview(), d = mv.daily, w = mv.weekly, cs = careerState();
+    const wDone = w.filter((c) => c.done).length;
+    const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi mi-${page}">${ic}</span><span class="mn">${name}</span><span class="mv">${val}</span><span class="chev">${ICON.chev}</span></button>`;
+    return `<div class="sec-h"><h3>Daily missions</h3><span>${ICON.clock}New in ${untilMidnight()}</span></div>
+      <div class="group">${needRow(mv, 'day')}${d.map((c) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>
+      <div class="menu-list">${row('week', ICON.target, 'This week', wDone + ' of ' + w.length + ' done')}${row('career', ICON.flag, 'Career', CAREER[cs.ch] ? 'Chapter ' + (cs.ch + 1) + ' of ' + CAREER.length : 'All done')}</div>`;
+  }
+  function weekHtml() {
+    const mv = mview(), w = mv.weekly;
+    return `<p class="vsub">New missions in ${untilMonday()}.</p>
+      <div class="group">${needRow(mv, 'week')}${w.map((c) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>`;
+  }
+  function careerHtml() {
+    const cs = careerState(), C = CAREER[cs.ch];
     let career;
     if (C) {
       const r = rewardOf(C), n = cs.done.filter(Boolean).length;
@@ -3605,17 +3656,7 @@
       const r = rewardOf(K), st = i < cs.ch ? 'done' : i === cs.ch ? 'now' : 'locked';
       return `<div class="chli ${st}"><span class="cs">${st === 'done' ? ICON.check : st === 'now' ? ICON.target : ICON.lock}</span><b>${i + 1}. ${K.name}</b><span class="cr">${COS[r.t][r.id].name}<canvas width="52" height="52" data-t="${r.t}" data-id="${r.id}"></canvas></span></div>`;
     }).join('');
-    $('mBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Missions</h2>
-      <p class="vsub">Earn XP to level up and unlock new gear. Every run counts, whatever you bet. Daily and weekly missions pay SOL too, once you've played that day's or week's amount.</p>
-      <div class="sec-h"><h3>Today</h3><span>${ICON.clock}New in ${untilMidnight()}</span></div>
-      <div class="group">${needRow(mv, 'day')}${d.map((c) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>
-      <div class="sec-h"><h3>This week</h3><span>${ICON.clock}New in ${untilMonday()}</span></div>
-      <div class="group">${needRow(mv, 'week')}${w.map((c) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid)).join('')}</div>
-      <p class="mnote">${dDone} of ${d.length} done today, ${wDone} of ${w.length} this week.</p>
-      <div class="sec-h"><h3>Career</h3><span>${Math.min(cs.ch, CAREER.length)} of ${CAREER.length} chapters</span></div>
-      ${career}
-      <div class="chlist">${chapters}</div></div>`;
-    $('mBody').querySelectorAll('canvas[data-t]').forEach((c) => drawThumb(c, c.dataset.t, c.dataset.id));
+    return `<p class="vsub">Chapters at your own pace, for XP and items you can only get here.</p>${career}<div class="chlist">${chapters}</div>`;
   }
 
   // ---------------------------------------------------------------- Locker tab
@@ -3695,26 +3736,18 @@
   // away), settings (wallet, sound, vibration) and help (how to play, odds & fairness).
   function renderProfileView() {
     const v = lvlOf(profile.xp), T = TITLE_BY[profile.card.title] || TITLES[0];
-    const nextU = UNLOCKS.filter((u) => u.lvl && u.lvl > v.l).sort((a, b) => a.lvl - b.lvl)[0];
-    const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–', net = stats.returned - stats.wagered;
-    const got = ACH.filter((a) => profile.ach[a.id]).length;
+    const got = ACH.filter((a) => profile.ach[a.id]).length, fresh = profile.fresh.length > 0;
     const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi mi-${page}">${ic}</span><span class="mn">${name}</span><span class="mv num">${val || ''}</span><span class="chev">${ICON.chev}</span></button>`;
-    const sw = (k, ic, name) => `<div class="mrow-sw"><span class="mi mi-${k}">${ic}</span><span class="mn" id="sw-${k}">${name}</span><button class="switch" role="switch" data-set="${k}" aria-checked="${!!settings[k]}" aria-labelledby="sw-${k}"></button></div>`;
     $('pBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Profile</h2>
       <button class="pcard" id="pfCard" aria-label="Edit your player card"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
-        <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span><br><span class="pedit">${ICON.pencil}Edit card</span></span></button>
-      <div class="plevel"><div class="lv-h"><span class="lv-n">Level ${v.l}</span><span class="lv-x">${v.into} / ${v.need} XP</span></div>
-        <div class="xp-bar"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></div>
-        ${nextU ? `<div class="lv-u">Next unlock: <b>${itemName(nextU)}</b> at level ${nextU.lvl}</div>` : ''}</div>
-      <div class="sec-h"><h3>Stats</h3><span>${stats.runs === 1 ? '1 run' : stats.runs + ' runs'}</span></div>
-      <div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '+' : '−'}${fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
-      <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
-      <div class="menu-list">${row('trophies', ICON.medal, 'Trophies', got + ' of ' + ACH.length)}${row('runs', ICON.clock, 'Recent runs', stats.history.length || '')}</div>
-      <div class="sec-h"><h3>Settings</h3></div>
-      <div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${sw('sound', ICON.sound, 'Sound')}${sw('haptics', ICON.buzz, 'Vibration')}</div>
-      <div class="sec-h"><h3>Help</h3></div>
-      <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.chart, 'Odds &amp; fairness')}</div></div>`;
+        <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span>
+          <span class="plv"><span>Level ${v.l}</span><span class="num">${v.into} / ${v.need} XP</span></span><span class="pxp"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></span></span>
+        <span class="chev">${ICON.chev}</span></button>
+      <div class="menu-list"><button id="pfLocker"><span class="mi mi-locker">${ICON.shirt}</span><span class="mn">Locker</span><span class="mv">${fresh ? '<i class="dot" aria-label="New items"></i>' : ''}</span><span class="chev">${ICON.chev}</span></button>${row('trophies', ICON.medal, 'Trophies', got + ' of ' + ACH.length)}${row('stats', ICON.chart, 'Stats', stats.runs === 1 ? '1 run' : stats.runs + ' runs')}</div>
+      <div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${row('settings', ICON.gear, 'Settings')}</div>
+      <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.shield, 'Odds &amp; fairness')}</div></div>`;
     $('pfCard').addEventListener('click', () => openPanel('card'));
+    $('pfLocker').addEventListener('click', () => setTab('locker'));
   }
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   // the player card editor: name, emblem, colour and title

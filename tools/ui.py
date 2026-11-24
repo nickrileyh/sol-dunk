@@ -1,9 +1,9 @@
-"""Checks the lobby's navigation and what lives behind it: the five tabs (Challenges has its own check,
-tools/special_flow.py), the pages that push in over them (How to play, Odds & fairness, Wallet, Trophies, Recent runs)
-and their back button, the Locker (equip, try-on, leaving
-clears the try-on), the missions (daily, weekly, career progress after a run), the player card editor, the
-settings on Profile, the pause card, and that items already earned under the newer unlock list are handed out on
-load."""
+"""Checks the lobby's navigation and what lives behind it: the three tabs (Play, Challenges, Profile; the special
+level has its own check, tools/special_flow.py), the pages that push in over them (This week, Career, Trophies,
+Stats, Wallet, Settings, How to play, Odds & fairness) and their back button, the Locker opened from Profile (equip,
+try-on, its back button clears the try-on), the missions (daily on Challenges, weekly and career progress after a
+run), the player card editor, the settings, the pause card, and that items already earned under the newer unlock
+list are handed out on load."""
 import asyncio, json
 from playwright.async_api import async_playwright
 from _paths import URL, SHOTS, CHROME
@@ -21,24 +21,30 @@ async def main():
         tab = lambda: page.evaluate("document.body.dataset.tab")
         vis = lambda sel: page.evaluate(f"!document.querySelector('{sel}').classList.contains('hide')")
         check(await tab() == 'play' and await vis('#lobby'), 'opens on Play with the bet sheet')
-        # tabs
+        # tabs: Play, Challenges (today's special, the pot, the missions), Profile (with the Locker)
+        check(await page.evaluate("[...document.querySelectorAll('#tabbar [data-tab]')].map((b) => b.dataset.tab).join()") == 'play,challenges,profile', 'three tabs: Play, Challenges, Profile')
         await page.click('#tabChallenges'); await page.wait_for_timeout(500)
         check(await tab() == 'challenges' and await vis('#vChallenges') and not await vis('#lobby'), 'Challenges tab shows the challenges page')
-        check(await page.evaluate("document.querySelectorAll('#cBody [data-ch]').length") == 2, 'Challenges switches between the special level and the daily pot')
-        await page.click('#tabMissions'); await page.wait_for_timeout(400)
-        check(await tab() == 'missions' and await vis('#vMissions') and not await vis('#lobby'), 'Missions tab shows the missions page')
-        n = await page.evaluate("document.querySelectorAll('#mBody .mrow').length")
-        check(n == 10, f'missions page lists 3 daily + 3 weekly + 4 career missions ({n})')
-        sol = await page.evaluate("document.querySelectorAll('#mBody .mxp small').length")
-        check(sol == 6 and await page.evaluate("document.querySelectorAll('#mBody .mneed').length") == 2, f'daily and weekly missions show their SOL and the play that unlocks it ({sol})')
+        check(await page.evaluate("!!document.querySelector('#cBody [data-page=\"special\"]') && !!document.querySelector('#cBody [data-page=\"pot\"]')"), 'Challenges has a card for today\'s special and one for the pot')
+        n = await page.evaluate("document.querySelectorAll('#cBody .mrow').length")
+        check(n == 3, f'Challenges lists the 3 daily missions ({n})')
+        sol = await page.evaluate("document.querySelectorAll('#cBody .mxp small').length")
+        check(sol == 3 and await page.evaluate("document.querySelectorAll('#cBody .mneed').length") == 1, f'daily missions show their SOL and the play that unlocks it ({sol})')
+        await page.click('#cBody [data-page="week"]'); await page.wait_for_timeout(450)
+        check(await page.evaluate("document.querySelectorAll('#pgBody .mrow').length") == 3 and await page.evaluate("document.querySelectorAll('#pgBody .mneed').length") == 1, 'This week opens its page: 3 missions and their play bar')
+        await page.click('#pgBack'); await page.wait_for_timeout(450)
+        await page.click('#cBody [data-page="career"]'); await page.wait_for_timeout(450)
+        check(await page.evaluate("document.querySelectorAll('#pgBody .chap .mrow').length") == 4, 'Career opens its page: the chapter and its 4 missions')
+        await page.click('#pgBack'); await page.wait_for_timeout(450)
+        await page.evaluate("document.activeElement.blur()")
         await page.keyboard.press('Space'); await page.wait_for_timeout(400)
-        check(await page.evaluate('__solDunk.phase()') == 'lobby', 'Space on the Missions tab does not start a run')
-        await page.click('#tabLocker'); await page.wait_for_timeout(600)
-        check(await tab() == 'locker' and await vis('#vLocker'), 'Locker tab shows the locker over the arena')
+        check(await page.evaluate('__solDunk.phase()') == 'lobby', 'Space on the Challenges tab does not start a run')
+        await page.click('#tabProfile'); await page.wait_for_timeout(400)
+        await page.click('#pfLocker'); await page.wait_for_timeout(600)
+        check(await tab() == 'locker' and await vis('#vLocker') and await page.evaluate("document.getElementById('tabProfile').getAttribute('aria-selected')") == 'true', 'the Locker opens from Profile, under the Profile tab')
         # equip an owned ball, then try a locked one
         await page.evaluate("__solDunk.profile.owned.push('ball:retro')")
         await page.click('#lkCats [data-cat="ball"]'); await page.wait_for_timeout(200)
-        await page.evaluate("document.querySelector('#tabLocker').click()")
         await page.click('#lkGrid .item[data-id="retro"]'); await page.wait_for_timeout(300)
         check(await page.evaluate("__solDunk.profile.eq.ball") == 'retro', 'tapping an owned ball equips it')
         await page.click('#lkGrid .item[data-id="gold"]'); await page.wait_for_timeout(300)
@@ -52,8 +58,12 @@ async def main():
             check(c >= 6, f'{cat} shelf has {c} items')
         check(await page.evaluate("__solDunk.nav.try") is None, 'changing shelf ends the try-on')
         await page.click('#lkGrid .item[data-id="orbit"]'); await page.wait_for_timeout(300)
+        await page.click('#lkBack'); await page.wait_for_timeout(400)
+        check(await tab() == 'profile' and await page.evaluate("__solDunk.nav.try") is None and await page.evaluate("__solDunk.profile.eq.court") == 'arena', 'the Locker\'s back button returns to Profile and ends the try-on')
+        await page.click('#pfLocker'); await page.wait_for_timeout(400)
+        await page.keyboard.press('Escape'); await page.wait_for_timeout(400)
+        check(await tab() == 'profile', 'Escape in the Locker goes back to Profile')
         await page.click('#tabPlay'); await page.wait_for_timeout(400)
-        check(await page.evaluate("__solDunk.nav.try") is None and await page.evaluate("__solDunk.profile.eq.court") == 'arena', 'leaving the locker ends the try-on')
         # pages: pushed over the current tab with a back button; one home each, no settings gear in the top bar
         pg = lambda: page.evaluate("__solDunk.nav.page")
         check(await page.evaluate("!document.getElementById('menuBtn') && !document.querySelector('#lobby .links')"), 'no settings gear in the top bar and no link row under the Play button')
@@ -74,7 +84,7 @@ async def main():
         await page.click('#tabPlay'); await page.wait_for_timeout(400)
         check(await pg() is None and await tab() == 'play' and await vis('#lobby'), 'tapping the current tab closes the page')
         await page.click('#tabProfile'); await page.wait_for_timeout(400)
-        for k, title in [('trophies', 'Trophies'), ('runs', 'Recent runs'), ('how', 'How to play'), ('odds', 'Odds & fairness'), ('wallet', 'Wallet')]:
+        for k, title in [('trophies', 'Trophies'), ('stats', 'Stats'), ('wallet', 'Wallet'), ('settings', 'Settings'), ('how', 'How to play'), ('odds', 'Odds & fairness')]:
             await page.click(f'#pBody [data-page="{k}"]'); await page.wait_for_timeout(450)
             t = await page.evaluate("document.getElementById('pgTitle').textContent")
             back = await page.evaluate("document.getElementById('pgBackT').textContent")
@@ -82,13 +92,15 @@ async def main():
             await page.keyboard.press('Escape'); await page.wait_for_timeout(400)
             check(await pg() is None and await tab() == 'profile', f'Escape closes {title}')
         snd = await page.evaluate("__solDunk.settings ? __solDunk.settings.sound : null")
-        await page.click('#pBody .switch[data-set="sound"]'); await page.wait_for_timeout(200)
-        sw = await page.evaluate("document.querySelector('#pBody .switch[data-set=\"sound\"]').getAttribute('aria-checked')")
+        await page.click('#pBody [data-page="settings"]'); await page.wait_for_timeout(450)
+        await page.click('#pgBody .switch[data-set="sound"]'); await page.wait_for_timeout(200)
+        sw = await page.evaluate("document.querySelector('#pgBody .switch[data-set=\"sound\"]').getAttribute('aria-checked')")
         lbl = await page.evaluate("document.getElementById('muteBtn').getAttribute('aria-label')")
-        check(sw == 'false' and lbl == 'Turn sound on', f'the Sound switch on Profile turns sound off and the mute button follows ({sw}, {lbl})')
+        check(sw == 'false' and lbl == 'Turn sound on', f'the Sound switch in Settings turns sound off and the mute button follows ({sw}, {lbl})')
         await page.evaluate("document.getElementById('muteBtn').click()"); await page.wait_for_timeout(200)  # it shows during runs only
-        sw = await page.evaluate("document.querySelector('#pBody .switch[data-set=\"sound\"]').getAttribute('aria-checked')")
+        sw = await page.evaluate("document.querySelector('#pgBody .switch[data-set=\"sound\"]').getAttribute('aria-checked')")
         check(sw == 'true', 'the mute button turns it back on and the switch follows')
+        await page.click('#pgBack'); await page.wait_for_timeout(400)
         bar = await page.evaluate("['balBtn', 'muteBtn'].map((id) => getComputedStyle(document.getElementById(id)).display).join()")
         check(bar.split(',')[0] != 'none' and bar.split(',')[1] == 'none', f'between runs the top bar is just the balance ({bar})')
         # profile and the card editor
@@ -138,7 +150,9 @@ async def main():
         await page.reload(); await page.wait_for_timeout(1200)
         owned = await page.evaluate("__solDunk.profile.owned")
         check(all(k in owned for k in ['ball:street', 'court:rooftop', 'rim:chrome', 'trail:sparkle']), 'a level-12 player gets the new items for their level on load')
-        check(await page.evaluate("document.getElementById('badgeL').classList.contains('on')"), 'the Locker tab shows a dot for new items')
+        check(await page.evaluate("document.getElementById('badgeP').classList.contains('on')"), 'the Profile tab shows a dot for new items')
+        await page.click('#tabProfile'); await page.wait_for_timeout(400)
+        check(await page.evaluate("!!document.querySelector('#pfLocker .dot')"), 'and so does the Locker row on Profile')
         await page.screenshot(path=SHOTS + '/ui_end.png')
         check(not errs, 'no page errors ' + json.dumps(errs))
         await b.close()
