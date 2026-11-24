@@ -1635,8 +1635,58 @@
     c.beginPath(); c.arc(x, y, R, 0, Math.PI * 2); c.fill();
     c.globalCompositeOperation = 'source-over';
   }
+  // The far side of the arena, behind the court: the courtside crowd in silhouette against the haze, and an
+  // LED board along the baseline. The crowd is further away, so it drifts slower than the court; the board
+  // moves with it. The crowd is painted once into a tile that repeats.
+  const STANDS_W = 420, STANDS_H = 40, BOARD_H = 10;
+  let standsEl = null, standsK = 0;
+  function standsTile() {
+    const k = Math.max(1, Math.round(scale * dpr * 2) / 2);
+    if (standsEl && standsK === k) return standsEl;
+    const el = standsEl || document.createElement('canvas');
+    el.width = Math.ceil(STANDS_W * k); el.height = Math.ceil(STANDS_H * k);
+    const g = el.getContext('2d');
+    g.setTransform(k, 0, 0, k, 0, 0); g.clearRect(0, 0, STANDS_W, STANDS_H);
+    const rnd = E.makeRng('crowd');
+    // two rows of heads and shoulders: the back row smaller and fainter
+    const row = (base, rMin, rMax, gap, alpha) => {
+      g.fillStyle = 'rgba(4,7,17,' + alpha + ')';
+      g.beginPath();
+      for (let x = rnd() * gap; x < STANDS_W + gap; x += gap * (0.8 + rnd() * 0.45)) {
+        const r = rMin + rnd() * (rMax - rMin), y = base - r * (1.5 + rnd() * 0.5);
+        for (const dx of [0, -STANDS_W]) { // wrap around the tile's edge so it repeats seamlessly
+          g.moveTo(x + dx + r, y); g.arc(x + dx, y, r, 0, Math.PI * 2);
+          g.moveTo(x + dx + r * 1.7, base); g.ellipse(x + dx, base, r * 1.7, r * 1.25, 0, 0, Math.PI * 2);
+        }
+      }
+      g.rect(0, base, STANDS_W, STANDS_H - base);
+      g.fill();
+    };
+    row(STANDS_H - 14, 2.6, 3.4, 8, 0.3);
+    row(STANDS_H - 2, 3.4, 4.4, 11, 0.62);
+    standsK = k;
+    return (standsEl = el);
+  }
+  function drawArena(c, left, width) {
+    const F = W.FLOOR, top = F - BOARD_H, x0 = left - 20, w = width + 40;
+    const tile = standsTile(), shift = view.camX * 0.65; // the stands move at 35% of the court's speed
+    for (let u = Math.floor((left - shift) / STANDS_W) * STANDS_W; u < left - shift + width; u += STANDS_W) {
+      c.drawImage(tile, u + shift, top - STANDS_H, STANDS_W, STANDS_H);
+    }
+    const glow = c.createLinearGradient(0, top - 18, 0, top); // the board lights the front row
+    glow.addColorStop(0, 'rgba(' + LIGHT + ',0)'); glow.addColorStop(1, 'rgba(' + LIGHT + ',0.15)');
+    c.fillStyle = glow; c.fillRect(x0, top - 18, w, 18);
+    const bd = c.createLinearGradient(0, top, 0, F);
+    bd.addColorStop(0, '#0f1730'); bd.addColorStop(1, '#070b18');
+    c.fillStyle = bd; c.fillRect(x0, top, w, BOARD_H);
+    c.fillStyle = 'rgba(130,165,255,0.5)'; c.fillRect(x0, top, w, 0.7);
+    c.font = '800 6.5px ' + FONT_DISPLAY; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = 'rgba(140,175,255,0.4)';
+    for (let x = Math.floor((left - 60) / 160) * 160; x < left + width + 60; x += 160) c.fillText('SOL DUNK', x, top + BOARD_H / 2 + 0.4);
+  }
   function drawCourt(c, left, width, S, bx, by, rings) {
     const lr = glowRgb(), x0 = left - 20, w = width + 40, F = W.FLOOR;
+    drawArena(c, left, width);
     const fg = c.createLinearGradient(0, F, 0, F + 150);
     fg.addColorStop(0, 'rgba(' + lr + ',0.24)'); fg.addColorStop(0.07, 'rgba(17,21,34,0.97)'); fg.addColorStop(1, EDGE);
     c.fillStyle = fg; c.fillRect(x0, F, w, 4000);
@@ -1648,6 +1698,12 @@
     const fade = c.createLinearGradient(0, F + 6, 0, F + 120);
     fade.addColorStop(0, EDGE0); fade.addColorStop(1, EDGE);
     c.fillStyle = fade; c.fillRect(x0, F + 6, w, 4000);
+    // the spotlight's reflection on the polished boards, under the middle of the view
+    c.save(); c.beginPath(); c.rect(x0, F, w, 200); c.clip();
+    c.translate(left + width / 2, F + 16); c.scale(1, 0.12);
+    const sr = width * 0.44, sheen = c.createRadialGradient(0, 0, 0, 0, 0, sr);
+    sheen.addColorStop(0, 'rgba(190,210,255,0.15)'); sheen.addColorStop(1, 'rgba(190,210,255,0)');
+    c.fillStyle = sheen; c.beginPath(); c.arc(0, 0, sr, 0, Math.PI * 2); c.fill(); c.restore();
     // each ring casts a soft shadow on the boards below it, so the rings sit in the space
     if (rings) for (const o of rings) {
       const h = o.h, x = o.off + h.x, d = clamp((F - E.hoopY(h, o.t)) / 700, 0, 1);
@@ -1677,11 +1733,13 @@
   // ---------------------------------------------------------------- rings: shaded torus sprites
   // Each ring is drawn exactly at its collision size (tube centre = rim peg, tube width = peg size).
   // Sprites are cached per size, colour and pixel density.
-  // Painted steel rims: no neon glow, light from the spotlight above, the far side in shadow.
+  // Painted steel rims: no neon glow. A dark edge at exactly the tube's collision width, the tube shaded from
+  // its underside up to a top lit by the spotlight, a narrow specular streak, and a cool bounce light off the
+  // court underneath. The streak and the bounce fade toward the sides; the far side sits in shadow.
   const RING_PAL = {
-    red: { dark: '#4a0a07', back: '#a3231b', mid: '#e5352b', light: '#ff9a88' },
-    gold: { dark: '#4c3500', back: '#a77a12', mid: '#f0b92a', light: '#fff2bf' },
-    grey: { dark: '#131722', back: '#262b39', mid: '#363d4f', light: '#5f6880' }
+    red: { edge: '#3a0805', body: '#a5261a', mid: '#dd3a22', hi: '#ff8a64', spec: '255,236,224', back: '#7c1b12', bounce: '150,175,255' },
+    gold: { edge: '#3e2b02', body: '#b5831a', mid: '#efb52e', hi: '#ffe08a', spec: '255,250,232', back: '#8c6512', bounce: '160,184,255' },
+    grey: { edge: '#0e121b', body: '#262c3a', mid: '#353d50', hi: '#56607a', spec: '200,210,235', back: '#1e2330', bounce: '110,140,220' }
   };
   const RING_RY = 0.34;
   function lerpHex(a, b, t) {
@@ -1689,23 +1747,44 @@
     const ch = (sh) => Math.round(((A >> sh) & 255) + (((B >> sh) & 255) - ((A >> sh) & 255)) * t);
     return 'rgb(' + ch(16) + ',' + ch(8) + ',' + ch(0) + ')';
   }
+  function hexRgb(h) { const n = parseInt(h.slice(1), 16); return ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255); }
   function ringHalf(c, rx, ry, lw, pal, front) {
-    const a0 = front ? 0 : Math.PI, a1 = front ? Math.PI : Math.PI * 2, top = front ? pal.mid : pal.back;
-    c.lineCap = 'round';
-    const steps = 6; // tube cross-section: shadowed underside up to the lit top
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      c.strokeStyle = lerpHex(pal.dark, top, Math.min(1, t * 1.5));
-      c.lineWidth = lw * (1 - t * 0.6);
-      c.beginPath(); c.ellipse(0, -lw * 0.08 * t, rx, ry, 0, a0, a1); c.stroke();
-    }
-    c.strokeStyle = pal.light; c.globalAlpha = front ? 0.85 : 0.3; c.lineWidth = lw * 0.18;
-    c.beginPath(); c.ellipse(0, -lw * 0.26, rx, ry, 0, front ? 0.12 * Math.PI : 1.08 * Math.PI, front ? 0.88 * Math.PI : 1.92 * Math.PI); c.stroke();
+    const a0 = front ? 0 : Math.PI, a1 = front ? Math.PI : Math.PI * 2;
+    const arc = (oy, b0, b1) => { c.beginPath(); c.ellipse(0, oy, rx, ry, 0, b0, b1); c.stroke(); };
+    // light that fades toward the sides of the ring, brightest a little left of centre (the light is up and left)
+    const fade = (rgb, a, mid) => {
+      const g = c.createLinearGradient(-rx, 0, rx, 0);
+      g.addColorStop(0, 'rgba(' + rgb + ',0)'); g.addColorStop(mid - 0.1, 'rgba(' + rgb + ',' + a + ')');
+      g.addColorStop(mid + 0.08, 'rgba(' + rgb + ',' + a + ')'); g.addColorStop(1, 'rgba(' + rgb + ',0)');
+      return g;
+    };
+    // the lit front blends into the shaded back's colours toward the sides, so the halves meet without a seam
+    const sides = (end, mid) => {
+      const g = c.createLinearGradient(-rx, 0, rx, 0);
+      g.addColorStop(0, end); g.addColorStop(0.22, mid); g.addColorStop(0.78, mid); g.addColorStop(1, end);
+      return g;
+    };
+    const backTop = lerpHex(pal.back, pal.mid, 0.45);
+    // flat ends, so the halves meet without dark knots at the sides; the back half runs a little past its
+    // ends underneath the front, so the front's ends always sit on matching colour
+    c.lineCap = 'butt';
+    const ov = front ? 0 : 0.04;
+    c.strokeStyle = pal.edge; c.lineWidth = lw; arc(0, a0 - ov, a1 + ov);
     if (front) {
-      c.strokeStyle = '#ffffff'; c.globalAlpha = 0.7; c.lineWidth = lw * 0.1;
-      c.beginPath(); c.ellipse(0, -lw * 0.29, rx, ry, 0, 0.6 * Math.PI, 0.72 * Math.PI); c.stroke();
+      c.strokeStyle = sides(pal.back, pal.body); c.lineWidth = lw * 0.82; arc(lw * 0.02, a0, a1);
+      c.strokeStyle = fade(pal.bounce, 0.22, 0.45); c.lineWidth = lw * 0.16; arc(lw * 0.3, a0, a1);
+      c.strokeStyle = sides(backTop, pal.mid); c.lineWidth = lw * 0.5; arc(-lw * 0.13, a0, a1);
+      c.strokeStyle = fade(hexRgb(pal.hi), 0.5, 0.45); c.lineWidth = lw * 0.24; arc(-lw * 0.22, a0, a1);
+      c.lineCap = 'round';
+      c.strokeStyle = fade(pal.spec, 0.95, 0.42); c.lineWidth = lw * 0.11; arc(-lw * 0.27, 0.08 * Math.PI, 0.92 * Math.PI);
+    } else {
+      // a little longer than half, so the front's flat ends sit on matching colour (no hairline at the sides)
+      c.strokeStyle = pal.back; c.lineWidth = lw * 0.8; arc(lw * 0.02, a0 - 0.035, a1 + 0.035);
+      c.strokeStyle = backTop; c.lineWidth = lw * 0.48; arc(-lw * 0.13, a0 - 0.035, a1 + 0.035);
+      c.lineCap = 'round';
+      c.strokeStyle = fade(pal.spec, 0.3, 0.5); c.lineWidth = lw * 0.09; arc(-lw * 0.26, 1.1 * Math.PI, 1.9 * Math.PI);
     }
-    c.globalAlpha = 1;
+    c.lineCap = 'butt';
   }
   const ringCache = new Map();
   function ringSprites(w, palKey) {
