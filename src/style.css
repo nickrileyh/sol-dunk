@@ -118,8 +118,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 #prompt .t { font-family: var(--font-display); font-weight: 800; font-size: 34px; letter-spacing: 0.01em; text-shadow: 0 2px 16px rgba(0, 0, 0, 0.55); }
 #prompt .s { margin-top: 2px; font-size: 14px; color: var(--label-2); }
 #prompt .s:empty { display: none; }
-#prompt .ring { width: 46px; height: 46px; margin: 0 auto 12px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, 0.85); animation: tapHint 1.3s ease-out infinite; }
-@keyframes tapHint { 0% { transform: scale(0.55); opacity: 1; } 100% { transform: scale(1.4); opacity: 0; } }
+#prompt .ring { position: relative; width: 46px; height: 46px; margin: 0 auto 12px; }  /* a touch point that presses, with a ripple going out */
+#prompt .ring::before { content: ''; position: absolute; inset: 16px; border-radius: 50%; background: #fff; box-shadow: 0 0 14px rgba(170, 200, 255, 0.75), 0 0 2px rgba(255, 255, 255, 0.9); animation: tapDot 1.3s ease-in-out infinite; }
+#prompt .ring::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.85); animation: tapHint 1.3s ease-out infinite; }
+@keyframes tapHint { 0% { transform: scale(0.36); opacity: 0.95; } 100% { transform: scale(1.35); opacity: 0; } }
+@keyframes tapDot { 0%, 100% { transform: scale(1); } 9% { transform: scale(0.7); } 26% { transform: scale(1); } }
 #banner {
   position: fixed; left: 0; right: 0; top: calc(var(--safe-t) + 21%); z-index: 4; pointer-events: none; text-align: center;
   opacity: 0; transform: translateY(8px) scale(0.98); transition: opacity 0.3s, transform 0.35s cubic-bezier(.2, .9, .2, 1);
@@ -133,9 +136,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .sheet, .card, .panel {
   position: fixed; z-index: 10; left: 50%;
   width: min(430px, calc(100% - 16px));
-  background: var(--sheet);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 150px), var(--sheet); /* a soft sheen from above */
   -webkit-backdrop-filter: saturate(150%) blur(28px); backdrop-filter: saturate(150%) blur(28px);
-  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 28px 64px rgba(0, 0, 0, 0.55);
+  box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 28px 64px rgba(0, 0, 0, 0.55);
   border-radius: 28px;
   transform: translate(-50%, 0);
   transition: transform 0.45s cubic-bezier(.2, .9, .2, 1), opacity 0.25s;
@@ -200,9 +203,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
   transition: transform 0.12s, opacity 0.15s, filter 0.15s;
 }
 .btn:active { transform: scale(0.97); filter: brightness(0.92); }
-.btn-primary { background: var(--orange); color: #160800; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35); }
+.btn-primary { background: linear-gradient(180deg, #ff9038, var(--orange) 55%, #f26c0e); color: #160800; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38), 0 10px 26px rgba(255, 122, 26, 0.26); }
 .btn-go { background: #ffffff; color: #05070d; box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.12); }
-.btn-green { background: var(--green); color: #02140a; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+.btn-green { background: linear-gradient(180deg, #45e27f, var(--green) 55%, #25bf5e); color: #02140a; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34), 0 10px 24px rgba(47, 211, 107, 0.2); }
 .btn-plain { background: var(--surface-2); color: var(--label); }
 .btn[disabled] { opacity: 0.4; pointer-events: none; }
 .btn .num { font-weight: 750; }
@@ -220,8 +223,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .big .sol-ico { vertical-align: 0.08em; }
 .big .sol-ico img { width: 0.5em; height: 0.5em; margin-right: 0.12em; }
 .big.win .unit, .big.loss .unit { color: inherit; opacity: 0.6; }
-.big.win { color: var(--green); }
-.big.loss { color: var(--red); }
+.big { text-shadow: 0 0 30px rgba(200, 215, 255, 0.14); }
+.big.win { color: var(--green); text-shadow: 0 0 32px rgba(47, 211, 107, 0.34); }
+.big.loss { color: var(--red); text-shadow: 0 0 32px rgba(255, 90, 78, 0.3); }
 .under { display: inline-block; margin-top: 10px; padding: 4px 12px; border-radius: 12px; background: rgba(47, 211, 107, 0.12); font-family: var(--font-display); font-weight: 800; font-size: 22px; letter-spacing: 0.02em; color: var(--green); font-variant-numeric: tabular-nums; }
 .under.muted { padding: 0; background: none; font-family: var(--font); color: var(--label-2); font-weight: 500; font-size: 15px; letter-spacing: 0; }
 .actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
@@ -249,6 +253,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .panel .body h3 { margin: 22px 0 8px 2px; font-size: 13px; font-weight: 650; color: var(--label-2); }
 .panel .body p { margin: 8px 2px; }
 .panel .body b { color: var(--label); font-weight: 650; }
+/* How to play: one quiet row per idea, each with a glyph tile */
+.how { display: grid; gap: 8px; margin-top: 2px; }
+.how .hrow { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px 14px 12px 12px; border-radius: 18px; background: var(--surface); }
+.how .hic { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: var(--surface-2); color: var(--label); }
+.how .hic svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.how .hic.heat { color: rgb(var(--heat)); background: rgba(var(--heat), 0.14); }
+.how .hic.gold { color: var(--gold); background: rgba(245, 197, 66, 0.13); }
+.panel .body .how h3 { margin: 1px 0 3px; font-size: 15px; font-weight: 650; color: var(--label); }
+.panel .body .how p { margin: 0; font-size: 14px; line-height: 1.45; }
 .panel .seg { margin: 2px 0 14px; }
 .tbl { background: var(--surface); border-radius: 16px; padding: 2px 12px; overflow-x: auto; }
 .panel table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
@@ -369,7 +382,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .pot-ic svg { width: 22px; height: 22px; }
 .pot-goal b { display: block; font-size: 17px; font-weight: 700; color: var(--label); }
 .pot-goal span { font-size: 13px; color: var(--label-2); }
-.pot-big { margin: 14px 0 0; text-align: center; font-size: 64px; }
+.pot-big { margin: 14px 0 0; text-align: center; font-size: 64px; color: var(--gold); text-shadow: 0 0 32px rgba(245, 197, 66, 0.26); } /* the prize pool, in the pot's gold (it inherited the body's dim text colour) */
+.pot-big .unit { color: inherit; opacity: 0.6; }
 .pot-big + .tiles { margin: 14px 0 14px; }
 .tiles b.sm { font-size: 22px; line-height: 1.4; }
 .pot-me { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--surface); }
@@ -541,7 +555,9 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 }
 #brand .wm {
   margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 58px; line-height: 0.86; letter-spacing: 0.012em;
-  color: #ffffff; text-shadow: 0 6px 34px rgba(0, 0, 0, 0.5);
+  /* white, cooling to steel at its foot; a drop-shadow filter, since a text shadow would show through gradient text */
+  background: linear-gradient(180deg, #ffffff 40%, #b4c3e6); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 6px 26px rgba(0, 0, 0, 0.5));
 }
 #brand .tag { margin: 8px 0 0; font-size: 14px; font-weight: 550; color: var(--label-2); text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7); }
 .hud-play #brand, body:not([data-tab="play"]) #brand { opacity: 0; transform: translateY(-8px); }
@@ -774,7 +790,8 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   .tiles b { font-size: 24px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  #prompt .ring { animation: none; }
+  #prompt .ring::before, #prompt .ring::after { animation: none; }
+  #prompt .ring::after { transform: scale(1); opacity: 0.45; }
   .score.bump { animation: none; }
   #callout.show { animation: callFade 1.3s linear forwards; }
   .streak.pump, .streak.broke, .gain, .delta.go { animation: none; }

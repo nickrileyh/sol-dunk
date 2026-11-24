@@ -842,6 +842,26 @@
         const sg = g.createRadialGradient(vw / 2, 0, 0, vw / 2, 0, playW * 0.62);
         sg.addColorStop(0, 'rgba(215,225,255,0.16)'); sg.addColorStop(1, 'rgba(215,225,255,0)');
         g.fillStyle = sg; g.fillRect(0, 0, vw, vh);
+        // the arena's lighting rig: a row of floodlights along the roof, each throwing a faint beam down into
+        // the haze, the outer ones angled in toward the court
+        const nL = 5, rigY = Math.max(4, vh * 0.008), step = playW / nL;
+        for (let i = 0; i < nL; i++) {
+          const k = i - (nL - 1) / 2, x = vw / 2 + k * step;
+          // the beam: three nested wedges with a little light each, so it widens as it falls and its edges are soft
+          g.save(); g.translate(x, rigY); g.rotate(k * 0.075);
+          const len = vh * 0.6, bm2 = g.createRadialGradient(0, 0, 0, 0, 0, len);
+          bm2.addColorStop(0, 'rgba(205,220,255,0.04)'); bm2.addColorStop(0.55, 'rgba(205,220,255,0.014)'); bm2.addColorStop(1, 'rgba(205,220,255,0)');
+          g.fillStyle = bm2;
+          for (const a of [0.045, 0.08, 0.125]) {
+            const w = Math.tan(a) * len;
+            g.beginPath(); g.moveTo(-2, 0); g.lineTo(2, 0); g.lineTo(w + 2, len); g.lineTo(-w - 2, len); g.closePath(); g.fill();
+          }
+          g.restore();
+          const bloom = g.createRadialGradient(x, rigY, 0, x, rigY, 30);
+          bloom.addColorStop(0, 'rgba(225,235,255,0.42)'); bloom.addColorStop(0.3, 'rgba(200,218,255,0.12)'); bloom.addColorStop(1, 'rgba(200,218,255,0)');
+          g.fillStyle = bloom; g.fillRect(x - 30, rigY - 30, 60, 60);
+          g.fillStyle = 'rgba(246,249,255,0.9)'; g.beginPath(); g.ellipse(x, rigY, 4.5, 1.5, 0, 0, Math.PI * 2); g.fill();
+        }
         vignette(g, vw, vh);
       },
       // behind the court: the courtside crowd and the LED board (drawArena)
@@ -2686,6 +2706,11 @@
       c.fillStyle = at; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
     }
     if (sk.rim) { c.strokeStyle = sk.rim; c.lineWidth = r * 0.07; c.beginPath(); c.arc(0, 0, r - r * 0.04, Math.PI * 0.62, Math.PI * 1.08); c.stroke(); }
+    // the arena's cool light catching the far edge, so the ball sits in the scene's light (inside the hitbox edge)
+    const rl = c.createLinearGradient(r * 0.2, -r, r * 0.6, r);
+    rl.addColorStop(0, 'rgba(150,182,255,0)'); rl.addColorStop(0.45, 'rgba(150,182,255,0.42)'); rl.addColorStop(1, 'rgba(150,182,255,0)');
+    c.strokeStyle = rl; c.lineWidth = r * 0.08;
+    c.beginPath(); c.arc(0, 0, r - r * 0.06, -Math.PI * 0.2, Math.PI * 0.42); c.stroke();
     const hl = c.createRadialGradient(-r * 0.4, -r * 0.5, 0, -r * 0.4, -r * 0.5, r * (sk.shine ? 0.62 : 0.5));
     hl.addColorStop(0, 'rgba(255,255,255,' + (sk.shine ? 0.75 : 0.45) + ')'); hl.addColorStop(1, 'rgba(255,255,255,0)');
     c.fillStyle = hl; c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill();
@@ -3091,14 +3116,27 @@
   $('muteBtn').addEventListener('click', () => { settings.sound = !settings.sound; saveAll(); syncMute(); Sound.unlock(); Sound.click(); });
   syncMute();
 
+  // How to play: one quiet row per idea, each with a small original glyph, so it scans at a glance
+  const HOW_ICON = {
+    tap: '<circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="7" opacity=".55"/><circle cx="12" cy="12" r="10.3" opacity=".22"/>',
+    rim: '<ellipse cx="11" cy="15.5" rx="8.5" ry="3"/><circle cx="18" cy="9" r="3.4" fill="currentColor" stroke="none"/>',
+    swish: '<ellipse cx="12" cy="16" rx="8.5" ry="3"/><path d="M12 3v11M8.6 10.6 12 14l3.4-3.4"/>',
+    fire: '<path d="M12 21.2c-3.7 0-6.2-2.5-6.2-5.8 0-3.5 2.7-5.4 3.7-8.7.9 1.7 2 2.6 2.7 2.6.4-2.3-.2-4.6-1.2-6.7 3.9 1.6 7.2 5.8 7.2 10.5 0 4.3-2.6 8.1-6.2 8.1z"/>',
+    flag: '<ellipse cx="12" cy="16.5" rx="8.5" ry="3"/><path d="M12 13.5V3.2l5.4 2.1L12 7.4"/>',
+    star: '<path d="m12 3.3 2.6 5.4 5.9.8-4.3 4.1 1.1 5.9-5.3-2.9-5.3 2.9 1.1-5.9-4.3-4.1 5.9-.8z"/>',
+    mission: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="m8.4 12.2 2.5 2.5 4.8-5"/>'
+  };
   function howHtml() {
-    return `<p><b>Tap</b> to flap. Drop the ball down through every ring. Fly past one, go under it or hit the floor and the run ends.</p>
-      <h3>Rims</h3><p>Touch the rim and you can still score: if the ball comes down over the opening it drops in. It only bounces out when it comes down past the rim.</p>
-      <h3>Swish</h3><p>Go through without touching the ring for a swish. Swishes pay more than rim hits, and swishes in a row pay more each time, up to 5 in a row. Your streak carries into the next level.</p>
-      <h3>Fire</h3><p>Two swishes in a row and the ball starts to smoulder. Three and it's <b>on fire</b>; five and it burns at full heat (blue-white with the Fire flame). Touch a rim and the flame goes out. Flames from the locker change the colours, never the pay.</p>
-      <h3>Checkpoints</h3><p>Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.</p>
-      <h3>Score and XP</h3><p>Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, missions and trophies earn XP, which unlocks balls, wings, flames, trails, rims and courts in the Locker. Score and XP never change what a run pays.</p>
-      <h3>Missions</h3><p>Three new missions every day and every week, and a career of six chapters, each ending in an item you can only get there. They count in every run, whatever you bet.</p>`;
+    const row = (icon, tone, title, text) => `<div class="hrow"><span class="hic ${tone}"><svg viewBox="0 0 24 24" aria-hidden="true">${HOW_ICON[icon]}</svg></span><div><h3>${title}</h3><p>${text}</p></div></div>`;
+    return `<div class="how">` +
+      row('tap', '', 'Tap to flap', `Drop the ball down through every ring. Fly past one, go under it or hit the floor and the run ends.`) +
+      row('rim', '', 'Rims', `Touch the rim and you can still score: if the ball comes down over the opening it drops in. It only bounces out when it comes down past the rim.`) +
+      row('swish', '', 'Swish', `Go through without touching the ring for a swish. Swishes pay more than rim hits, and swishes in a row pay more each time, up to 5 in a row. Your streak carries into the next level.`) +
+      row('fire', 'heat', 'Fire', `Two swishes in a row and the ball starts to smoulder. Three and it's <b>on fire</b>; five and it burns at full heat (blue-white with the Fire flame). Touch a rim and the flame goes out. Flames from the locker change the colours, never the pay.`) +
+      row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.`) +
+      row('star', 'gold', 'Score and XP', `Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, missions and trophies earn XP, which unlocks balls, wings, flames, trails, rims and courts in the Locker. Score and XP never change what a run pays.`) +
+      row('mission', '', 'Missions', `Three new missions every day and every week, and a career of six chapters, each ending in an item you can only get there. They count in every run, whatever you bet.`) +
+      `</div>`;
   }
   // locker thumbnails, drawn with the same code as the game
   const FLAME_PATH = typeof Path2D === 'function' ? new Path2D('M12 23c-4.4 0-8-3.1-8-7.5 0-3.3 2-5.6 3.7-7.4.6-.6 1.6-.2 1.6.7 0 1.4.9 2.6 2.1 2.6 1.1 0 1.8-.9 1.8-2.1 0-2.3-1.2-4.2-1.2-6.6 0-.9 1-1.5 1.7-1C17 3.9 20 8.4 20 14.5 20 19.6 16.4 23 12 23Z') : null;
