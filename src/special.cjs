@@ -20,7 +20,8 @@
  * Where a level starts: START for someone new, or higher if they've already shown more, from the rings they've played
  * in regular runs (a rating over the scale, from the simulator's per-ring miss rates) or from their levels in the
  * other specials. A strong player who hasn't shown it yet wins more than 90% while their level climbs, a weak one less
- * while it comes down; after that it's 90% for both. The simulator's best bot ("perfect") is past the top of the
+ * while it comes down; after that it's 90% for both. So the specials open only once a player has bet UNLOCK entries'
+ * worth in regular runs (the owner asked for it): by then a strong player's runs have raised their starting levels. The simulator's best bot ("perfect") is past the top of the
  * scale and keeps winning, so accounts the server flags for beating the house can't enter.
  */
 (function (root, factory) {
@@ -63,6 +64,7 @@
   const START = 1.8;                      // where a level starts for someone who hasn't shown more
   const DOWN = 0.3;                       // a miss lowers that special's level by this much; a clear raises it by up(x)
   const SLOT_MARGIN = 0.5;                // a new special starts at most this far below the player's level in another
+  const UNLOCK = 10;                      // the specials open once a player has bet this many entries in regular runs
 
   // @@TABLES@@ written by node sim/special.cjs --write, for each bot on the ANCHORS. Don't edit by hand.
   // reg[tier][level - 1] = ln(per-ring miss rate) per anchor; sp[recipe][grade] = [a, b, c] per anchor, with
@@ -250,11 +252,12 @@
     const m = w.reduce((a, v, i) => a + v * GRID[i], 0) / sum, sd = Math.sqrt(w.reduce((a, v, i) => a + v * (GRID[i] - m) ** 2, 0) / sum);
     return { m, sd };
   }
-  // where a special's level starts: START, or more if regular runs (their rating less one spread) or the player's
-  // level in another special (less SLOT_MARGIN) show more
+  // where a special's level starts: START, or more if regular runs (the middle of their rating) or the player's level
+  // in another special (less SLOT_MARGIN) show more. It leans high: starting a player too high costs them a few misses
+  // while their level comes down; starting a strong one too low hands them wins while it climbs.
   function startFor(Rt, slot) {
     let d = START;
-    if (Rt && Rt.r) { const g = regular(Rt); d = Math.max(d, g.m - g.sd); }
+    if (Rt && Rt.r) d = Math.max(d, regular(Rt).m);
     if (Rt && Array.isArray(Rt.d)) Rt.d.forEach((v, k) => { if (k !== slot && v != null) d = Math.max(d, v - SLOT_MARGIN); });
     return clamp(d);
   }
@@ -303,7 +306,7 @@
 
   return {
     ENTRY, DAY_MS, START_Y, SLOTS, TARGET, N_MIN, N_MAX, N_IDEAL, GRADES, RECIPES, BY, ANCHORS, LEVEL_NAMES, GRID,
-    D_MIN, D_MAX, PRIOR_MU, PRIOR_SD, START, DOWN, SLOT_MARGIN, TABLES,
+    D_MIN, D_MAX, PRIOR_MU, PRIOR_SD, START, DOWN, SLOT_MARGIN, UNLOCK, TABLES,
     config, generate, dayKey, dayStart, closesAt, specialsFor,
     blank, addLevel, regular, startFor, levelOf, addSpecial, up, levelName, rating, courseFor, todayFor, missReg, clearP
   };

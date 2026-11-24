@@ -441,6 +441,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .ct-v { margin-top: 1px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--label-2); white-space: nowrap; }
 .ct-bar { align-self: stretch; height: 4px; margin-top: 10px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
 .ct-bar i { display: block; height: 100%; border-radius: 2px; background: var(--cc); }
+/* until the specials open: how much regular play is left, on the card and on a special's page */
+.sp-cc .sp-unlock { padding-top: 8px; }
+.sp-unlock + .spr { box-shadow: inset 0 0.5px 0 var(--sep); }
+.sp-lock { margin-top: 16px; }
+.sp-lock p { margin: 0; padding: 0 16px 13px; font-size: 13px; line-height: 1.4; color: var(--label-2); }
 .sp-card { border-radius: 24px; background: var(--surface); background: color-mix(in srgb, #6e6cf0 15%, var(--bg)); overflow: hidden; }
 .sp-head { padding: 14px 16px 4px; }
 .sp-k { font-size: 13px; color: var(--label-2); }
@@ -464,11 +469,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--orange); ou
 .mxp small { font-size: 12px; font-weight: 500; color: var(--label-2); }
 .mrow.done .mxp small { color: var(--label-3); }
 .mrow.done .mxp small.paid { color: var(--green); }
-.mneed { padding: 12px 16px 13px; }
-.mneed .mn-h { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--label-2); }
-.mneed .mn-h b { font-weight: 600; color: var(--label); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.mneed .bar { height: 4px; margin-top: 8px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
-.mneed .bar i { display: block; height: 100%; border-radius: 2px; background: var(--gold); }
+.mneed, .sp-unlock { padding: 12px 16px 13px; }
+.mneed .mn-h, .sp-unlock .mn-h { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--label-2); }
+.mneed .mn-h b, .sp-unlock .mn-h b { font-weight: 600; color: var(--label); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mneed .bar, .sp-unlock .bar { height: 4px; margin-top: 8px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.mneed .bar i, .sp-unlock .bar i { display: block; height: 100%; border-radius: 2px; background: var(--gold); }
 .mneed.met .bar i { background: var(--green); }
 .mneed + .mrow { box-shadow: inset 0 0.5px 0 var(--sep); }
 

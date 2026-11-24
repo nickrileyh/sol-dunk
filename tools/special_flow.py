@@ -1,5 +1,6 @@
-"""The special levels, end to end in the demo: three a day in one card on the Challenges tab (a row each with its twist,
-length, prize and Play), each with its own page (a sketch of the course set for the player, the prize, Play, tallies,
+"""The special levels, end to end in the demo: locked until 0.5 SOL of regular runs (the card's unlock bar, Locked in
+place of Play, the page's note), then open, with the starting levels raised by those runs; three a day in one card on
+the Challenges tab (a row each with its twist, length, prize and Play), each with its own page (a sketch of the course set for the player, the prize, Play, tallies,
 the level it's set for and the rules); the entry (debited), the HUD during an attempt (twist name, one segment per
 ring, rings done and the prize), a cleared attempt (the prize is paid, the result card, the level goes up), Try again
 on the same special, a missed one (nothing paid, where it ended, the level comes down), Play from the tab, Back, the
@@ -28,8 +29,39 @@ async def main():
         check(len(set(s['recipe']['id'] for s in L)) == 3, 'three different twists')
         check(await page.evaluate("document.getElementById('badgeC').classList.contains('on')"), 'the Challenges tab has a dot for specials not seen yet')
         await page.click('#tabChallenges'); await page.wait_for_timeout(700)
-        check(await page.evaluate("document.body.dataset.tab") == 'challenges' and await page.evaluate("document.querySelectorAll('#cBody .spr').length") == 3 and await page.evaluate("[0,1,2].every((k) => !!document.getElementById('chSpPlay' + k))"), 'the Challenges tab shows the three specials, each with a Play button')
         check(await page.evaluate("!document.getElementById('badgeC').classList.contains('on')"), 'opening it clears the dot')
+        # locked until the regular runs reach the unlock: a bar on the card, Locked in place of Play, a note on the page
+        need = sp['unlock']['need']
+        check(sp['me']['locked'] and abs(need - 0.5) < 1e-9 and sp['unlock']['played'] == 0, 'a new player\'s specials are locked until 0.5 SOL of regular runs: ' + json.dumps(sp['unlock']))
+        lk = await page.evaluate("[!!document.querySelector('#cBody .sp-unlock'), document.querySelector('#cBody .sp-unlock') ? document.querySelector('#cBody .sp-unlock').innerText : '', document.querySelectorAll('#cBody .spr .pill.off').length, [0,1,2].some((k) => !!document.getElementById('chSpPlay' + k))]")
+        check(lk[0] and 'Play 0.5 SOL in regular runs to unlock' in lk[1] and lk[2] == 3 and not lk[3], 'the card shows the unlock bar and Locked in place of Play: ' + json.dumps(lk))
+        await page.screenshot(path=OUT + 'locked.png')
+        await page.click('#cBody .spr-open[data-slot="0"]'); await page.wait_for_timeout(600)
+        check(await page.evaluate("!document.getElementById('spPlay') && !!document.querySelector('#pgBody .sp-lock')"), 'a special\'s page shows the unlock in place of Play')
+        await page.click('#pgBack'); await page.wait_for_timeout(400)
+        # a regular run of 0.5 SOL opens them, and the pro's rings raise where every level starts
+        await page.click('#tabPlay'); await page.wait_for_timeout(400)
+        await page.click('#diff0'); await page.fill('#betInput', '0.5'); await page.evaluate("document.getElementById('betInput').blur()"); await page.wait_for_timeout(200)
+        await page.click('#playBtn'); await page.wait_for_timeout(800)
+        await page.evaluate("__solDunk.autoplay('pro'); __solDunk.tap()")
+        for i in range(900):
+            ph = await page.evaluate('__solDunk.phase()')
+            if ph == 'checkpoint':
+                await page.wait_for_timeout(700)
+                if await page.evaluate('__solDunk.run.level') >= 3: await page.click('#cashBtn'); await page.wait_for_timeout(900); break
+                await page.click('#goBtn'); await page.wait_for_timeout(800); await page.evaluate('__solDunk.tap()')
+            if ph == 'over': break
+            await page.wait_for_timeout(110)
+        await page.wait_for_timeout(1200)
+        await page.evaluate("__solDunk.autoplay(null)")
+        await page.click('#lobbyBtn'); await page.wait_for_timeout(700)
+        await page.click('#tabChallenges'); await page.wait_for_timeout(700)
+        sp = await spec(); L = sp['specials']
+        check(not sp['me']['locked'] and abs(sp['unlock']['played'] - 0.5) < 1e-9, 'a 0.5 SOL run opens the specials: ' + json.dumps(sp['unlock']))
+        h0 = await page.evaluate('__solDunk.stats.history[0]')
+        cleared = h0['level'] - (0 if h0['result'] in ('cashout', 'final', 'maxwin') else 1)
+        check(all(s['course']['level'] >= 1.8 - 1e-9 for s in L) and (cleared < 2 or all(s['course']['level'] > 1.8 + 1e-9 for s in L)), f'the run\'s rings ({cleared} levels cleared) raise where each special starts: ' + json.dumps([s['course']['level'] for s in L]))
+        check(await page.evaluate("document.body.dataset.tab") == 'challenges' and await page.evaluate("document.querySelectorAll('#cBody .spr').length") == 3 and await page.evaluate("[0,1,2].every((k) => !!document.getElementById('chSpPlay' + k)) && !document.querySelector('#cBody .sp-unlock')"), 'the Challenges tab shows the three specials, each with a Play button')
         txt = await page.evaluate("document.querySelector('#cBody .sp-cc').innerText")
         check(all(s['recipe']['name'] in txt and f"{s['course']['rings']} rings" in txt for s in L), 'each row shows its twist and length: ' + txt.replace('\n', ' | ')[:160])
         await page.screenshot(path=OUT + 'tab.png')
@@ -42,7 +74,7 @@ async def main():
         drawn = await page.evaluate("(() => { const c = document.getElementById('spCourse'); if (!c || !c.width) return 0; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; })()")
         check(drawn > 200, f'the sample course is drawn ({drawn} px)')
         ptxt = await page.evaluate("document.getElementById('pgBody').innerText")
-        check('This course is set for' in ptxt and 'Average' in ptxt and 'over time you get back about 90%' in ptxt, 'the page says the level the course is set for, and the rules')
+        check('This course is set for' in ptxt and R['course']['levelName'] in ptxt and 'over time you get back about 90%' in ptxt and 'They open once you’ve played 0.5 SOL' in ptxt, 'the page says the level the course is set for, and the rules')
         await page.screenshot(path=OUT + 'page.png', full_page=True)
 
         async def attempt(skill, shot, how):

@@ -29,7 +29,7 @@ function attempt(recipe, g, n, skill, seed) {
   return st.outcomes.length; // rings passed (n if it cleared)
 }
 
-const LEARN_A = 40, REG_RUNS = 12, SANDBAG = 6;
+const LEARN_A = 40, REG_RUNS = 5, SANDBAG = 6; // REG_RUNS: about what the 0.5 SOL unlock takes at a 0.1 SOL bet
 if (!isMainThread) {
   if (workerData.tables) Object.assign(SP.TABLES, workerData.tables);
   const out = [];
@@ -216,7 +216,8 @@ function fit(hist, total) {
   const BUCKETS = [[0, 5], [5, 15], [15, LEARN_A], [0, LEARN_A]];
   console.log(`\n5. return as the level settles: ${PLAYERS} new players per row, each playing one special ${LEARN_A} times`);
   console.log(`   (a clear raises its level by ${SP.SLOTS.map((x) => SP.up(x).toFixed(2)).join(' / ')} for ${SP.SLOTS.map((x) => x + '×').join(' / ')}, a miss lowers it by ${SP.DOWN}; new players start at ${SP.START})`);
-  console.log(`   honest: specials only; regular: ${REG_RUNS} regular runs on Easy first; sandbag: the first ${SANDBAG} attempts lost on purpose`);
+  console.log(`   honest: starting at ${SP.START}, as if their unlock runs showed nothing; regular: ${REG_RUNS} regular runs on Easy first`);
+  console.log(`   (each until it busts); sandbag: starting at ${SP.START}, with the first ${SANDBAG} attempts lost on purpose`);
   console.log('prize  how      skill      attempts 1-5   6-15  16-40    all   level after');
   SP.SLOTS.forEach((x, slot) => { for (const how in hows) for (const skill of hows[how]) {
     const s = L[[how, slot, skill].join('|')];

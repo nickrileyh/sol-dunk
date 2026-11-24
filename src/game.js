@@ -80,6 +80,7 @@
   // ---------------------------------------------------------------- settings / stats / wallet
   const settings = Object.assign({ sound: true, haptics: true }, store.get('settings', {}));
   const stats = Object.assign({ runs: 0, wagered: 0, returned: 0, best: 0, hoops: 0, swishes: 0, deepest: 0, history: [] }, store.get('stats', {}));
+  if (stats.runPlayed == null) stats.runPlayed = stats.wagered || 0; // bets on regular runs (the specials open at SP.UNLOCK entries)
   const prefs = Object.assign({ di: 0, bet: 0.1 }, store.get('prefs', {}));
   const wallet = { balance: store.get('balance', CFG.demoStart), nonce: store.get('nonce', 0) };
   function saveAll() {
@@ -628,18 +629,20 @@
     },
     view() {
       const day = SP.dayKey(Date.now()), t = this.tally();
+      const unlock = { need: round9(SP.UNLOCK * this.fee), played: stats.runPlayed || 0 };
       return {
-        day, fee: this.fee, closesAt: SP.closesAt(day), target: SP.TARGET,
+        day, fee: this.fee, closesAt: SP.closesAt(day), target: SP.TARGET, unlock,
         specials: SP.todayFor(profile.skill, day).map((c) => {
           const R = SP.BY[c.recipe];
           return { slot: c.slot, x: c.x, prize: round9(this.fee * c.x), recipe: { id: R.id, name: R.name, blurb: R.blurb }, course: { grade: c.g, rings: c.n, chance: c.chance, level: c.level, levelName: c.levelName }, me: { tries: t.tries[c.slot] || 0, wins: t.wins[c.slot] || 0 } };
         }),
-        me: { blocked: false, skill: SP.rating(profile.skill) }
+        me: { blocked: false, skill: SP.rating(profile.skill), locked: unlock.played + 1e-9 < unlock.need }
       };
     },
     start(slot) {
       const v = this.view(), sp = v.specials[slot];
       if (!sp) throw new Error('There’s no such special level today');
+      if (v.me.locked) throw new Error('Play ' + fmtBet(v.unlock.need) + ' SOL in regular runs to unlock the special levels.');
       if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
       wallet.balance = round9(wallet.balance - v.fee);
       const paid = DemoMissions.play(v.fee);
@@ -777,8 +780,9 @@
         const L = 1e9;
         return {
           day: j.day, fee: j.feeLamports / L, closesAt: j.closesAt, target: j.target,
+          unlock: { need: (j.unlockLamports || 0) / L, played: ((j.me && j.me.playedLamports) || 0) / L },
           specials: j.specials.map((x) => ({ slot: x.slot, x: x.x, prize: x.prizeLamports / L, recipe: x.recipe, course: x.course, me: x.me })),
-          me: j.me || { blocked: false, skill: null }
+          me: j.me || { blocked: false, skill: null, locked: true }
         };
       },
       async state() { return this.view(await ServerBank.api('/api/special')); },
@@ -1771,6 +1775,7 @@
     if (!c) return '<div class="empty">The special levels aren’t available right now. Try again in a moment.</div>';
     const left = s.closesAt - Date.now(), pct = Math.round((s.target || SP.TARGET) * 100);
     const play = s.me && s.me.blocked ? '<div class="empty">The special levels aren’t available on this account.</div>'
+      : s.me && s.me.locked ? `<div class="group sp-lock">${unlockRow(s)}<p>Your regular runs show the game your level, so each special starts out set for you.</p></div>`
       : `<button class="btn btn-primary" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
     return `<div class="sp-card">
         <div class="sp-head"><div class="sp-blurb">${c.recipe.blurb} · ${c.course.rings} rings</div></div>
@@ -1787,7 +1792,7 @@
         <div class="row"><span>After a clear</span><b>Next one harder</b></div>
         <div class="row"><span>After a miss</span><b>A little easier</b></div>
       </div>
-      <p class="pot-rules">Clear every ring to win the prize; miss one and the entry is gone. Each special’s course is set for your level in it, and the level moves: up when you clear it, down a little when you don’t. It settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries whatever your level: the house keeps about ${100 - pct}% from beginners and pros alike. You start at ${SP.levelName(SP.START)}, or higher if your runs show more. New specials come every day at midnight UTC, and your levels carry over. Their rings don’t count toward missions or the pot, but entries count as play for mission SOL.</p>`;
+      <p class="pot-rules">Clear every ring to win the prize; miss one and the entry is gone. Each special’s course is set for your level in it, and the level moves: up when you clear it, down a little when you don’t. It settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries whatever your level: the house keeps about ${100 - pct}% from beginners and pros alike. They open once you’ve played ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs, and you start at ${SP.levelName(SP.START)}, or higher if your runs show more. New specials come every day at midnight UTC, and your levels carry over. Their rings don’t count toward missions or the pot, but entries count as play for mission SOL.</p>`;
   }
   // a sketch of a course: the rings in order, how far each one bobs, and the gold finish
   function drawCourse(el, def) {
@@ -1815,10 +1820,18 @@
   function specialCard() {
     const s = specState;
     if (!s || !s.specials) return '';
-    const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked;
+    const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked, locked = !blocked && s.me && s.me.locked;
+    const act = (c) => (blocked ? '<span class="pill off">Not available</span>' : locked ? '<span class="pill off">Locked</span>'
+      : `<button class="pill go" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`);
     const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><span class="spr-x" style="--sx:${SPX(c.x)}">${c.x}×</span><span class="spr-t"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></span></button>
-      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(c.prize)}</b> SOL</span>${blocked ? '<span class="pill off">Not available</span>' : `<button class="pill go" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`}</div></div>`).join('');
-    return `<div class="cc sp sp-cc"><div class="cc-h"><span class="cc-k">${ICON.star}Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftText(left) : 'New soon'}</span></div>${rows}</div>`;
+      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(c.prize)}</b> SOL</span>${act(c)}</div></div>`).join('');
+    return `<div class="cc sp sp-cc"><div class="cc-h"><span class="cc-k">${ICON.star}Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftText(left) : 'New soon'}</span></div>${locked ? unlockRow(s) : ''}${rows}</div>`;
+  }
+  // the specials open once the player has bet SP.UNLOCK entries in regular runs: how far along they are
+  function unlockRow(s) {
+    const u = s.unlock || { need: 0, played: 0 }, shown = Math.min(u.need, Math.floor(u.played * 100 + 1e-6) / 100);
+    return `<div class="sp-unlock"><div class="mn-h"><span>Play ${fmtBet(u.need)} SOL in regular runs to unlock</span><b>${fmtBet(shown)} / ${fmtBet(u.need)} SOL</b></div>
+      <div class="bar"><i style="width:${(Math.min(1, u.need ? u.played / u.need : 1) * 100).toFixed(1)}%"></i></div></div>`;
   }
   function potCard() {
     const p = potState;
@@ -1885,7 +1898,7 @@
       return;
     }
     run.busy = false;
-    stats.runs++; stats.wagered = round9(stats.wagered + bet); saveAll();
+    stats.runs++; stats.wagered = round9(stats.wagered + bet); stats.runPlayed = round9(stats.runPlayed + bet); saveAll();
     enterRun(r.missions);
   }
   // a special level attempt: the entry up front, one long level, the prize for clearing every ring
@@ -3652,7 +3665,7 @@
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the gold ring ends the level. Cash out your pot, or keep going for more.`) +
       row('star', 'gold', 'Score and XP', `Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, missions and trophies earn XP, which unlocks balls, wings, flames, trails, rims and courts in the Locker. Score and XP never change what a run pays.`) +
       row('mission', 'purple', 'Missions', `Three new missions every day and every week (new ones at midnight UTC, and on Mondays), and a career of six chapters, each ending in an item you can only get there. They count in every run, whatever you bet. Daily and weekly missions also pay SOL once you've played ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week (bets and special level entries); rewards earned before then wait, and go when the day or week ends.`) +
-      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: three a day, each with a twist like every ring moving and a prize of 2×, 3× or 5× the entry. Pay the entry, then clear every ring of a fresh course to win. Each course is set for your level in that special: harder after a clear, a little easier after a miss. <b>Daily pot</b>: buy in, then meet the day's challenge in any regular run to share the pot.`) +
+      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: three a day, each with a twist like every ring moving and a prize of 2×, 3× or 5× the entry. Pay the entry, then clear every ring of a fresh course to win. Each course is set for your level in that special: harder after a clear, a little easier after a miss. They open once you've played ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL in regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge in any regular run to share the pot.`) +
       `</div>`;
   }
   // locker thumbnails, drawn with the same code as the game

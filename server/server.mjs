@@ -54,6 +54,7 @@ const CFG = {
   potEntry: num(env.POT_ENTRY_LAMPORTS, Math.round(POTS.ENTRY * 1e9)), // challenge pot entry
   potGoal: env.MOCK_CHAIN === '1' ? env.POT_GOAL || '' : '',            // tests only: force a challenge
   specialEntry: num(env.SPECIAL_ENTRY_LAMPORTS, Math.round(SP.ENTRY * 1e9)),
+  specialUnlock: num(env.SPECIAL_UNLOCK_LAMPORTS, Math.round(SP.UNLOCK * num(env.SPECIAL_ENTRY_LAMPORTS, Math.round(SP.ENTRY * 1e9)))), // regular-run bets before the specials open
   specialRecipe: env.MOCK_CHAIN === '1' ? env.SPECIAL_RECIPE || '' : '', // tests only: force every slot's twist
   missionNeed: { day: num(env.MISSION_DAY_LAMPORTS, Math.round(MS.NEED.day * 1e9)), week: num(env.MISSION_WEEK_LAMPORTS, Math.round(MS.NEED.week * 1e9)) },
   checkpointTimeoutMs: 10 * 60 * 1000,
@@ -417,7 +418,7 @@ app.post('/api/run/start', wrap(async (req) => {
     // the house must be able to cover the biggest possible win plus every player balance
     const need = bet * E.DIFFS[di].maxWin;
     if ((await houseLamports()) - owedLamports() < need) throw bad('The house can’t cover a bet that size right now. Try a smaller bet.');
-    u.balance -= bet; u.wagered += bet;
+    u.balance -= bet; u.wagered += bet; u.runPlayed = runPlayed(u) + bet;
     const paid = missionPlay(u, bet);
     const run = {
       id: crypto.randomUUID(), address: u.address, di, bet,
@@ -510,17 +511,28 @@ function specialsToday(u) {
     })
   };
 }
+// what a player has bet in regular runs (special entries aside); the specials open at CFG.specialUnlock. Accounts
+// from before this was kept count the regular runs on record.
+function runPlayed(u) {
+  if (u.runPlayed == null) {
+    let t = 0;
+    for (const id in db.runs) { const r = db.runs[id]; if (r.address === u.address && r.kind !== 'special') t += r.bet; }
+    u.runPlayed = t;
+  }
+  return u.runPlayed;
+}
+const unlockText = () => `Play ${+(CFG.specialUnlock / LAMPORTS).toFixed(4)} SOL in regular runs to unlock the special levels`;
 function specialView(u) {
   const { day, fee, list } = specialsToday(u);
   const t = u && u.special && u.special.day === day ? u.special : null;
   const out = {
-    day, feeLamports: fee, closesAt: SP.closesAt(day) - db.potClock, target: SP.TARGET,
+    day, feeLamports: fee, closesAt: SP.closesAt(day) - db.potClock, target: SP.TARGET, unlockLamports: CFG.specialUnlock,
     specials: list.map((s) => ({
       slot: s.slot, x: s.x, prizeLamports: s.prize, recipe: { id: s.recipe.id, name: s.recipe.name, blurb: s.recipe.blurb },
       course: { grade: s.g, rings: s.n, chance: s.chance, level: s.level, levelName: SP.levelName(s.level) }, me: t ? { tries: t.tries[s.slot] || 0, wins: t.wins[s.slot] || 0 } : { tries: 0, wins: 0 }
     }))
   };
-  if (u) out.me = { blocked: !!u.flagged, skill: SP.rating(u.skill) };
+  if (u) out.me = { blocked: !!u.flagged, skill: SP.rating(u.skill), playedLamports: runPlayed(u), locked: runPlayed(u) < CFG.specialUnlock };
   return out;
 }
 app.get('/api/special', wrap(async (req) => specialView(maybeAuth(req))));
@@ -532,6 +544,7 @@ app.post('/api/special/start', wrap(async (req) => {
   return withLock(u.address, async () => {
     if (openRun(u)) throw bad('Finish your current run first');
     if (u.flagged) throw bad('The special levels aren’t available on this account');
+    if (runPlayed(u) < CFG.specialUnlock) throw bad(unlockText());
     const { day, fee, list } = specialsToday(u), s = list[slot];
     if (u.balance < fee) throw bad('Not enough balance for the entry');
     if ((await houseLamports()) - owedLamports() < s.prize) throw bad('The house can’t cover the prize right now. Try again later.');

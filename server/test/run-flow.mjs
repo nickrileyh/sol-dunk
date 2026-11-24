@@ -175,8 +175,10 @@ function playTaps(seed, di, L, skill, salt) {
   check(hard && hard.done && hard.just, 'a perfect run on Hard completes "swish 5 in a row" ' + JSON.stringify(hard));
   const again = await potRun(A, 1, 'perfect', 'hard2', 2);
   check(again && again.done && !again.just, 'completing again does not count twice');
-  const bRun = await potRun(Bc, 1, 'novice', 'b', 1);
-  check(!bRun || !bRun.done, 'a weak run does not complete it');
+  // a run that falls to the floor before the first ring (one tap, then nothing): it can't complete anything
+  const bs = await Bc.api('/api/run/start', { difficulty: 1, lamports: 10_000_000, clientSeed: 'potb' });
+  const bRun = (await Bc.api('/api/run/level', { runId: bs.runId, level: 1, taps: [0] })).pot;
+  check(!bRun || !bRun.done, 'a run that misses does not complete it');
   const mid = await C.api('/api/pot');
   check(mid.entrants === 3 && mid.completed === 1 && mid.poolLamports === Math.floor(3 * fee * (1 - POTS.RAKE)), 'pot totals: ' + JSON.stringify([mid.entrants, mid.completed, mid.poolLamports]));
   const balA = (await A.api('/api/me')).balance, balB = (await Bc.api('/api/me')).balance;
@@ -248,11 +250,18 @@ function playTaps(seed, di, L, skill, salt) {
   const spF = await fresh.api('/api/special');
   check(spF.specials.every((x) => { const c = SP.courseFor(SP.START, 'gauntlet', x.x); return x.course.grade === c.g && x.course.rings === c.n && x.course.level === SP.START; }), 'special: someone new gets the courses set for a new player ' + JSON.stringify(view(spF)));
   check(view(spF).join() !== view(sp0).join(), 'special: a player who has shown skill gets other courses than someone new');
-  const open1 = await M.api('/api/run/start', { difficulty: 0, lamports: 10_000_000, clientSeed: 'openrun' });
+  // the specials open once a player has bet SP.UNLOCK entries in regular runs (0.5 SOL here); M has played 0.08
+  const unlock = SP.UNLOCK * sfee;
+  check(sp0.unlockLamports === unlock && sp0.me.locked === true && sp0.me.playedLamports === 8 * 10_000_000 && spF.me.locked === true && spF.me.playedLamports === 0, 'special: locked until the regular runs reach the unlock ' + JSON.stringify([sp0.unlockLamports, sp0.me.playedLamports]));
+  const lockedTry = await M.api('/api/special/start', { clientSeed: 'lock1', slot: 0 });
+  check(lockedTry.status === 400 && /unlock/.test(lockedTry.error || ''), 'special: an entry before the unlock is refused: ' + lockedTry.error);
+  const open1 = await M.api('/api/run/start', { difficulty: 0, lamports: unlock - 8 * 10_000_000, clientSeed: 'openrun' });
   check((await M.api('/api/special/start', { clientSeed: 'sp0x', slot: 0 })).status === 400, 'special refused while a run is open');
   const pl1 = playTaps(open1.levelSeed, 0, 1, 'novice', 'open1');
   const e1 = await M.api('/api/run/level', { runId: open1.runId, level: 1, taps: pl1.taps });
   if (e1.status === 'checkpoint') await M.api('/api/run/cashout', { runId: open1.runId });
+  const spU = await M.api('/api/special');
+  check(spU.me.locked === false && spU.me.playedLamports === unlock, 'special: the regular runs reaching the unlock open the specials');
   check((await M.api('/api/special/start', { clientSeed: 'sp0y', slot: 3 })).status === 400 && (await M.api('/api/special/start', { clientSeed: 'sp0z' })).status === 400, 'special: an unknown slot is refused');
   let wins = 0, tries = 0;
   const lv2 = (await M.api('/api/special')).specials[2].course.level;
