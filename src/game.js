@@ -905,36 +905,33 @@
       light: '153,69,255', edge: 'rgba(255,255,255,0.32)',
       sky(g, vw, vh, playW) {
         const rgb = this.light;
-        g.fillStyle = vgrad(g, vh, [[0, '#0e0a1c'], [0.6, '#08060f'], [1, EDGE]]); g.fillRect(0, 0, vw, vh);
-        let rg = g.createRadialGradient(vw / 2, vh * 0.3, 0, vw / 2, vh * 0.3, Math.max(vw, vh) * 0.7);
-        rg.addColorStop(0, 'rgba(' + rgb + ',0.11)'); rg.addColorStop(1, 'rgba(' + rgb + ',0)');
-        g.fillStyle = rg; g.fillRect(0, 0, vw, vh);
-        g.save(); g.translate(vw / 2, vh * 0.92); g.scale(1, Math.min(0.4, 0.4 * vh / vw * 0.55 * 2));
-        rg = g.createRadialGradient(0, 0, 0, 0, 0, vw * 0.95);
-        rg.addColorStop(0, 'rgba(' + rgb + ',0.26)'); rg.addColorStop(0.55, 'rgba(' + rgb + ',0.07)'); rg.addColorStop(1, 'rgba(' + rgb + ',0)');
-        g.fillStyle = rg; g.beginPath(); g.arc(0, 0, vw * 0.95, 0, Math.PI * 2); g.fill(); g.restore();
-        // one spotlight from above: a long, soft elliptical beam over the play area
-        const bh = vh * 1.05;
-        g.save(); g.translate(vw / 2, -vh * 0.05); g.scale(Math.min(1, 0.62 * playW / bh), 1);
+        // night above, and the hall's haze gathering low over the court: the top stays near black, so the ball,
+        // the rings and the HUD's numbers are what's lit
+        g.fillStyle = vgrad(g, vh, [[0, '#030207'], [0.38, '#06040d'], [0.74, '#0c0719'], [0.9, '#120a26'], [1, EDGE]]); g.fillRect(0, 0, vw, vh);
+        // one spotlight from above: a narrow, soft violet beam down the middle of the play area
+        const bh = vh * 0.98;
+        g.save(); g.translate(vw / 2, -vh * 0.08); g.scale(Math.min(1, 0.5 * playW / bh), 1);
         const bm = g.createRadialGradient(0, 0, 0, 0, 0, bh);
-        bm.addColorStop(0, 'rgba(226,212,255,0.15)'); bm.addColorStop(0.4, 'rgba(226,212,255,0.06)'); bm.addColorStop(1, 'rgba(226,212,255,0)');
+        bm.addColorStop(0, 'rgba(196,168,255,0.2)'); bm.addColorStop(0.5, 'rgba(170,130,255,0.06)'); bm.addColorStop(1, 'rgba(170,130,255,0)');
         g.fillStyle = bm; g.beginPath(); g.arc(0, 0, bh, 0, Math.PI * 2); g.fill(); g.restore();
-        const sg = g.createRadialGradient(vw / 2, 0, 0, vw / 2, 0, playW * 0.62);
-        sg.addColorStop(0, 'rgba(232,222,255,0.16)'); sg.addColorStop(1, 'rgba(232,222,255,0)');
-        g.fillStyle = sg; g.fillRect(0, 0, vw, vh);
-        vignette(g, vw, vh);
+        // where the beam lands: a wide pool of violet light on the far side of the court
+        g.save(); g.translate(vw / 2, vh * 0.9); g.scale(1, Math.min(0.42, 0.46 * vh / vw));
+        const rg = g.createRadialGradient(0, 0, 0, 0, 0, vw * 0.9);
+        rg.addColorStop(0, 'rgba(' + rgb + ',0.3)'); rg.addColorStop(0.5, 'rgba(' + rgb + ',0.09)'); rg.addColorStop(1, 'rgba(' + rgb + ',0)');
+        g.fillStyle = rg; g.beginPath(); g.arc(0, 0, vw * 0.9, 0, Math.PI * 2); g.fill(); g.restore();
+        vignette(g, vw, vh, 0.42);
       },
       // behind the court: the courtside crowd and the LED board (drawArena)
       farDraw: (c, left, width) => drawArena(c, left, width),
       floor(c, x0, w, F, S, mid, width) {
-        floorBase(c, x0, w, F, this.light, 0.24, 'rgba(22,15,36,0.97)');
-        recede(c, x0, w, F, mid, 34, 'rgba(255,255,255,0.055)', S);
+        floorBase(c, x0, w, F, this.light, 0.34, 'rgba(20,12,38,0.98)');
+        recede(c, x0, w, F, mid, 34, 'rgba(190,160,255,0.085)', S);
         floorFade(c, x0, w, F);
         // the spotlight's reflection on the polished boards, under the middle of the view
         c.save(); c.beginPath(); c.rect(x0, F, w, 200); c.clip();
         c.translate(mid, F + 16); c.scale(1, 0.12);
         const sr = width * 0.44, sheen = c.createRadialGradient(0, 0, 0, 0, 0, sr);
-        sheen.addColorStop(0, 'rgba(214,194,255,0.15)'); sheen.addColorStop(1, 'rgba(214,194,255,0)');
+        sheen.addColorStop(0, 'rgba(206,176,255,0.2)'); sheen.addColorStop(1, 'rgba(206,176,255,0)');
         c.fillStyle = sheen; c.beginPath(); c.arc(0, 0, sr, 0, Math.PI * 2); c.fill(); c.restore();
       }
     }
@@ -1462,13 +1459,15 @@
     $('betDown').addEventListener('click', () => { const b = prefs.bet; stepBet(-1); Sound.click(); if (prefs.bet !== b) bumpBet(); });
     $('betUp').addEventListener('click', () => { const b = prefs.bet; stepBet(1); Sound.click(); if (prefs.bet !== b) bumpBet(); });
     const inp = $('betInput');
-    inp.addEventListener('input', () => { const v = parseFloat(inp.value.replace(',', '.')); if (v > 0) { prefs.bet = v; refreshLobby(true); } });
+    inp.addEventListener('input', () => { const v = parseFloat(inp.value.replace(',', '.')); if (v > 0) { prefs.bet = v; refreshLobby(true); } else fitBet(); });
     inp.addEventListener('blur', () => { setBet(prefs.bet); });
     inp.addEventListener('focus', () => { try { inp.select(); } catch (e) { /* ignore */ } });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { inp.blur(); startRun(); } });
     $('playBtn').addEventListener('click', () => startRun());
     $('practiceBtn').addEventListener('click', () => { Sound.click(); startPractice(); });
   }
+  // the amount's field is as wide as its digits, so the amount and its "SOL" sit centred as one
+  function fitBet() { const inp = $('betInput'), v = inp.value, dots = (v.match(/[.,]/g) || []).length; inp.style.width = (Math.max(1, v.length - dots) * 1.04 + dots * 0.5 + 0.2).toFixed(2) + 'ch'; }
   function setBet(v) {
     const max = Math.min(CFG.maxBet, Math.max(CFG.minBet, bank.balance()));
     prefs.bet = clamp(Math.round(v * 1e4) / 1e4, CFG.minBet, max);
@@ -1482,6 +1481,7 @@
     const wl = $('winLine'); wl.innerHTML = `Win up to <b>${fmtBet(prefs.bet * TOP[di])} SOL</b>`;
     refreshProfileHud();
     if (!keepInput) $('betInput').value = fmtBet(prefs.bet);
+    fitBet();
     $('playAmt').textContent = fmtBet(prefs.bet) + ' SOL';
     const short = prefs.bet > bank.balance() + 1e-12, broke = bank.balance() < CFG.minBet;
     const top = Math.min(CFG.maxBet, Math.max(CFG.minBet, bank.balance()));
@@ -2155,7 +2155,7 @@
       const w = (a.into / a.need * 100).toFixed(1) + '%';
       fill.style.transition = 'none'; fill.style.width = w;
       hudAnim(fill, 'fill', [{ width: '0%' }, { width: w }], { duration: REDUCED ? 1 : 600, easing: EASE_OUT });
-      Sound.levelUp(); buzz([10, 40, 10]); celebrate(70, box);
+      Sound.levelUp(); buzz([10, 40, 10]); celebrate(60, ui.res); // from the card's top corners, clear of its text
     }, 1100));
     const g = [];
     if (run.potJust && potState) g.push(['pot', ICON.trophy, 'Pot challenge done · in for a share']);
@@ -2673,7 +2673,7 @@
   // The far side of the arena, behind the court: the courtside crowd in silhouette against the haze, and an
   // LED board along the baseline. The crowd is further away, so it drifts slower than the court; the board
   // moves with it. The crowd is painted once into a tile that repeats.
-  const STANDS_W = 420, STANDS_H = 40, BOARD_H = 10;
+  const STANDS_W = 420, STANDS_H = 40, BOARD_H = 12, HAZE_H = 150;
   let standsEl = null, standsK = 0;
   function standsTile() {
     const k = Math.max(1, Math.round(scale * dpr * 2) / 2);
@@ -2697,29 +2697,31 @@
       g.rect(0, base, STANDS_W, STANDS_H - base);
       g.fill();
     };
-    row(STANDS_H - 14, 2.6, 3.4, 8, 0.3);
-    row(STANDS_H - 2, 3.4, 4.4, 11, 0.62);
+    row(STANDS_H - 14, 2.6, 3.4, 8, 0.5);
+    row(STANDS_H - 2, 3.4, 4.4, 11, 0.94);
     standsK = k;
     return (standsEl = el);
   }
   const ARENA_G = { glow: null, bd: null };
   function drawArena(c, left, width) {
     const F = W.FLOOR, top = F - BOARD_H, x0 = left - 20, w = width + 40;
+    if (!ARENA_G.glow) { // world-space gradients: made once, reused every frame
+      const L = COURT_ART.arena.light;
+      ARENA_G.glow = c.createLinearGradient(0, top - HAZE_H, 0, top); // the haze the board and the court light up, behind the crowd
+      ARENA_G.glow.addColorStop(0, 'rgba(' + L + ',0)'); ARENA_G.glow.addColorStop(0.55, 'rgba(' + L + ',0.07)');
+      ARENA_G.glow.addColorStop(0.86, 'rgba(' + L + ',0.2)'); ARENA_G.glow.addColorStop(1, 'rgba(' + L + ',0.34)');
+      ARENA_G.bd = c.createLinearGradient(0, top, 0, F);
+      ARENA_G.bd.addColorStop(0, '#150b2b'); ARENA_G.bd.addColorStop(1, '#070413');
+    }
+    c.fillStyle = ARENA_G.glow; c.fillRect(x0, top - HAZE_H, w, HAZE_H);
     const tile = standsTile(), shift = view.camX * 0.65; // the stands move at 35% of the court's speed
     for (let u = Math.floor((left - shift) / STANDS_W) * STANDS_W; u < left - shift + width; u += STANDS_W) {
       c.drawImage(tile, u + shift, top - STANDS_H, STANDS_W, STANDS_H);
     }
-    if (!ARENA_G.glow) { // world-space gradients: made once, reused every frame
-      ARENA_G.glow = c.createLinearGradient(0, top - 18, 0, top); // the board lights the front row
-      ARENA_G.glow.addColorStop(0, 'rgba(' + COURT_ART.arena.light + ',0)'); ARENA_G.glow.addColorStop(1, 'rgba(' + COURT_ART.arena.light + ',0.15)');
-      ARENA_G.bd = c.createLinearGradient(0, top, 0, F);
-      ARENA_G.bd.addColorStop(0, '#160c2c'); ARENA_G.bd.addColorStop(1, '#090616');
-    }
-    c.fillStyle = ARENA_G.glow; c.fillRect(x0, top - 18, w, 18);
     c.fillStyle = ARENA_G.bd; c.fillRect(x0, top, w, BOARD_H);
-    c.fillStyle = 'rgba(20,241,149,0.5)'; c.fillRect(x0, top, w, 0.7);
-    const sp = textSprite('SOL DUNK', 800, 6.5 * scale * dpr, FONT_DISPLAY, 'rgba(20,241,149,0.42)'); // the LED board, in Solana green
-    for (let x = Math.floor((left - 60) / 160) * 160; x < left + width + 60; x += 160) drawText(c, sp, x, top + BOARD_H / 2 + 0.4, scale * dpr);
+    c.fillStyle = 'rgba(20,241,149,0.62)'; c.fillRect(x0, top, w, 0.8);
+    const sp = textSprite('SOL DUNK', 700, 7 * scale * dpr, FONT_DISPLAY, 'rgba(20,241,149,0.6)'); // the LED board, in Solana green
+    for (let x = Math.floor((left - 60) / 160) * 160; x < left + width + 60; x += 160) drawText(c, sp, x, top + BOARD_H / 2 + 0.5, scale * dpr);
   }
   function drawCourt(c, left, width, S, bx, by, rings) {
     const A = courtArt(), x0 = left - 20, w = width + 40, F = W.FLOOR;
