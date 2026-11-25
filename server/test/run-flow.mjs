@@ -1,12 +1,10 @@
-// End-to-end test: spawns the server in mock-chain mode, signs in with a fresh ed25519 wallet,
-// plays runs with the bot and checks every server result against a local recomputation.
-import { spawn } from 'node:child_process';
+// End-to-end test of the game logic: spawns the server in mock-chain mode on a throwaway Postgres, signs in with a
+// fresh ed25519 wallet, plays runs with the bot and checks every server result against a local recomputation.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import nacl from 'tweetnacl';
-import bs58 from 'bs58';
+import { bootServer, apiClient, stopAll, check, failed } from './lib/harness.mjs';
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -20,39 +18,10 @@ const gameSrc = fs.readFileSync(path.join(root, 'src/game.js'), 'utf8');
 const start = gameSrc.indexOf('const K256'), end = gameSrc.indexOf('// ---------------------------------------------------------------- settings');
 const client = new Function(gameSrc.slice(start, end) + '; return { deriveLevelSeed, sha256, utf8, hex };')();
 
-let failures = 0;
-const check = (cond, msg) => { if (!cond) { failures++; console.log('  FAIL', msg); } };
-
-async function boot(port, extra) {
-  const dir = fs.mkdtempSync('/tmp/soldunk-');
-  const proc = spawn(process.execPath, [path.join(here, '..', 'server.mjs')], {
-    env: { ...process.env, MOCK_CHAIN: '1', PORT: String(port), DB_FILE: path.join(dir, 'db.json'), MIN_REALTIME: '0', ...extra }, stdio: ['ignore', 'pipe', 'pipe']
-  });
-  proc.stderr.on('data', (d) => process.stderr.write(d));
-  for (let i = 0; i < 50; i++) { try { await fetch(`http://127.0.0.1:${port}/api/config`); return proc; } catch { await new Promise((r) => setTimeout(r, 100)); } }
-  throw new Error('server did not start');
-}
-function client_(port) {
-  let token = null;
-  const api = async (p, body) => {
-    const res = await fetch(`http://127.0.0.1:${port}${p}`, { method: body ? 'POST' : 'GET', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined });
-    const j = await res.json();
-    return { status: res.status, ...j };
-  };
-  return {
-    api,
-    async signIn() {
-      const kp = nacl.sign.keyPair();
-      const address = bs58.encode(kp.publicKey);
-      const { message } = await api('/api/auth/nonce', { address });
-      const sig = nacl.sign.detached(new TextEncoder().encode(message), kp.secretKey);
-      const r = await api('/api/auth/verify', { address, signature: bs58.encode(sig) });
-      token = r.token;
-      return { address, r };
-    },
-    setToken(t) { token = t; }, get token() { return token; }
-  };
-}
+// servers by test port (the ports are only labels now: each server gets a free one)
+const servers = new Map();
+async function boot(label, extra) { const s = await bootServer(extra); servers.set(label, s); return { kill: () => s.kill() }; }
+const client_ = (label) => apiClient(servers.get(label).url);
 // play one level with a bot, returning the taps it made
 function playTaps(seed, di, L, skill, salt) {
   const st = E.createState(E.generateLevel(seed, di, L));
@@ -339,6 +308,7 @@ function playTaps(seed, di, L, skill, salt) {
   check((await Lc.api('/api/limits', { lossLamports: -5 })).status === 400, 'limits: a negative limit is refused');
   srv5.kill();
 
-  console.log(failures ? `${failures} check(s) failed` : 'all checks passed');
-  process.exit(failures ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(1); });
+  await stopAll();
+  console.log(failed() ? `${failed()} check(s) failed` : 'game flow: all checks passed');
+  process.exitCode = failed() ? 1 : 0;
+})().catch(async (e) => { console.error(e); await stopAll(); process.exitCode = 1; });

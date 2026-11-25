@@ -14,20 +14,31 @@ Amounts are shown as "SOL". To show the official SOL token icon beside them, dow
 ```bash
 npm run build                       # both HTML builds
 cd server && npm install
-npm run dev                         # mock chain: no RPC, /api/dev/faucet gives test SOL
-npm test                            # end-to-end: 40 bot-played runs checked against local replay
+npm run dev                         # mock chain: no RPC, /api/dev/faucet gives test SOL; a local Postgres starts in data/
+npm test                            # game logic, money on a real Solana runtime, and the protections (about 40 s)
 ```
 
-### Devnet (real SOL, test network)
+### Real SOL
+
+`docs/LAUNCH.md` is the step-by-step: devnet, the production setup (`deploy/`: Docker, Postgres, Caddy with automatic HTTPS), a closed beta on mainnet with small limits, and opening up. `server/SECURITY.md` is the threat model. In short:
 
 ```bash
-solana-keygen new -o house.json     # house wallet; fund it: solana airdrop 5 <address> --url devnet
-export HOUSE_SECRET="$(cat house.json)" TOKEN_SECRET="$(openssl rand -hex 32)"
-export NETWORK=devnet RPC_URL=https://api.devnet.solana.com
-cd server && npm start              # serves the game on :8787
+cd server
+NETWORK=devnet npm start            # makes a devnet house wallet and prints its address; fund it at faucet.solana.com
+node scripts/keygen.mjs player.json
+SERVER_URL=http://127.0.0.1:8787 PLAYER_KEY=player.json npm run e2e   # deposit, play, cash out, withdraw, check the chain
 ```
 
-Open the server URL in the Phantom or Solflare in-app browser (or desktop with the extension). The player signs a one-time message, deposits with a normal SOL transfer to the house wallet (the server verifies it on-chain), plays, and withdraws from the house wallet.
+Open the server's address in Phantom or Solflare (or on desktop with the extension). The player signs a one-time sign-in message, deposits with a normal SOL transfer to the house's hot wallet (the server reads it on chain, and a watcher credits it even if the page was closed), plays, and withdraws to the same wallet.
+
+What the server does for real money (`server/lib/`):
+
+- **Postgres** with a ledger line for every balance change, row locks, and constraints (no negative balance, one open run, a deposit credited once).
+- **Withdrawals that can't pay twice:** signed and recorded before they're broadcast, and re-sent only once the chain shows the old one can never land. Large ones, held or limited accounts and anything past the daily limits wait for review.
+- **Hot and cold wallets:** the server holds only the hot key; the excess is swept to a cold (multisig) address, and both count in the bankroll.
+- **Max bets tied to the bankroll:** a bet's biggest possible win must fit in the free bankroll and under a set share of it; the lobby shows the live limit per mode.
+- **Reviews:** big wins and bot-like tap precision hold an account's withdrawals; an operator API and CLI (`npm run admin`) list, approve and reject.
+- **Hardening:** a start-up check that refuses unsafe mainnet settings, a content security policy, rate limits, country blocking, a closed-beta allowlist, pause switches, structured logs and alerts.
 
 ## How a run is kept honest
 
@@ -136,9 +147,11 @@ None of this changes bets, ring layouts, physics or payouts; it lives in the cli
 
 ## Before real money
 
-1. **Skill and bots.** The tables keep an edge against average and good players at every checkpoint, but elite players (the `pro` bot) still profit deep in a run, and a bot that plays perfectly hits the max win on almost every run. The server already limits bets for accounts above 115% return after 150 runs, and for superhuman swish rates. Add tap-timing anomaly checks and manual review of large wins before launch.
-2. **Licensing.** Real-money skill gaming and crypto gambling are regulated, or banned, in many places. You need geo-blocking, age and KYC checks, and a license where it's required.
-3. **Production hardening.** Move from the JSON file DB to Postgres. Use HTTPS, rate limits and a hot/cold wallet split, and get a security review of the deposit and withdraw paths.
+The technical list is done (see Real SOL above); what's left before real money:
+
+1. **Licensing.** Real-money skill gaming and crypto gambling are regulated, or banned, in many places. A lawyer decides where you may operate; the server has the hooks (country blocking, an allowlist, identity status, deposit and withdrawal limits) but not the licence, the identity provider or the player-protection tools a licence will ask for.
+2. **A live run and an outside review.** Stage 1 of `docs/LAUNCH.md` on devnet with a real wallet, then an independent security review of `server/` before opening to the public.
+3. **Skill and bots.** The tables keep an edge against average and good players at every checkpoint, but elite players (the `pro` bot) still profit deep in a run. The server limits accounts above 115% return after 150 runs or with superhuman swish rates, holds withdrawals after big wins and bot-like precision, and caps every bet by the bankroll; the bot check still needs calibrating on real players.
 
 ## Files
 
@@ -154,7 +167,10 @@ src/index.html, src/style.css
 build.cjs          inlines everything into dist/*.html
 sim/               Monte Carlo runner, calibrator, quick stats; special.cjs measures the special courses,
                    pots.cjs measures the pot challenges
-server/            Express API, Solana deposits/withdrawals, replay verification, tests
+server/            the game server: server.mjs (routes), lib/ (config, Postgres, chain, payments, bot check,
+                   HTTP hardening, operator API), scripts/ (admin CLI, keygen, the live e2e check), test/
+deploy/            Dockerfile, docker-compose (Postgres, the app, Caddy with HTTPS), .env.example
+docs/LAUNCH.md     taking it live: devnet, production setup, closed beta, opening up, what to do when things go wrong
 tools/             browser checks (Playwright + Chrome): flows.py plays every run outcome,
                    contact.py freezes rim contacts, audit.py screenshots every screen (to ./shots),
                    ui.py checks the tabs, the pages and their back button, the locker, missions,
@@ -163,7 +179,8 @@ tools/             browser checks (Playwright + Chrome): flows.py plays every ru
                    special_flow.py plays the special levels, missions_flow.py mission SOL, pot_flow.py the pot,
                    speed.py plays deep into a tier and reports how much of the next ring is in view,
                    clip.py records exact 60 fps frames of a run (contact sheet + mp4), e.g. to
-                   review the flame; sync_check.cjs (npm run check) checks every copy is the same build
+                   review the flame; server_flow.py plays the real-SOL page against the server under its
+                   security policy; sync_check.cjs (npm run check) checks every copy is the same build
 ```
 
 ## Working on it

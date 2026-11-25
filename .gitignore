@@ -8,3 +8,7 @@ tools/__pycache__/
 .DS_Store
 .env
 .env.*
+!.env.example
+# deployment secrets and test wallets
+deploy/secrets/
+player.json

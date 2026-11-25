@@ -710,7 +710,9 @@
 
   // Real SOL: talks to server/server.mjs. Only active when SOL_DUNK_CONFIG.serverUrl is set.
   const ServerBank = {
-    real: true, token: null, address: null, bal: 0, runId: null, specId: null, mv: null,
+    real: true, token: null, address: null, bal: 0, runId: null, specId: null, mv: null, modeMax: null,
+    // the most each mode takes right now: the server sets it from the house's bankroll
+    async betLimits() { const c = await this.api('/api/config'); this.modeMax = (c.difficulties || []).map((d) => d.maxBet / 1e9); },
     async api(path, body) {
       const res = await fetch(CFG.serverUrl.replace(/\/$/, '') + path, {
         method: body ? 'POST' : 'GET',
@@ -1468,8 +1470,10 @@
   }
   // the amount's field is as wide as its digits, so the amount and its "SOL" sit centred as one
   function fitBet() { const inp = $('betInput'), v = inp.value, dots = (v.match(/[.,]/g) || []).length; inp.style.width = (Math.max(1, v.length - dots) * 1.04 + dots * 0.5 + 0.2).toFixed(2) + 'ch'; }
+  // the biggest bet the picked mode takes: the build's limit, or with a server its live limit for that mode
+  const betCap = () => (bank.modeMax && bank.modeMax[prefs.di] >= CFG.minBet ? Math.min(CFG.maxBet, bank.modeMax[prefs.di]) : CFG.maxBet);
   function setBet(v) {
-    const max = Math.min(CFG.maxBet, Math.max(CFG.minBet, bank.balance()));
+    const max = Math.min(betCap(), Math.max(CFG.minBet, bank.balance()));
     prefs.bet = clamp(Math.round(v * 1e4) / 1e4, CFG.minBet, max);
     refreshLobby(); saveAll();
   }
@@ -1484,7 +1488,8 @@
     fitBet();
     $('playAmt').textContent = fmtBet(prefs.bet) + ' SOL';
     const short = prefs.bet > bank.balance() + 1e-12, broke = bank.balance() < CFG.minBet;
-    const top = Math.min(CFG.maxBet, Math.max(CFG.minBet, bank.balance()));
+    const top = Math.min(betCap(), Math.max(CFG.minBet, bank.balance()));
+    if (prefs.bet > betCap() + 1e-9) { prefs.bet = Math.max(CFG.minBet, Math.floor(betCap() * 1e4) / 1e4); return refreshLobby(keepInput); } // this mode takes less
     $('betDown').disabled = prefs.bet <= CFG.minBet + 1e-9; $('betUp').disabled = prefs.bet >= top - 1e-9;
     $('playBtn').disabled = short;
     const err = $('lobbyErr');
@@ -2194,6 +2199,7 @@
     run.st = null; run.streak = 0; view.st = null; view.prevHoops = []; ball.lastVis = 0;
     attract.wait = 0.3; attract.st = null;
     setTab('play', true); refreshLobby(); refreshPot();
+    if (bank.betLimits) bank.betLimits().then(() => { if (phase === 'lobby') refreshLobby(true); }).catch(() => null);
   }
   if (window.ResizeObserver) { try { const ro = new ResizeObserver(() => { sheetTopC = -1; }); ro.observe(ui.lobby); ro.observe($('vLocker')); } catch (e) { /* optional */ } }
 
@@ -3726,9 +3732,10 @@
       if (phase !== 'lobby' && phase !== 'over') { toast('Finish this run first.'); return; }
       wallet.balance = CFG.demoStart; saveAll(); refreshLobby(); renderPage(true); Sound.click(); toast('Demo balance reset to ' + CFG.demoStart + ' SOL');
     });
-    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; await bank.missions.state().catch(() => null); setBalance(); refreshLobby(); refreshPot(); refreshSpecial(); renderPage(true); } catch (e) { $('wErr').textContent = e.message; } });
-    on('wDeposit', async () => { try { await ServerBank.deposit(parseFloat($('wAmt').value)); setBalance(); renderPage(true); toast('Deposit credited'); } catch (e) { $('wErr').textContent = e.message; } });
-    on('wWithdraw', async () => { try { await ServerBank.withdraw(parseFloat($('wAmt').value)); setBalance(); renderPage(true); toast('Withdrawal sent'); } catch (e) { $('wErr').textContent = e.message; } });
+    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; await bank.missions.state().catch(() => null); await bank.betLimits().catch(() => null); setBalance(); refreshLobby(); refreshPot(); refreshSpecial(); renderPage(true); } catch (e) { $('wErr').textContent = e.message; } });
+    // the server says what happened: credited, or waiting for the network; sent, queued or waiting for review
+    on('wDeposit', async () => { try { const j = await ServerBank.deposit(parseFloat($('wAmt').value)); setBalance(); renderPage(true); toast(j.message || 'Deposit credited'); } catch (e) { $('wErr').textContent = e.message; } });
+    on('wWithdraw', async () => { try { const j = await ServerBank.withdraw(parseFloat($('wAmt').value)); setBalance(); renderPage(true); toast(j.message || 'Withdrawal sent'); } catch (e) { $('wErr').textContent = e.message; } });
   }
 
   // ---------------------------------------------------------------- pages

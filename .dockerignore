@@ -1,0 +1,15 @@
+.git
+node_modules
+server/node_modules
+server/data
+deploy/.env
+deploy/secrets
+dist
+shots
+sim
+tools
+docs
+index.html
+*.zip
+.env
+.env.*

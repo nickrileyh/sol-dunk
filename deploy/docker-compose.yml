@@ -1,0 +1,67 @@
+# SOL DUNK on one server: Postgres, the app, and Caddy in front with automatic HTTPS (Let's Encrypt).
+#
+#   cd deploy
+#   cp .env.example .env          # fill it in (docs/LAUNCH.md walks through every value)
+#   mkdir -p secrets && node ../server/scripts/keygen.mjs secrets/house.json   # the hot wallet (or copy yours in)
+#   docker compose up -d --build
+#
+# A managed Postgres with point-in-time recovery is better than the db service here once real money is involved:
+# set DATABASE_URL in .env and remove the db service. Back up the house key and the database before going live.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: soldunk
+      POSTGRES_USER: soldunk
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U soldunk -d soldunk"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://soldunk:${POSTGRES_PASSWORD}@db:5432/soldunk}
+      HOUSE_KEY_FILE: /run/secrets/house_key
+    secrets:
+      - house_key
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8787"
+    stop_grace_period: 15s
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      ORIGIN_SECRET: ${ORIGIN_SECRET:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+secrets:
+  house_key:
+    file: ./secrets/house.json
+
+volumes:
+  pgdata: {}
+  caddy_data: {}
+  caddy_config: {}

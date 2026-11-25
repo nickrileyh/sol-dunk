@@ -3,17 +3,30 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "SOL DUNK game server: wallet sign-in, SOL deposits/withdrawals, provably-fair seeds and server-side replay of every run.",
+  "description": "SOL DUNK game server: wallet sign-in, SOL deposits and withdrawals (hot/cold wallets, safe resends), Postgres ledger, provably fair seeds and a server-side replay of every run, operator review tools.",
   "scripts": {
     "start": "node server.mjs",
     "dev": "MOCK_CHAIN=1 MIN_REALTIME=0 node server.mjs",
-    "test": "node test/run-flow.mjs"
+    "devnet": "NETWORK=devnet node server.mjs",
+    "test": "node test/run-flow.mjs && node test/money-flow.mjs && node test/security.mjs",
+    "test:e2e": "node test/e2e-local.mjs",
+    "e2e": "node scripts/e2e.mjs",
+    "admin": "node scripts/admin.mjs",
+    "keygen": "node scripts/keygen.mjs",
+    "botcheck": "node scripts/botcheck-calibrate.mjs"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "@solana/web3.js": "1.95.8",
+    "@solana/web3.js": "1.98.4",
     "bs58": "6.0.0",
-    "express": "4.21.2",
+    "express": "4.22.3",
+    "pg": "8.23.1",
     "tweetnacl": "1.0.3"
+  },
+  "devDependencies": {
+    "embedded-postgres": "17.12.0-beta.19",
+    "litesvm": "0.3.3"
   }
 }
