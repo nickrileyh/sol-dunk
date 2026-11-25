@@ -302,7 +302,7 @@
     mov: (n) => (n === 1 ? 'Swish a moving ring' : `Swish ${n} moving rings`),
     perfect: (n, sum) => (sum ? (n === 1 ? 'Get a perfect level' : `Get ${n} perfect levels`) : `Get ${n} perfect levels in one run`),
     fires: (n) => (n === 1 ? 'Catch fire' : `Catch fire ${n} times`),
-    novas: (n) => (n === 1 ? 'Go supernova' : `Go supernova ${n} times`)
+    novas: (n) => (n === 1 ? 'Swish 5 in a row' : `Swish 5 in a row ${n} times`)
   };
   const weeklySet = () => mview().weekly;
   const weeklyText = (c) => MTEXT[c.k](c.n, true);
@@ -499,7 +499,7 @@
       const winners = sim.filter((x) => x.done !== null).length + (myDone ? 1 : 0);
       const r = POTS.split((sim.length + mine) * this.fee, s.carryIn, winners, false);
       const won = myDone ? round9(r.share) : 0;
-      if (won) wallet.balance = round9(wallet.balance + won);
+      if (won) { wallet.balance = round9(wallet.balance + won); DemoLimits.won(won); }
       this.last = { key: s.key, goal: POTS.goalFor(s.key).text, entrants: sim.length + mine, winners, share: round9(r.share), rolled: winners ? 0 : round9(r.carry), me: s.me ? { done: myDone, won } : null };
       const today = POTS.dayKey(now), sameDay = String(s.key).slice(0, 10) === today;
       const key = force && sameDay ? today + '#' + ((+String(s.key).split('#')[1] || 0) + 1) : today;
@@ -524,7 +524,8 @@
       if (s.me) throw new Error('You’re already in this pot');
       if (POTS.closesAt(s.key) - Date.now() < 60000) throw new Error('This pot is about to close. The next one opens at midnight UTC.');
       if (wallet.balance + 1e-12 < this.fee) throw new Error('Not enough demo SOL for the entry.');
-      wallet.balance = round9(wallet.balance - this.fee);
+      DemoLimits.check(this.fee);
+      wallet.balance = round9(wallet.balance - this.fee); DemoLimits.bet(this.fee);
       s.me = { at: Date.now(), done: false, best: 0 };
       this.save(); saveAll();
       return this.view();
@@ -561,7 +562,7 @@
     pay(paid) {
       let sum = 0;
       for (const p of paid) sum += p.amount;
-      if (sum) { wallet.balance = round9(wallet.balance + sum); stats.missionSol = round9((stats.missionSol || 0) + sum); }
+      if (sum) { wallet.balance = round9(wallet.balance + sum); stats.missionSol = round9((stats.missionSol || 0) + sum); DemoLimits.won(sum); }
       return paid;
     },
     play(amount) { const r = MS.play(profile.ms, amount, Date.now(), this.need); profile.ms = r.s; return this.pay(r.paid); },
@@ -599,9 +600,10 @@
     start(slot) {
       const v = this.view(), sp = v.specials[slot];
       if (!sp) throw new Error('There’s no such special level today');
-      if (v.me.locked) throw new Error('Play ' + fmtBet(v.unlock.need) + ' SOL in regular runs to unlock the special levels.');
+      if (v.me.locked) throw new Error('Bet ' + fmtBet(v.unlock.need) + ' SOL in regular runs to unlock the special levels.');
       if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
-      wallet.balance = round9(wallet.balance - v.fee);
+      DemoLimits.check(v.fee);
+      wallet.balance = round9(wallet.balance - v.fee); DemoLimits.bet(v.fee);
       const paid = DemoMissions.play(v.fee);
       const t = this.tally(); t.tries[slot]++; store.set('special', t);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
@@ -615,12 +617,45 @@
       this.cur = null;
       const r = E.replay(SP.generate(c.seed, c.recipe, c.g, c.n), taps), won = r.result === 'clear';
       if (won) {
-        wallet.balance = round9(wallet.balance + c.prize);
+        wallet.balance = round9(wallet.balance + c.prize); DemoLimits.won(c.prize);
         const t = this.tally(); if (t.day === c.day) { t.wins[c.slot]++; store.set('special', t); }
       }
       profile.skill = SP.addSpecial(profile.skill, c.slot, won, r.outcomes.length); // that special's level moves
       saveAll();
       return { status: won ? 'won' : 'lost', payout: won ? c.prize : 0, serverSeed: c.serverSeed, outcomes: r.outcomes, special: this.view() };
+    }
+  };
+
+  // ---------------------------------------------------------------- play limits (Settings): a daily loss limit
+  // Today's loss is what went into bets and entries today (UTC) less what came back. A bet or entry that would take it
+  // past the limit is refused. Setting or lowering a limit works at once; raising it or turning it off waits 24
+  // hours, so it can't be undone in the heat of a losing streak. The server keeps its own for real SOL.
+  const LIMIT_WAIT = 24 * 3600 * 1000;
+  const LOSS_STEPS = [0, 0.5, 1, 2, 5, 10]; // the choices on the Settings page, in SOL (0 is off)
+  const DemoLimits = {
+    day() { const key = POTS.dayKey(Date.now()); if (!stats.day || stats.day.key !== key) stats.day = { key, bet: 0, won: 0 }; return stats.day; },
+    lim() {
+      const L = prefs.limits || (prefs.limits = { loss: 0, pending: null });
+      if (L.pending && L.pending.at <= Date.now()) { L.loss = L.pending.loss; L.pending = null; saveAll(); }
+      return L;
+    },
+    lossToday() { const d = this.day(); return Math.max(0, round9(d.bet - d.won)); },
+    check(amount) {
+      const L = this.lim();
+      if (!L.loss) return;
+      const left = Math.max(0, round9(L.loss - this.lossToday()));
+      if (amount > left + 1e-9) throw new Error(left > 0 ? `That would pass your daily loss limit. You can bet ${fmtBet(left)} SOL more today.` : `You've reached your daily loss limit of ${fmtBet(L.loss)} SOL. It resets at midnight UTC.`);
+    },
+    bet(a) { const d = this.day(); d.bet = round9(d.bet + a); },
+    won(a) { if (a > 0) { const d = this.day(); d.won = round9(d.won + a); } },
+    view() { const L = this.lim(); return { loss: L.loss, pending: L.pending ? { loss: L.pending.loss, at: L.pending.at } : null, lossToday: this.lossToday(), resetsAt: POTS.closesAt(this.day().key) }; },
+    set(loss) {
+      const L = this.lim();
+      if (loss && (!L.loss || loss <= L.loss)) { L.loss = loss; L.pending = null; } // tighter: at once
+      else if (loss !== L.loss) L.pending = { loss, at: Date.now() + LIMIT_WAIT }; // looser: in 24 hours
+      else L.pending = null;
+      saveAll();
+      return this.view();
     }
   };
 
@@ -632,7 +667,8 @@
     async start(di, bet) {
       if (!(bet >= CFG.minBet)) throw new Error('Minimum bet is ' + CFG.minBet + ' SOL');
       if (bet > wallet.balance + 1e-12) throw new Error('Not enough demo SOL for that bet.');
-      wallet.balance = round9(wallet.balance - bet);
+      DemoLimits.check(bet);
+      wallet.balance = round9(wallet.balance - bet); DemoLimits.bet(bet);
       const paid = DemoMissions.play(bet);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
       saveAll();
@@ -657,13 +693,14 @@
     },
     async next() { const c = this.cur; c.level++; return { levelSeed: deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, c.level) }; },
     async cashout() { const payout = this._pay(), missions = DemoMissions.run(this.cur.levels); saveAll(); return { payout, serverSeed: this.cur.serverSeed, missions }; },
-    _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); saveAll(); return payout; },
+    _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); DemoLimits.won(payout); saveAll(); return payout; },
     pot: {
       async state() { DemoPot.roll(); return DemoPot.view(); },
       async enter() { return DemoPot.enter(); },
       async closeNow() { DemoPot.roll(true); return DemoPot.view(); } // demo only
     },
     missions: { view: () => DemoMissions.view(), async state() { return DemoMissions.view(); } },
+    limits: { view: () => DemoLimits.view(), async state() { return DemoLimits.view(); }, async set(loss) { return DemoLimits.set(loss); } },
     special: {
       async state() { return DemoSpecial.view(); },
       async start(slot) { return DemoSpecial.start(slot); },
@@ -732,6 +769,13 @@
       view() { return ServerBank.mv || MS.view(null, Date.now()); },
       async state() { ServerBank.mv = ServerBank.mconv(await ServerBank.api('/api/missions')); return ServerBank.mv; }
     },
+    limits: {
+      v: null,
+      view() { return this.v || { loss: 0, pending: null, lossToday: 0, resetsAt: 0 }; },
+      conv(j) { const L = 1e9; return (this.v = { loss: j.lossLamports / L, pending: j.pending ? { loss: j.pending.lossLamports / L, at: j.pending.at } : null, lossToday: j.lossTodayLamports / L, resetsAt: j.resetsAt }); },
+      async state() { return this.conv(await ServerBank.api('/api/limits')); },
+      async set(loss) { return this.conv(await ServerBank.api('/api/limits', { lossLamports: Math.round(loss * 1e9) })); }
+    },
     special: {
       view(j) {
         const L = 1e9;
@@ -779,6 +823,27 @@
     return s;
   }
   let bank = LocalBank;
+  // Practice: a free run on a real course. Nothing is at stake and nothing is recorded (no SOL, XP, missions, trophies,
+  // stats, pot or special-level rating). Each level is checked by the same replay, so it plays exactly like a run.
+  const PracticeBank = {
+    cur: null,
+    async start(di) {
+      const serverSeed = randomHex(32), clientSeed = randomHex(8);
+      this.cur = { di, serverSeed, clientSeed, nonce: 0, level: 1, total: 1, streak: 0 };
+      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce: 0, levelSeed: deriveLevelSeed(serverSeed, clientSeed, 0, 1), missions: null };
+    },
+    async level(L, taps) {
+      const c = this.cur, def = E.generateLevel(deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, L), c.di, L), r = E.replay(def, taps);
+      const a = E.applyLevel(PAY.PAYTABLE[c.di][L - 1], r.outcomes, c.total, E.DIFFS[c.di].maxWin, c.streak);
+      c.total = a.total; c.streak = a.streak; c.level = L;
+      const status = a.capped ? 'maxwin' : r.result === 'clear' ? (L >= NL ? 'final' : 'checkpoint') : 'bust';
+      return { status, total: c.total, payout: 0, serverSeed: status === 'checkpoint' ? null : c.serverSeed, pot: null, missions: null };
+    },
+    async next() { const c = this.cur; c.level++; return { levelSeed: deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, c.level) }; },
+    async cashout() { return { payout: 0, serverSeed: this.cur.serverSeed, missions: null }; }
+  };
+  const runBank = () => (run.mode === 'practice' ? PracticeBank : bank); // the bank the run in progress talks to
+  const practicing = () => run.mode === 'practice';
 
   // ---------------------------------------------------------------- canvas & view
   // The client shows a 352-unit-wide window of the 400-unit world (a little zoomed in),
@@ -1140,6 +1205,8 @@
   function fmtDelta(d) { return d >= 0.0001 ? fmtSol(d) : d >= 0.000001 ? d.toFixed(6) : '0'; }
   function setPot(animate) {
     ui.potCap.classList.toggle('prize', run.mode === 'special');
+    ui.potCap.classList.toggle('practice', practicing());
+    if (practicing()) { ui.mult.textContent = fmtMult(run.total); ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = 'Practice'; potShown = 0; return; }
     if (run.mode === 'special') { // the special pays only for clearing every ring: count the rings, show the prize
       const st = run.st;
       ui.mult.textContent = (st ? st.outcomes.length : 0) + '/' + (st ? st.hoops.length : 0);
@@ -1278,7 +1345,7 @@
   }
   const KIND_NAME = { daily: 'Daily mission', weekly: 'Weekly mission', career: 'Career mission' };
   function liveGoals() {
-    if (!run.told || phase === 'lobby' || run.mode === 'special') return;
+    if (!run.told || phase === 'lobby' || run.mode !== 'run') return; // specials and practice runs don't count toward goals
     const pp = potProgress();
     if (pp && pp.done && !run.told.pot) { run.told.pot = 1; potNotice(); }
     const r = runFacts(0);
@@ -1295,6 +1362,7 @@
   // the next goal, shown under each level's banner: the pot challenge if you're in it, else the next mission
   function goalLine() {
     if (run.mode === 'special') return '';
+    if (practicing()) return 'Practice · nothing is at stake';
     const pl = potLine();
     if (pl) return pl;
     for (const m of openMissions(runFacts(0))) if (!run.told[m.id] && m.p < m.n) return m.text + ' · ' + m.p + '/' + m.n;
@@ -1399,6 +1467,7 @@
     inp.addEventListener('focus', () => { try { inp.select(); } catch (e) { /* ignore */ } });
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { inp.blur(); startRun(); } });
     $('playBtn').addEventListener('click', () => startRun());
+    $('practiceBtn').addEventListener('click', () => { Sound.click(); startPractice(); });
   }
   function setBet(v) {
     const max = Math.min(CFG.maxBet, Math.max(CFG.minBet, bank.balance()));
@@ -1488,7 +1557,7 @@
       <div class="sp-prize pot"><span class="k">In the pot</span><div class="big"><span class="num">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></div></div>
       ${me}
       <div class="tiles"><div><b>${p.entrants}</b><span>Entered</span></div><div><b>${p.completed}</b><span>Made it</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Closing'}</b><span>Left</span></div></div>
-      <p class="pot-rules">Everyone who completes the challenge before the pot closes (midnight UTC) splits it equally. The house keeps ${Math.round(p.rake * 100)}% of each entry; if nobody makes it, the pot rolls over to the next one. Only runs you start after entering count, and your runs are bets as usual.${p.carryIn > 0 ? ' This pot includes ' + fmtSol(p.carryIn) + ' SOL rolled over.' : ''}</p>
+      <p class="pot-rules">Enter, then meet the challenge in a run you start after entering (your runs are bets as usual). At midnight UTC, everyone who made it splits the pot equally. The house keeps ${Math.round(p.rake * 100)}% of each entry. If nobody makes it, the pot rolls over to the next day.${p.carryIn > 0 ? ' This pot includes ' + fmtSol(p.carryIn) + ' SOL rolled over.' : ''}</p>
       ${last}
       ${p.simulated ? `<div class="pot-demo"><p>Demo: the other entrants are simulated, from how often players at different skill levels make the challenge.</p><button class="btn btn-plain" id="potClose">Close this pot now</button></div>` : ''}`;
   }
@@ -1514,7 +1583,7 @@
     if (!c) return '<div class="empty">The special levels aren’t available right now. Try again in a moment.</div>';
     const left = s.closesAt - Date.now(), pct = Math.round((s.target || SP.TARGET) * 100);
     const play = s.me && s.me.blocked ? '<div class="empty">The special levels aren’t available on this account.</div>'
-      : s.me && s.me.locked ? `<div class="group sp-lock">${unlockRow(s)}<p>Your regular runs show the game your level, so each special starts out set for you.</p></div>`
+      : s.me && s.me.locked ? `<div class="group sp-lock">${unlockRow(s)}<p>Your regular runs also set the level you start at.</p></div>`
       : `<button class="btn btn-primary" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
     return `<div class="sp-card">
         <div class="sp-head"><div class="sp-blurb">${c.recipe.blurb} · ${c.course.rings} rings</div></div>
@@ -1526,12 +1595,11 @@
       <div class="tiles"><div><b>${c.me.tries}</b><span>Tries today</span></div><div><b>${c.me.wins}</b><span>Wins today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>New specials</span></div></div>
       <div class="sec-h"><h3>Set for you</h3></div>
       <div class="group sp-odds">
-        <div class="row"><span>This course is set for</span><b>${c.course.levelName || SP.levelName(c.course.level)}</b></div>
-        <div class="row"><span>A player at that level clears it</span><b>${oneIn(c.course.chance)}</b></div>
-        <div class="row"><span>After a clear</span><b>Next one harder</b></div>
-        <div class="row"><span>After a miss</span><b>A little easier</b></div>
+        <div class="row"><span>Your level</span><b>${c.course.levelName || SP.levelName(c.course.level)}</b></div>
+        <div class="row"><span>Players at your level clear it</span><b>${oneIn(c.course.chance)}</b></div>
       </div>
-      <p class="pot-rules">Clear every ring to win the prize; miss one and the entry is gone. Each special’s course is set for your level in it, and the level moves: up when you clear it, down a little when you don’t. It settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries whatever your level: the house keeps about ${100 - pct}% from beginners and pros alike. They open once you’ve played ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs, and you start at ${SP.levelName(SP.START)}, or higher if your runs show more. New specials come every day at midnight UTC, and your levels carry over. Their rings don’t count toward missions or the pot, but entries count as play for mission SOL.</p>`;
+      <p class="foot">Clear it and the next course is harder. Miss and it gets a little easier.</p>
+      <p class="pot-rules">Clear every ring to win the prize. Miss one and the entry is gone. Your level settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries, whatever your level: the house keeps about ${100 - pct}%. They open once you’ve bet ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs. New specials come every day at midnight UTC. Special rings don’t count toward missions or the pot.</p>`;
   }
   // a sketch of a course: the rings in order, how far each one bobs, and the green finish
   function drawCourse(el, def) {
@@ -1568,7 +1636,7 @@
   // the specials open once the player has bet SP.UNLOCK entries in regular runs: how far along they are
   function unlockRow(s) {
     const u = s.unlock || { need: 0, played: 0 }, shown = Math.min(u.need, Math.floor(u.played * 100 + 1e-6) / 100);
-    return `<div class="sp-unlock"><div class="mn-h"><span>Play ${fmtBet(u.need)} SOL in regular runs to unlock</span><b>${fmtBet(shown)} / ${fmtBet(u.need)} SOL</b></div>
+    return `<div class="sp-unlock"><div class="mn-h"><span>Bet ${fmtBet(u.need)} SOL in regular runs to unlock</span><b>${fmtBet(shown)} / ${fmtBet(u.need)} SOL</b></div>
       <div class="bar"><i style="width:${(Math.min(1, u.need ? u.played / u.need : 1) * 100).toFixed(1)}%"></i></div></div>`;
   }
   function potCard() {
@@ -1637,7 +1705,7 @@
     }
     run.busy = false;
     stats.runs++; stats.wagered = round9(stats.wagered + bet); stats.runPlayed = round9(stats.runPlayed + bet); saveAll();
-    enterRun(r.missions);
+    sitTick(); enterRun(r.missions);
   }
   // a special level attempt: the entry up front, one long level, the prize for clearing every ring
   async function startSpecial(slot) {
@@ -1659,7 +1727,33 @@
     }
     run.busy = false;
     stats.runs++; stats.wagered = round9(stats.wagered + run.bet); saveAll();
-    enterRun(r.missions);
+    sitTick(); enterRun(r.missions);
+  }
+  // The break reminder (Settings): after that many minutes of play in one sitting (a 15-minute gap starts a new
+  // sitting), the result card says how long it's been and suggests a break, then again after as long.
+  const sitting = { start: 0, last: 0, next: 0 };
+  function sitTick() { // a run is starting
+    const now = Date.now();
+    if (!sitting.start || now - sitting.last > 15 * 60000) { sitting.start = now; sitting.next = now + (prefs.remind || 0) * 60000; }
+    sitting.last = now;
+  }
+  function breakLine() { // a run has ended
+    const now = Date.now();
+    sitting.last = now;
+    if (!prefs.remind || !sitting.start || now < sitting.next) return '';
+    sitting.next = now + prefs.remind * 60000;
+    const m = Math.max(1, Math.round((now - sitting.start) / 60000));
+    return `You've been playing for ${m >= 60 ? Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '') : m + ' min'}. Time for a break?`;
+  }
+  // a free practice run on the picked mode: the bet is only there to show what a real run would have paid
+  async function startPractice() {
+    if (run.busy || (phase !== 'lobby' && phase !== 'over')) return;
+    Sound.unlock();
+    const r = await PracticeBank.start(prefs.di);
+    Object.assign(run, { mode: 'practice', recipe: null, prize: 0, di: prefs.di, bet: prefs.bet, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.levelSeed }, RUN_FRESH);
+    run.log = []; run.told = {}; run.share = ''; run.potJust = false;
+    $('lobbyErr').textContent = '';
+    sitTick(); enterRun(null);
   }
   function enterRun(missions) {
     closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vP, false); show(vC, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
@@ -1688,10 +1782,11 @@
     ball.fall = null; ball.hidden = false;
     phase = 'ready';
     run.lvlSw = 0; run.log.push([]);
-    if (!sp) profile.lv[run.di][run.level - 1][0]++;
+    if (run.mode === 'run') profile.lv[run.di][run.level - 1][0]++;
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
     if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
-    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL' : run.level === 1 ? (newPlayer() ? 'Drop down through each ring' : potLine()) : '');
+    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL'
+      : run.level === 1 ? (practicing() ? 'Free practice: nothing is at stake' : newPlayer() ? 'Drop down through each ring' : potLine()) : '');
   }
 
   function settleOffset() { ball.x += ball.ox; ball.y += ball.oy; ball.ox = 0; ball.oy = 0; }
@@ -1771,7 +1866,7 @@
   function addPoints(n) {
     run.score += n;
     const b = profile.best[run.di];
-    if (!run.newBest && b > 0 && run.score > b) {
+    if (run.mode === 'run' && !run.newBest && b > 0 && run.score > b) {
       run.newBest = true;
       callout('New best', 'Beat your best of ' + b, 'gold'); Sound.best(); Sound.cheer(0.4); buzz([8, 30, 8]);
     }
@@ -1781,7 +1876,7 @@
     phase = 'clearing';
     run.cleared++;
     if (run.mode === 'special') { specialFinish(true); return; }
-    profile.lv[run.di][run.level - 1][1]++;
+    if (run.mode === 'run') profile.lv[run.di][run.level - 1][1]++;
     if (!REDUCED) view.shake = Math.max(view.shake, 2);
     confetti(ball.x, ball.y - 30, 56);
     Sound.checkpoint(); buzz([12, 40, 12]);
@@ -1796,7 +1891,7 @@
     ball.fall = { vx: Math.max(120, run.st.ball.vx), vy: -240, hover: true, t: 0 };
     if (run.level >= NL) { endWin('final'); return; }
     const L = run.level;
-    bank.level(L, run.taps.slice()).then((r) => {
+    runBank().level(L, run.taps.slice()).then((r) => {
       if (r.status !== 'checkpoint' || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
       potResult(r.pot);
       setTimeout(() => showCheckpoint(), REDUCED ? 100 : CALL.busy ? 900 : 450);
@@ -1817,12 +1912,13 @@
     Sound.bust(); buzz([30, 60, 50]);
     if (run.mode === 'special') { specialFinish(false, kind); return; }
     const L = run.level, taps = run.taps.slice();
-    bank.level(L, taps).then((r) => {
+    runBank().level(L, taps).then((r) => {
       if (r.status !== 'bust') return verifyFail();
+      if (practicing()) { run.prog = null; setTimeout(() => showResult('Practice: ' + (BUST_TITLES[kind] || 'Missed').toLowerCase(), 'Out', 'loss', `A real run would have lost its ${fmtBet(run.bet)} SOL bet on level ${L}`), REDUCED ? 200 : 650); return; }
       potResult(r.pot);
       run.serverSeed = r.serverSeed || '';
       record(0, 'bust', r.missions);
-      setTimeout(() => showResult(BUST_TITLES[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Lost a ${fmtAmt(lostPot)} SOL pot on level ${L}`), REDUCED ? 200 : 650);
+      setTimeout(() => showResult(BUST_TITLES[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Your run was worth ${fmtAmt(lostPot)} SOL on level ${L}`), REDUCED ? 200 : 650);
     }).catch(netFail);
   }
 
@@ -1830,14 +1926,15 @@
     if (phase !== 'checkpoint' || run.busy || !armed(ui.cp)) return;
     run.busy = true;
     try {
-      const r = await bank.cashout();
+      const r = await runBank().cashout();
       run.serverSeed = r.serverSeed || '';
       run.busy = false;
       phase = 'over';
       hideStreak(); clearNotices();
       winFx(1);
-      record(r.payout, 'cashout', r.missions);
       show(ui.cp, false);
+      if (practicing()) { run.prog = null; showResult('Practice: cashed out', fmtMult(run.total), 'even', `A ${fmtBet(run.bet)} SOL bet would have paid ${fmtAmt(run.bet * run.total)} SOL`); return; }
+      record(r.payout, 'cashout', r.missions);
       const profit = r.payout - run.bet; // cashing out at 1.00× gives the bet back: no green +0
       if (profit < 0.00005) showResult('Cashed out', '0', 'even', `Your bet back · ${fmtMult(run.total)} after level ${run.level}`);
       else showResult('Cashed out', '+' + fmtSol(profit), 'win', `${fmtAmt(r.payout)} SOL · ${fmtMult(run.total)} after level ${run.level}`, profit);
@@ -1848,8 +1945,9 @@
     phase = 'over';
     clearCallouts(); clearNotices(); hideStreak();
     const L = run.level;
-    bank.level(L, run.taps.slice()).then((r) => {
+    runBank().level(L, run.taps.slice()).then((r) => {
       if (r.status !== kind || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
+      if (practicing()) { run.prog = null; winFx(1.3); setTimeout(() => showResult(kind === 'maxwin' ? 'Practice: max win' : 'Practice: all ' + NL + ' levels', fmtMult(run.total), 'even', `A ${fmtBet(run.bet)} SOL bet would have paid ${fmtAmt(run.bet * run.total)} SOL`), 700); return; }
       potResult(r.pot);
       run.serverSeed = r.serverSeed || '';
       winFx(kind === 'maxwin' ? 1.6 : 1.3);
@@ -1951,25 +2049,32 @@
 
   function showCheckpoint() {
     phase = 'checkpoint';
-    const L = run.level, pot = run.bet * run.total;
-    $('cpKicker').textContent = 'Checkpoint ' + L + ' of ' + (NL - 1);
+    const L = run.level, pot = run.bet * run.total, pr = practicing();
+    ui.cp.classList.toggle('practice', pr);
+    $('cpKicker').textContent = (pr ? 'Practice · checkpoint ' : 'Checkpoint ') + L + ' of ' + (NL - 1);
     $('cpTitle').innerHTML = 'Level ' + L + ' cleared' + (run.lvlSw === NH ? '<span class="cp-badge">Perfect</span>' : '');
-    countUp($('cpPot'), run.bet * (run.lvlStart || 1), pot, fmtAmt, 750);
     const profit = pot - run.bet;
-    $('cpMult').textContent = fmtMult(run.total) + (profit >= 0.00005 ? ' · +' + (profit >= 0.0001 ? fmtAmt(profit) : fmtDelta(profit)) + ' SOL profit' : ' · your bet back');
-    $('cpMult').classList.toggle('flat', profit < 0.00005);
+    if (pr) { // practice: the multiplier, and what a real run at your bet would have now
+      countUp($('cpPot'), run.lvlStart || 1, run.total, fmtMult, 750);
+      $('cpMult').textContent = 'A ' + fmtBet(run.bet) + ' SOL bet would be ' + fmtAmt(pot) + ' SOL now';
+      $('cpMult').classList.add('flat');
+    } else {
+      countUp($('cpPot'), run.bet * (run.lvlStart || 1), pot, fmtAmt, 750);
+      $('cpMult').textContent = fmtMult(run.total) + (profit >= 0.00005 ? ' · +' + (profit >= 0.0001 ? fmtAmt(profit) : fmtDelta(profit)) + ' SOL profit' : ' · your bet back');
+      $('cpMult').classList.toggle('flat', profit < 0.00005);
+    }
     // what the next level can pay (every ring swished, streak carried) and whether the streak carries over
     const nx = L + 1, di = run.di, pt = PAY.PAYTABLE[di][nx - 1];
     let up = run.total, s = run.streak;
     for (let i = 0; i < NH; i++) { s++; up *= E.hoopMultiplier(pt, 'S', s); }
     up = Math.min(up, E.DIFFS[di].maxWin);
-    $('cpNextL').textContent = 'Next: Level ' + nx;
-    $('cpUpTo').textContent = 'Up to ' + fmtMult(up);
+    $('cpNextL').textContent = 'After level ' + nx + ', up to';
+    $('cpUpTo').textContent = fmtMult(up);
     $('cpUpTo').setAttribute('title', 'If you swish all ' + NH + ' rings: ' + fmtSol(run.bet * up) + ' SOL');
     const sk = $('cpStreak');
     sk.className = 'nx-s' + (run.streak >= 5 ? ' nova' : '');
     sk.innerHTML = run.streak > 1 ? ICON.flame + `Your ${run.streak}-swish streak carries over` : '';
-    $('cashAmt').textContent = fmtAmt(pot) + ' SOL';
+    $('cashAmt').textContent = pr ? 'Ends practice' : fmtAmt(pot) + ' SOL';
     $('goSub').textContent = 'Level ' + nx;
     show(ui.cp, true); armCard(ui.cp, 600); STK.el.classList.add('tuck');
     // focus the card, not a button: a Space meant as a flap must never press "Keep going"
@@ -1980,7 +2085,7 @@
     if (phase !== 'checkpoint' || run.busy || !armed(ui.cp)) return;
     run.busy = true;
     try {
-      const r = await bank.next();
+      const r = await runBank().next();
       run.levelSeed = r.levelSeed;
       run.busy = false;
     } catch (e) { run.busy = false; netFail(e); return; }
@@ -1995,13 +2100,15 @@
     if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtAmt(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
     $('resAmount').className = 'big ' + cls;
     $('resSub').textContent = sub;
-    const sp = run.mode === 'special';
-    run.share = shareText(sp ? (cls === 'win' ? 'Cleared it' : title + ' at ring ' + Math.min(run.st ? run.st.hoops.length : 0, run.hoops + 1)) : cls !== 'loss' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
+    const sp = run.mode === 'special', prac = practicing();
+    ui.res.classList.toggle('practice', prac);
+    run.share = prac ? '' : shareText(sp ? (cls === 'win' ? 'Cleared it' : title + ' at ring ' + Math.min(run.st ? run.st.hoops.length : 0, run.hoops + 1)) : cls !== 'loss' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
     $('resStats').innerHTML = [[run.score, nb ? 'New best' : 'Score', nb], [run.hoops, 'Rings'], [run.best, 'Best streak']]
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
-    $('againT').textContent = sp ? 'Try again' : 'Play again';
-    $('againAmt').textContent = fmtBet(sp ? run.bet : prefs.bet) + ' SOL';
-    $('lobbyBtn').textContent = sp ? 'Back' : 'Change bet';
+    $('againT').textContent = prac ? 'Practice again' : sp ? 'Try again' : 'Play again';
+    $('againAmt').textContent = prac ? '' : fmtBet(sp ? run.bet : prefs.bet) + ' SOL';
+    $('lobbyBtn').textContent = sp || prac ? 'Back' : 'Change bet';
+    $('resRemind').textContent = breakLine();
     showProgress(pr);
     show(ui.res, true); armCard(ui.res, 600); refreshPot(); if (sp) refreshSpecial();
     if (cls === 'win') setTimeout(() => celebrate(run.total >= 5 || sp ? 150 : 100, ui.res), 140);
@@ -2059,7 +2166,7 @@
       const mv = mview();
       for (const [list, win, when] of [[mv.daily, 'day', 'today'], [mv.weekly, 'week', 'this week']]) {
         const wait = list.filter((c) => c.done && !c.paid).reduce((a, c) => a + c.reward, 0), more = mv.need[win] - mv.played[win];
-        if (wait > 0 && more > 0) g.push(['', ICON.gift, `${fmtBet(wait)} SOL waiting · play ${fmtBet(Math.ceil(more * 100) / 100)} more SOL ${when}`]);
+        if (wait > 0 && more > 0) g.push(['', ICON.gift, `${fmtBet(wait)} SOL waiting · bet ${fmtBet(Math.ceil(more * 100) / 100)} SOL more ${when}`]);
       }
     }
     pr.unlocks.forEach((u) => g.push(['unlock', '', 'New ' + itemName(u), u]));
@@ -3293,10 +3400,11 @@
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
       if (tag === 'INPUT' || (tag === 'BUTTON' && phase !== 'play' && phase !== 'ready' && phase !== 'paused')) return;
       if (nav.page) return; // a page is open: Space scrolls it, and nothing starts or resumes behind it
+      if (tourOpen()) { e.preventDefault(); return; } // the tour is up: nothing starts behind it
       const panelOpen = !ui.panel.classList.contains('hide');
       if (e.code === 'Space' && !panelOpen && !e.repeat) {
         if (phase === 'lobby') { e.preventDefault(); if (nav.tab === 'play') startRun(); return; }
-        if (phase === 'over' && armed(ui.res)) { e.preventDefault(); show(ui.res, false); if (run.mode === 'special') startSpecial(run.slot); else startRun(); return; }
+        if (phase === 'over' && armed(ui.res)) { e.preventDefault(); again(); return; }
       }
       e.preventDefault();
       if (!e.repeat) flapInput();
@@ -3304,7 +3412,8 @@
       e.preventDefault();
       if (e.code === 'KeyC') cashOut(); else keepGoing();
     } else if (e.code === 'Escape') {
-      if (!ui.panel.classList.contains('hide')) closePanel();
+      if (tourOpen()) closeTour();
+      else if (!ui.panel.classList.contains('hide')) closePanel();
       else if (nav.page) closePage();
       else if (phase === 'play') pause();
       else if (phase === 'paused') resume();
@@ -3335,7 +3444,8 @@
 
   $('cashBtn').addEventListener('click', cashOut);
   $('goBtn').addEventListener('click', keepGoing);
-  $('againBtn').addEventListener('click', () => { if (!armed(ui.res)) return; show(ui.res, false); if (run.mode === 'special') startSpecial(run.slot); else startRun(); });
+  const again = () => { show(ui.res, false); if (run.mode === 'special') startSpecial(run.slot); else if (practicing()) startPractice(); else startRun(); };
+  $('againBtn').addEventListener('click', () => { if (armed(ui.res)) again(); });
   $('lobbyBtn').addEventListener('click', () => { Sound.click(); const sp = run.mode === 'special'; backToLobby(); if (sp) setTab('challenges'); });
   $('shareBtn').addEventListener('click', shareRun);
   $('pauseBtn').addEventListener('click', () => { if (phase === 'play') pause(); else if (phase === 'paused') resume(); });
@@ -3358,7 +3468,7 @@
   }
   function closePanel() { ui.scrim.classList.remove('show'); show(ui.panel, false); document.body.classList.remove('panel-open'); }
   $('panelClose').addEventListener('click', closePanel);
-  ui.scrim.addEventListener('click', closePanel);
+  ui.scrim.addEventListener('click', () => { if (tourOpen()) closeTour(); else closePanel(); });
   // any [data-page] button opens its page, including ones drawn later (Profile rows, the Odds link, the pause card)
   document.addEventListener('click', (e) => { const b = e.target.closest && e.target.closest('[data-page]'); if (b && !b.disabled) openPage(b.dataset.page, b.dataset.slot); });
   $('balBtn').addEventListener('click', () => openPage('wallet'));
@@ -3387,21 +3497,54 @@
     flag: '<ellipse cx="12" cy="16.5" rx="8.5" ry="3"/><path d="M12 13.5V3.2l5.4 2.1L12 7.4"/>',
     star: '<path d="m12 3.3 2.6 5.4 5.9.8-4.3 4.1 1.1 5.9-5.3-2.9-5.3 2.9 1.1-5.9-4.3-4.1 5.9-.8z"/>',
     mission: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="m8.4 12.2 2.5 2.5 4.8-5"/>',
-    trophy: '<path d="M7.6 3.8h8.8v5.4a4.4 4.4 0 0 1-8.8 0z"/><path d="M7.6 5.6H4.8v1.2a3.3 3.3 0 0 0 3.1 3.3M16.4 5.6h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 13.6v3.6M8.4 20.2h7.2"/>'
+    trophy: '<path d="M7.6 3.8h8.8v5.4a4.4 4.4 0 0 1-8.8 0z"/><path d="M7.6 5.6H4.8v1.2a3.3 3.3 0 0 0 3.1 3.3M16.4 5.6h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 13.6v3.6M8.4 20.2h7.2"/>',
+    practice: '<circle cx="12" cy="12" r="9"/><path d="M10 8.4v7.2l5.6-3.6z" fill="currentColor"/>',
+    limit: '<circle cx="12" cy="13.4" r="7.6"/><path d="M12 13.4V9.4M9.4 2.9h5.2M18.6 5.6l1.4-1.4"/>'
   };
   function howHtml() {
     const row = (icon, tone, title, text) => `<div class="hrow"><span class="hic ${tone}"><svg viewBox="0 0 24 24" aria-hidden="true">${HOW_ICON[icon]}</svg></span><div><h3>${title}</h3><p>${text}</p></div></div>`;
-    return `<div class="how">` +
-      row('tap', 'blue', 'Tap to flap', `Drop the ball down through every ring. Fly past one, go under it or hit the floor and the run ends.`) +
-      row('rim', 'red', 'Rims', `Touch the rim and you can still score: if the ball comes down over the opening it drops in. It only bounces out when it comes down past the rim.`) +
-      row('swish', 'green', 'Swish', `Go through without touching the ring for a swish. Swishes pay more than rim hits, and swishes in a row pay more each time, up to 5 in a row. Your streak carries into the next level.`) +
-      row('fire', 'heat', 'Fire', `Two swishes in a row and the ball starts to smoulder. Three and it's <b>on fire</b> and burns purple; five and it burns at full heat, in green. Touch a rim and the flame goes out.`) +
-      row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the green ring ends the level. Cash out your pot, or keep going for more.`) +
-      row('star', 'gold', 'Score and XP', `Rings also score points: a rim hit +1, a swish +2, and each swish in a row +1 more, up to +6. Swish all ${NH} rings in a level for a <b>Perfect level</b> (+${PERFECT_BONUS}). Points, missions and trophies earn XP, which unlocks balls, wings and trails in the Locker. Score and XP never change what a run pays.`) +
-      row('mission', 'purple', 'Missions', `Three new missions every day and every week (new ones at midnight UTC, and on Mondays), and a career of six chapters, each ending in an item you can only get there. They count in every run, whatever you bet. Daily and weekly missions also pay SOL once you've played ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week (bets and special level entries); rewards earned before then wait, and go when the day or week ends.`) +
-      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: three a day, each with a twist like every ring moving and a prize of 2×, 3× or 5× the entry. Pay the entry, then clear every ring of a fresh course to win. Each course is set for your level in that special: harder after a clear, a little easier after a miss. They open once you've played ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL in regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge in any regular run to share the pot.`) +
+    // one short idea a row; the details live on the pages they belong to
+    return (phase === 'lobby' ? `<button class="btn btn-plain how-tour" id="howTour">Take the quick tour</button>` : '') + `<div class="how">` +
+      row('tap', 'blue', 'Tap to flap', `Each tap flaps the ball up. Let it drop down through every ring. Miss a ring or hit the floor and the run is over.`) +
+      row('rim', 'red', 'Rims', `Touching the rim is fine: if the ball comes down over the opening, it drops in.`) +
+      row('swish', 'green', 'Swish', `Go through without touching the rim. A swish pays more than a rim hit, and each swish in a row pays more, up to 5 in a row.`) +
+      row('fire', 'heat', 'Fire', `Swish 3 in a row and the ball catches fire. At 5 it burns green. A rim hit puts it out.`) +
+      row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the green ring ends the level. Cash out, or keep going for more.`) +
+      row('practice', 'blue', 'Practice', `Tap <b>Practice for free</b> under Play for a run with nothing at stake.`) +
+      row('star', 'gold', 'Score and XP', `Rings score points, more for swishes and streaks. Points, missions and trophies earn XP, which unlocks balls, wings and trails. Neither changes what a run pays.`) +
+      row('mission', 'purple', 'Missions', `New ones every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week.`) +
+      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
+      row('limit', 'blue', 'Play limits', `Set a daily loss limit or a break reminder in Settings.`) +
       `</div>`;
   }
+  // ---------------------------------------------------------------- the quick tour
+  // Three steps for a first-time player (and from How to play): how to fly, why swishes matter, and the checkpoint
+  // where you cash out. It ends with a free practice run.
+  const TOUR = [
+    { ic: 'tap', t: 'Tap to fly', x: 'Each tap flaps the ball up. Let it fall down through every ring.' },
+    { ic: 'swish', t: 'Swish to win more', x: 'Go through clean, without touching the rim. Swishes in a row win more each time.' },
+    { ic: 'flag', t: 'Cash out at the green ring', x: 'Every ' + NH + ' rings, take your winnings or keep going for more. Miss a ring and you lose the bet.' }
+  ];
+  let tourAt = -1;
+  const tourOpen = () => tourAt >= 0;
+  function showTour(i) {
+    const T = TOUR[i], last = i === TOUR.length - 1, nb = $('tourNext');
+    tourAt = i;
+    $('tourIc').innerHTML = `<svg viewBox="0 0 24 24">${HOW_ICON[T.ic]}</svg>`;
+    $('tourTitle').textContent = T.t; $('tourText').textContent = T.x;
+    document.querySelectorAll('#tour .tour-dots i').forEach((d, k) => d.classList.toggle('on', k <= i));
+    nb.textContent = last ? 'Practice for free' : 'Next'; nb.className = 'btn ' + (last ? 'btn-primary' : 'btn-plain');
+    $('tourSkip').textContent = last ? 'Not now' : 'Skip';
+    ui.scrim.classList.add('show', 'tour'); show($('tour'), true);
+    setTimeout(() => $('tour').focus({ preventScroll: true }), 30);
+  }
+  function closeTour() {
+    if (!tourOpen()) return;
+    tourAt = -1; prefs.tourSeen = 1; saveAll();
+    show($('tour'), false); ui.scrim.classList.remove('show', 'tour');
+  }
+  $('tourNext').addEventListener('click', () => { Sound.click(); if (tourAt < TOUR.length - 1) showTour(tourAt + 1); else { closeTour(); startPractice(); } });
+  $('tourSkip').addEventListener('click', () => { Sound.click(); closeTour(); });
   // locker thumbnails, drawn with the same code as the game
   function drawThumb(el, t, id) {
     const g = el.getContext('2d'), s = el.width;
@@ -3451,9 +3594,10 @@
       lo = Math.min(lo, D.maxWin); hi = Math.min(hi, D.maxWin);
       rows.push(`<tr><td>${L}</td><td class="r">${pt.rim.toFixed(3)}</td><td class="r">${pt.swish[0].toFixed(3)}</td><td class="r">${pt.swish[pt.swish.length - 1].toFixed(3)}</td><td class="r tot">${multRange(lo, Math.min(hi, TOP[di]))}</td></tr>`);
     }
-    return `<div class="seg odds-seg" id="oddsSeg" role="group" aria-label="Tier">${E.DIFFS.map((d, i) => `<button data-t="${i}" aria-pressed="${i === di}">${d.name}</button>`).join('')}</div>
+    return `<p class="vsub">Every ring you pass multiplies your bet. A swish multiplies it more than a rim hit, and a swish streak more still.</p>
+      <div class="seg odds-seg" id="oddsSeg" role="group" aria-label="Tier">${E.DIFFS.map((d, i) => `<button data-t="${i}" aria-pressed="${i === di}">${d.name}</button>`).join('')}</div>
       <div class="tbl"><table><thead><tr><th>Level</th><th class="r">Rim</th><th class="r">Swish</th><th class="r">5+ streak</th><th class="r">Total</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
-      <div class="prose"><p>Rim, Swish and 5+ streak are what one ring multiplies your pot by on that level. <b>Total</b> is your multiplier once you clear the level: the low end if every ring so far was a rim hit, the high end if every one was a swish (your streak carries over between levels).</p>
+      <div class="prose"><p><b>Rim</b>, <b>Swish</b> and <b>5+ streak</b> are what one ring multiplies your bet by on that level. <b>Total</b> is what your bet is multiplied by once you clear the level: the low end if every ring was a rim hit, the high end if every one was a swish.</p>
       <p>${D.name} pays up to <b>${TOP[di]}×</b> your bet. An average player who cashes out at the first checkpoint gets back about ${Math.round(PAY.AVG_RTP[di][0] * 100)}% of their bet over time, and less the deeper they go. Skilled players do better.</p></div>
       <div class="sec-h"><h3>Fairness</h3></div>
       <div class="prose">${fairHtml()}</div>`;
@@ -3503,9 +3647,25 @@
       <div class="sec-h"><h3>Recent runs</h3>${stats.history.length ? '<span>Newest first</span>' : ''}</div>
       ${runsHtml()}`;
   }
+  // Settings: sound, vibration and the play limits (a daily loss limit and a break reminder)
+  const REMIND_STEPS = [0, 30, 60]; // minutes (0 is off)
+  const remindName = (v) => (!v ? 'Off' : v === 60 ? '1 hour' : v + ' min');
+  const whenText = (t) => new Date(t).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
   function settingsHtml() {
     const sw = (k, ic, name) => `<div class="mrow-sw"><span class="mi mi-${k}">${ic}</span><span class="mn" id="sw-${k}">${name}</span><button class="switch" role="switch" data-set="${k}" aria-checked="${!!settings[k]}" aria-labelledby="sw-${k}"></button></div>`;
-    return `<div class="menu-list">${sw('sound', ICON.sound, 'Sound')}${sw('haptics', ICON.buzz, 'Vibration')}</div>`;
+    const seg = (id, label, vals, cur, name) => `<div class="seg lim-seg" id="${id}" role="radiogroup" aria-label="${label}">${vals.map((v) => `<button role="radio" data-v="${v}" aria-checked="${v === cur}">${name(v)}</button>`).join('')}</div>`;
+    const L = bank.limits.view(), rem = prefs.remind || 0;
+    const lossNote = L.pending ? (L.pending.loss ? `Goes up to <b>${fmtBet(L.pending.loss)} SOL</b> on ${whenText(L.pending.at)}.` : `Turns off on ${whenText(L.pending.at)}.`)
+      : L.loss ? `Lost today: <b>${fmtBet(L.lossToday)}</b> of ${fmtBet(L.loss)} SOL. It resets at midnight UTC.`
+      : 'The most you can lose in a day. Bets past it are stopped.';
+    return `<div class="menu-list">${sw('sound', ICON.sound, 'Sound')}${sw('haptics', ICON.buzz, 'Vibration')}</div>
+      <div class="sec-h"><h3>Daily loss limit</h3><span>SOL</span></div>
+      ${seg('limLoss', 'Daily loss limit in SOL', LOSS_STEPS, L.loss, (v) => (v ? fmtBet(v) : 'Off'))}
+      <p class="foot" id="limNote">${lossNote}</p>
+      <div class="sec-h"><h3>Break reminder</h3></div>
+      ${seg('limRemind', 'Break reminder', REMIND_STEPS, rem, remindName)}
+      <p class="foot" id="remNote">${rem ? `A reminder on the result card after ${rem === 60 ? 'an hour' : rem + ' minutes'} of play in a row.` : 'Get a reminder to take a break.'}</p>
+      <p class="foot lim-foot">Lowering your loss limit works at once. Raising it or turning it off takes 24 hours, so it can't be loosened on a bad day.</p>`;
   }
   function runsHtml() {
     if (!stats.history.length) return '<div class="empty">Your runs will show up here.</div>';
@@ -3527,6 +3687,23 @@
       on('potEnter', enterPot);
       on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
     }
+    if (kind === 'settings') {
+      document.querySelectorAll('#limLoss button').forEach((b) => b.addEventListener('click', async () => {
+        const v = +b.dataset.v, was = bank.limits.view();
+        Sound.click();
+        let L;
+        try { L = await bank.limits.set(v); } catch (e) { toast(e.message); return; }
+        if (v !== was.loss && L.pending) toast(L.pending.loss ? `Your limit goes up to ${fmtBet(L.pending.loss)} SOL in 24 hours` : 'Your limit turns off in 24 hours');
+        else if (v === was.loss && was.pending) toast('Change cancelled');
+        if (nav.page === 'settings') renderPage(true);
+      }));
+      document.querySelectorAll('#limRemind button').forEach((b) => b.addEventListener('click', () => {
+        prefs.remind = +b.dataset.v; saveAll(); Sound.click();
+        if (sitting.start) sitting.next = sitting.start + prefs.remind * 60000; // counts from the start of this sitting
+        renderPage(true);
+      }));
+    }
+    if (kind === 'how') on('howTour', () => { closePage(); setTimeout(() => showTour(0), 280); });
     if (kind === 'odds') document.querySelectorAll('#oddsSeg button').forEach((b) => b.addEventListener('click', () => { oddsTier = +b.dataset.t; Sound.click(); renderPage(true); }));
     on('fairVerify', () => {
       const h = stats.history[0];
@@ -3573,6 +3750,7 @@
     if (!ui.panel.classList.contains('hide')) closePanel();
     Sound.click();
     if (kind === 'odds' && !nav.page) oddsTier = null; // from the Play sheet or Profile: the tier you have picked
+    if (kind === 'settings' && bank.real) bank.limits.state().then(() => { if (nav.page === 'settings') renderPage(true); }).catch(() => {});
     const fresh = !nav.page;
     nav.page = kind;
     $('pgBackT').textContent = phase === 'lobby' ? TAB_NAME[nav.tab] : 'Back';
@@ -3667,7 +3845,7 @@
   function needRow(mv, win) {
     const need = mv.need[win], got = mv.played[win], met = got >= need - 1e-9, when = win === 'day' ? 'today' : 'this week';
     const shown = Math.min(need, Math.floor(got * 100 + 1e-6) / 100);
-    return `<div class="mneed${met ? ' met' : ''}"><div class="mn-h"><span>${met ? 'SOL rewards unlocked ' + when : 'Play ' + fmtBet(need) + ' SOL ' + when + ' to collect the SOL'}</span><b>${fmtBet(shown)} / ${fmtBet(need)} SOL</b></div>
+    return `<div class="mneed${met ? ' met' : ''}"><div class="mn-h"><span>${met ? 'SOL rewards unlocked ' + when : 'Bet ' + fmtBet(need) + ' SOL ' + when + ' to unlock SOL rewards'}</span><b>${fmtBet(shown)} / ${fmtBet(need)} SOL</b></div>
       <div class="bar"><i style="width:${(Math.min(1, got / need) * 100).toFixed(1)}%"></i></div></div>`;
   }
   const rewardOf = (C) => { const [t, id] = C.reward.split(':'); return { t, id, u: UNLOCK_BY[C.reward] }; };
@@ -3815,7 +3993,7 @@
     const el = $('pauseCard');
     if (on) {
       $('pauseSub').textContent = run.mode === 'special' ? SP.BY[run.recipe].name + ' · ring ' + Math.min(run.st.hoops.length, run.hoops + 1) + ' of ' + run.st.hoops.length + ' · ' + fmtAmt(run.prize) + ' SOL to win'
-        : 'Level ' + run.level + ' · ' + fmtSol(run.bet * run.total) + ' SOL pot';
+        : practicing() ? 'Level ' + run.level + ' · practice' : 'Level ' + run.level + ' · ' + fmtSol(run.bet * run.total) + ' SOL pot';
       syncSettings();
     }
     show(el, on);
@@ -3832,6 +4010,7 @@
     grantUnlocks(); syncSettings(); applyFlameTheme(); buildLobby(); setTab('play', true); refreshLobby(); setHudMode(false); refreshPot(); refreshSpecial();
     setInterval(() => { if (phase === 'lobby' && !document.hidden) { refreshPot(); if (nav.tab === 'challenges') refreshSpecial(); } }, 30000); // entrants, pot and time left move on
     attract.wait = 0;
+    if (!prefs.tourSeen && stats.runs === 0 && !/notour/.test(location.search)) setTimeout(() => { if (phase === 'lobby' && !nav.page) showTour(0); }, 700);
     requestAnimationFrame((t) => { last = t; frame(t); });
   }
   const hot = window.claude && window.claude.hot;
@@ -3849,6 +4028,7 @@
     dbg,
     unfreeze: () => { dbg.frozen = false; goPlay(); },
     tap: () => flapInput(),
+    tour: () => showTour(0), // the quick tour, as How to play opens it
     autoplay: (skill) => { autoBot = skill ? BOT.createBot(skill, E.makeRng('auto' + Math.random())) : null; },
     fx: (streak) => { dbg.fx = streak; }, // show the flame for a streak without touching the run
     hold: (on) => { dbg.hold = !!on; },   // stop the clock with the last frame on screen
@@ -3857,7 +4037,9 @@
     pot: () => potState, // the challenge pot as the client sees it
     special: () => specState, // today's special level as the client sees it
     missions: () => mview(), // daily and weekly missions, with SOL and the play that unlocks it
-    mode: () => run.mode,
+    mode: () => run.mode, // 'run', 'special' or 'practice'
+    sitting, // the break reminder's clock: when this sitting started and when the next reminder is due
+    limits: () => bank.limits.view(), // the daily loss limit as the client sees it
     bal: () => bank.balance(),
     sfx: (name, args, secs) => Sound.render(name, args, secs), // a sound's samples, rendered offline
     ballScreen: () => ({ x: view.bsx, y: view.bsy }),

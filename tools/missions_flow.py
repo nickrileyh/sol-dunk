@@ -44,7 +44,7 @@ async def main():
         check(m1['played']['day'] == 1 and done1, 'run 1: 1 SOL played and daily missions done: ' + json.dumps([(c['k'], c['p'], c['n']) for c in m1['daily']]))
         check(all(not c['paid'] for c in done1), 'their SOL waits until the day\'s play reaches ' + str(need))
         gains = await page.evaluate("document.getElementById('resGains').innerText")
-        check('SOL waiting' in gains and 'more SOL today' in gains, 'the result card says how much more play unlocks it: ' + gains.replace('\n', ' | '))
+        check('SOL waiting' in gains and 'SOL more today' in gains, 'the result card says how much more play unlocks it: ' + gains.replace('\n', ' | '))
         # run 2: the bet reaches the need, so everything already done pays at once
         b0 = await bal()
         await page.click('#againBtn'); await page.wait_for_timeout(500)

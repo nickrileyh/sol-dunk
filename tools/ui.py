@@ -3,10 +3,12 @@ level has its own check, tools/special_flow.py), the pages that push in over the
 Stats, Wallet, Settings, How to play, Odds & fairness) and their back button, the Locker opened from Profile (equip,
 try-on, its back button clears the try-on), the missions (daily on Challenges, weekly and career progress after a
 run), the player card editor, the settings, the pause card, and that items already earned under the newer unlock
-list are handed out on load."""
+list are handed out on load. It also checks the free practice run (nothing is bet, recorded or earned), the play
+limits in Settings (a daily loss limit that stops bets past it, where raising it waits a day, and the break
+reminder on the result card) and the quick tour a new player sees (it ends in a practice run; How to play reopens it)."""
 import asyncio, json
 from playwright.async_api import async_playwright
-from _paths import URL, SHOTS, CHROME
+from _paths import URL, PAGE, SHOTS, CHROME
 fails = []
 def check(ok, what):
     print(('ok   ' if ok else 'FAIL ') + what)
@@ -156,8 +158,92 @@ async def main():
         check(await page.evaluate("document.getElementById('badgeP').classList.contains('on')"), 'the Profile tab shows a dot for new items')
         await page.click('#tabProfile'); await page.wait_for_timeout(400)
         check(await page.evaluate("!!document.querySelector('#pfLocker .dot')"), 'and so does the Locker row on Profile')
+        await page.click('#tabPlay'); await page.wait_for_timeout(400)
+        # a free practice run: nothing is bet, recorded or earned
+        bal0, runs0, xp0 = await page.evaluate("[__solDunk.bal(), __solDunk.stats.runs, __solDunk.profile.xp]")
+        check(await page.evaluate("document.getElementById('practiceBtn').textContent") == 'Practice for free', 'a Practice for free link under the Play button')
+        await page.click('#practiceBtn'); await page.wait_for_timeout(900)
+        check(await page.evaluate('__solDunk.mode()') == 'practice' and await page.evaluate('__solDunk.bal()') == bal0, 'practice starts a run without taking a bet')
+        await page.evaluate("__solDunk.autoplay('perfect'); __solDunk.tap()")
+        for i in range(200):
+            ph = await page.evaluate('__solDunk.phase()')
+            if ph in ('checkpoint', 'over'): break
+            await page.wait_for_timeout(100)
+        if ph == 'checkpoint':
+            check('practice' in (await page.evaluate("document.getElementById('cpKicker').textContent")).lower(), 'the practice checkpoint says it is practice')
+            await page.wait_for_timeout(900); await page.click('#cashBtn'); await page.wait_for_timeout(2200)
+        await page.evaluate("__solDunk.autoplay(null)")
+        t = await page.evaluate("document.getElementById('resTitle').textContent")
+        check(t.startswith('Practice'), f'the practice result says so ({t})')
+        b1, r1, x1 = await page.evaluate("[__solDunk.bal(), __solDunk.stats.runs, __solDunk.profile.xp]")
+        check(b1 == bal0 and r1 == runs0 and x1 == xp0, f'practice changes no balance, run count or XP ({bal0}->{b1}, {runs0}->{r1}, {xp0}->{x1})')
+        check(await page.evaluate("document.getElementById('againT').textContent") == 'Practice again' and await page.evaluate("getComputedStyle(document.getElementById('shareBtn')).display") == 'none', 'its result offers Practice again and no share')
+        await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
+        # play limits: a daily loss limit stops bets past it; lowering works at once, raising waits a day
+        await page.click('#tabProfile'); await page.wait_for_timeout(400)
+        await page.click('#pBody [data-page="settings"]'); await page.wait_for_timeout(450)
+        check(await page.evaluate("document.querySelectorAll('#limLoss button').length") == 6 and await page.evaluate("document.querySelectorAll('#limRemind button').length") == 3, 'Settings has the loss limit and the break reminder')
+        await page.click('#limLoss button[data-v="0.5"]'); await page.wait_for_timeout(300)
+        L = await page.evaluate("__solDunk.limits()")
+        check(L['loss'] == 0.5 and L['pending'] is None and 'Lost today' in await page.evaluate("document.getElementById('limNote').textContent"), f'setting a limit works at once {L}')
+        await page.click('#limLoss button[data-v="5"]'); await page.wait_for_timeout(300)
+        L = await page.evaluate("__solDunk.limits()")
+        note = await page.evaluate("document.getElementById('limNote').textContent")
+        check(L['loss'] == 0.5 and L['pending'] and L['pending']['loss'] == 5 and 'Goes up to 5 SOL' in note, f'raising it waits a day ({note})')
+        check('24 hours' in await page.evaluate("document.getElementById('toast').textContent"), 'a toast says the raise takes 24 hours')
+        await page.click('#limLoss button[data-v="0.5"]'); await page.wait_for_timeout(300)
+        check(await page.evaluate("__solDunk.limits().pending") is None, 'tapping the current limit cancels the raise')
+        await page.click('#limRemind button[data-v="30"]'); await page.wait_for_timeout(200)
+        check(await page.evaluate("__solDunk.prefs.remind") == 30 and '30 minutes' in await page.evaluate("document.getElementById('remNote').textContent"), 'the break reminder can be set to 30 minutes')
+        await page.click('#tabPlay'); await page.wait_for_timeout(400)
+        await page.fill('#betInput', '1'); await page.dispatch_event('#betInput', 'change'); await page.wait_for_timeout(200)
+        await page.click('#playBtn'); await page.wait_for_timeout(600)
+        err = await page.evaluate("document.getElementById('lobbyErr').textContent")
+        check(await page.evaluate('__solDunk.phase()') == 'lobby' and 'loss limit' in err, f'a bet past the limit is stopped ({err})')
+        # the break reminder: a sitting that began 31 minutes ago shows it on the next result card
+        await page.fill('#betInput', '0.1'); await page.dispatch_event('#betInput', 'change'); await page.wait_for_timeout(200)
+        await page.evaluate("(() => { const s = __solDunk.sitting, t = Date.now(); s.start = t - 31 * 60000; s.last = t; s.next = s.start + 30 * 60000; })()")
+        await page.click('#playBtn'); await page.wait_for_timeout(900)
+        check(await page.evaluate('__solDunk.mode()') == 'run', 'a bet under the limit plays')
+        await page.evaluate("__solDunk.tap()")  # one flap, then the ball falls to the floor
+        for i in range(150):  # the result card comes up a moment after the run ends
+            if await vis('#result'): break
+            await page.wait_for_timeout(100)
+        rem = await page.evaluate("document.getElementById('resRemind').textContent")
+        check('31 min' in rem and 'break' in rem, f'the result card suggests a break ({rem})')
+        await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
         await page.screenshot(path=SHOTS + '/ui_end.png')
         check(not errs, 'no page errors ' + json.dumps(errs))
+        # the quick tour: a new player sees it once, it ends in a practice run, and How to play reopens it
+        ctx2 = await b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
+        pg2 = await ctx2.new_page(); errs2 = []
+        pg2.on('pageerror', lambda e: errs2.append(str(e)))
+        await pg2.goto(PAGE); await pg2.wait_for_timeout(1500)
+        tv = lambda: pg2.evaluate("!document.getElementById('tour').classList.contains('hide')")
+        check(await tv() and await pg2.evaluate("document.getElementById('tourTitle').textContent") == 'Tap to fly', 'a new player sees the quick tour')
+        await pg2.screenshot(path=SHOTS + '/ui_tour.png')
+        await pg2.keyboard.press('Space'); await pg2.wait_for_timeout(300)
+        check(await pg2.evaluate('__solDunk.phase()') == 'lobby' and await tv(), 'Space does not start a run behind the tour')
+        await pg2.click('#tourNext'); await pg2.wait_for_timeout(250)
+        await pg2.click('#tourNext'); await pg2.wait_for_timeout(250)
+        check(await pg2.evaluate("document.getElementById('tourTitle').textContent") == 'Cash out at the green ring' and await pg2.evaluate("document.getElementById('tourNext').textContent") == 'Practice for free', 'its last step offers a practice run')
+        check(await pg2.evaluate("document.querySelectorAll('#tour .tour-dots i.on').length") == 3, 'the meter fills as the tour goes on')
+        await pg2.click('#tourNext'); await pg2.wait_for_timeout(900)
+        check(not await tv() and await pg2.evaluate('__solDunk.mode()') == 'practice' and await pg2.evaluate("__solDunk.prefs.tourSeen") == 1, 'Practice for free closes the tour and starts a practice run')
+        await pg2.evaluate("__solDunk.tap()")  # one flap, then the ball falls to the floor
+        for i in range(150):
+            if await pg2.evaluate("!document.getElementById('result').classList.contains('hide')"): break
+            await pg2.wait_for_timeout(100)
+        await pg2.click('#lobbyBtn'); await pg2.wait_for_timeout(500)
+        await pg2.reload(); await pg2.wait_for_timeout(1500)
+        check(not await tv(), 'the tour does not open again once seen')
+        await pg2.click('#tabProfile'); await pg2.wait_for_timeout(400)
+        await pg2.click('#pBody [data-page="how"]'); await pg2.wait_for_timeout(450)
+        await pg2.click('#howTour'); await pg2.wait_for_timeout(700)
+        check(await tv() and await pg2.evaluate("__solDunk.nav.page") is None, 'How to play reopens the tour')
+        await pg2.click('#tourSkip'); await pg2.wait_for_timeout(300)
+        check(not await tv() and await pg2.evaluate('__solDunk.phase()') == 'lobby', 'Skip closes it')
+        check(not errs2, 'no page errors with the tour ' + json.dumps(errs2))
         await b.close()
     print('FAILS', fails if fails else 'none')
 asyncio.run(main())

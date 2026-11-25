@@ -261,6 +261,33 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .btn-plain { background: var(--surface-2); color: var(--label); }
 .btn[disabled] { opacity: 0.4; pointer-events: none; }
 .btn .num { font-weight: 800; }
+/* a free practice run, under the Play key: a quiet link, so Play stays the one button */
+.practice-link { display: block; margin: 2px auto 0; padding: 6px 14px; font-size: 14px; font-weight: 600; color: var(--accent-hi); }
+.practice-link:active { opacity: 0.55; }
+/* practice: the cards show a multiplier, not SOL */
+#checkpoint.practice .big .unit, #result.practice .big .unit { display: none; }
+#result.practice #shareBtn { display: none; }
+#result.practice .pair { grid-template-columns: minmax(0, 1fr); }
+#potCap.practice .unit { display: none; }
+/* the quick tour: three short steps over the lobby, ending in a free practice run */
+#tour { z-index: 15; padding: 28px 20px 10px; }
+.tour-ic { display: grid; place-items: center; width: 60px; height: 60px; margin: 0 auto 16px; border-radius: 18px; background: var(--surface-2); color: var(--label); box-shadow: 0 4px 0 var(--key-edge); }
+.tour-ic svg { width: 32px; height: 32px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#tour .card-title { margin-bottom: 8px; font-size: 23px; text-wrap: balance; }
+.tour-tx { max-width: 30ch; min-height: 4.4em; margin: 0 auto; font-size: 16px; line-height: 1.45; color: var(--label-2); text-wrap: pretty; }
+.tour-dots { display: flex; justify-content: center; gap: 4px; margin: 18px 0 20px; } /* a lit meter: how far through the tour */
+.tour-dots i { width: 22px; height: 5px; border-radius: 1px; background: rgba(255, 255, 255, 0.16); transition: background 0.25s; }
+.tour-dots i.on { background: var(--green); }
+.tour-skip { display: block; margin: 2px auto 0; padding: 10px 18px; font-size: 15px; font-weight: 600; color: var(--label-2); }
+.tour-skip:active { opacity: 0.55; }
+.how-tour { margin-top: 18px; }
+.vtitle + .how-tour + .how { margin-top: 14px; }
+/* the break reminder on the result card */
+.remind { margin: 0 0 14px; padding: 10px 14px; border-radius: 14px; background: var(--surface-2); font-size: 14px; font-weight: 550; line-height: 1.4; color: var(--label); }
+.remind:empty { display: none; }
+/* Settings: the play limits */
+.lim-seg button { height: 36px; font-size: 14px; }
+.lim-foot { margin-top: 26px; color: var(--label-3); }
 .err { min-height: 4px; margin: 4px 0 0; font-size: 13px; color: var(--red); text-align: center; }
 .err:empty { margin: 0; }
 .err .link { color: var(--accent-hi); font-weight: 650; font-size: 13px; padding: 2px 0; }
@@ -448,7 +475,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .spr-x { display: grid; place-items: center; width: 46px; height: 43px; border-radius: 12px; background: var(--surface-2); color: var(--label); box-shadow: 0 3px 0 var(--key-edge); font-family: var(--font-round); font-size: 17px; font-weight: 800; }
 .spr-t { min-width: 0; }
 .spr-t b { display: block; font-family: var(--font-title); font-size: 15.5px; font-weight: 700; line-height: 1.25; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.spr-t span { display: block; margin-top: 2px; font-size: 13px; color: var(--label-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spr-t span { display: -webkit-box; margin-top: 2px; font-size: 13px; line-height: 1.35; color: var(--label-2); overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; } /* the twist in full, on two lines */
 .spr-act { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .spr-win { font-size: 12.5px; color: var(--label-2); white-space: nowrap; }
 .spr-win b { font-family: var(--font-round); font-size: 14px; font-weight: 800; color: var(--label); font-variant-numeric: tabular-nums; }
@@ -486,6 +513,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .vcol > .tiles { margin: 16px 0 0; text-align: center; }
 .vtitle + .sp-card, .vtitle + .pot-goal { margin-top: 18px; }
 .sp-odds { margin-top: 10px; }
+.sp-odds + .foot { margin-top: 8px; }
 .sp-odds .row { min-height: 44px; font-size: 15px; color: var(--label); }
 .sp-odds .row b { font-weight: 400; color: var(--label-2); font-variant-numeric: tabular-nums; }
 #potCap.prize::before { content: "Win"; margin-right: 4px; font-family: var(--font); font-size: 0.85em; font-weight: 600; color: var(--label-2); }

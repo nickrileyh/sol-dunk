@@ -16,6 +16,7 @@
 //   POT_ENTRY_LAMPORTS=50000000  SPECIAL_ENTRY_LAMPORTS=50000000
 //   MISSION_DAY_LAMPORTS=2000000000  MISSION_WEEK_LAMPORTS=10000000000  (play before a window's mission SOL pays)
 //   WITHDRAW_REVIEW_LAMPORTS=20000000000 (larger withdrawals wait for manual review)
+//   Players can set a daily loss limit (/api/limits): lowering it works at once, raising it or turning it off waits a day.
 import express from 'express';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -282,7 +283,7 @@ function settlePots() {
     for (const p of due) {
       const winners = Object.keys(p.entries).filter((a) => p.entries[a].done);
       const r = POTS.split(p.paidIn, p.carryIn, winners.length, true);
-      for (const a of winners) { const u = user(a); u.balance += r.share; u.potWon = (u.potWon || 0) + r.share; p.entries[a].won = r.share; }
+      for (const a of winners) { const u = user(a); u.balance += r.share; u.potWon = (u.potWon || 0) + r.share; p.entries[a].won = r.share; dayWon(u, r.share); }
       Object.assign(p, { settled: true, settledAt: Date.now(), winners: winners.length, share: r.share, rake: r.rake, carryOut: r.carry });
       db.houseRake += r.rake;
       if (r.carry) potFor(POTS.dayKey(POTS.closesAt(p.day))).carryIn += r.carry;
@@ -333,7 +334,8 @@ app.post('/api/pot/enter', wrap(async (req) => {
     if (p.entries[u.address]) throw bad('You’re already in today’s pot');
     if (POTS.closesAt(p.day) - potNow() < 60_000) throw bad('This pot is about to close. The next one opens at midnight UTC.');
     if (u.balance < p.fee) throw bad('Not enough balance for the entry');
-    u.balance -= p.fee; p.paidIn += p.fee;
+    checkLimit(u, p.fee);
+    u.balance -= p.fee; p.paidIn += p.fee; dayBet(u, p.fee);
     p.entries[u.address] = { at: potNow(), done: false, best: 0 };
     save();
     return { ...potView(p, u), last: lastPot(u), ...publicMe(u) };
@@ -351,7 +353,7 @@ if (CFG.mock) {
 function missionPay(u, paid) {
   let sum = 0;
   const out = paid.map((p) => { const lamports = Math.floor(p.amount); sum += lamports; return { win: p.win, slot: p.slot, k: p.k, n: p.n, lamports }; });
-  if (sum) { u.balance += sum; u.returned += sum; u.missionPaid = (u.missionPaid || 0) + sum; db.missionPaid += sum; } // counts in the player's return
+  if (sum) { u.balance += sum; u.returned += sum; u.missionPaid = (u.missionPaid || 0) + sum; db.missionPaid += sum; dayWon(u, sum); } // counts in the player's return
   return out;
 }
 function missionView(u) {
@@ -367,6 +369,53 @@ const verifiedLevels = (run) => run.levels.map((l) => {
   return { outcomes: l.outcomes.slice(0, n), clear: l.result === 'clear' && !l.capped, mov: l.mov || '' };
 });
 app.get('/api/missions', wrap(async (req) => missionView(auth(req))));
+
+// ------------------------------------------------------------------ play limits (Settings)
+// A player can set a daily loss limit: a bet, special entry or pot entry that would take the UTC day's losses (what
+// they staked that day minus what came back to them) past it is refused. Setting or lowering a limit works at once;
+// raising it or turning it off waits LIMIT_WAIT_MS, so it can't be loosened in the middle of a losing streak.
+const LIMIT_WAIT_MS = 24 * 3600 * 1000;
+const solText = (l) => String(+(l / LAMPORTS).toFixed(4));
+function dayTally(u) {
+  const key = POTS.dayKey(potNow());
+  if (!u.dayPlay || u.dayPlay.key !== key) u.dayPlay = { key, bet: 0, won: 0 };
+  return u.dayPlay;
+}
+function lossLimit(u) {
+  const L = u.limits || (u.limits = { loss: 0, pending: null });
+  if (L.pending && L.pending.at <= potNow()) { L.loss = L.pending.loss; L.pending = null; save(); } // a waited-out change
+  return L;
+}
+const lossToday = (u) => { const d = dayTally(u); return Math.max(0, d.bet - d.won); };
+function checkLimit(u, lamports) {
+  const L = lossLimit(u);
+  if (!L.loss) return;
+  const left = Math.max(0, L.loss - lossToday(u));
+  if (lamports > left) throw bad(left > 0 ? `That would pass your daily loss limit. You can bet ${solText(left)} SOL more today.` : `You’ve reached your daily loss limit of ${solText(L.loss)} SOL. It resets at midnight UTC.`);
+}
+const dayBet = (u, lamports) => { const d = dayTally(u); d.bet += lamports; };
+const dayWon = (u, lamports) => { if (lamports > 0) { const d = dayTally(u); d.won += lamports; } };
+function limitsView(u) {
+  const L = lossLimit(u);
+  return {
+    lossLamports: L.loss, pending: L.pending ? { lossLamports: L.pending.loss, at: L.pending.at - db.potClock } : null,
+    lossTodayLamports: lossToday(u), resetsAt: POTS.closesAt(dayTally(u).key) - db.potClock
+  };
+}
+app.get('/api/limits', wrap(async (req) => limitsView(auth(req))));
+app.post('/api/limits', wrap(async (req) => {
+  const u = auth(req);
+  const loss = Math.floor(Number((req.body || {}).lossLamports));
+  if (!(loss >= 0 && loss <= 1e6 * LAMPORTS)) throw bad('Enter a loss limit in SOL, or 0 to turn it off');
+  return withLock(u.address, async () => {
+    const L = lossLimit(u);
+    if (loss && (!L.loss || loss <= L.loss)) { L.loss = loss; L.pending = null; } // tighter: at once
+    else if (loss !== L.loss) L.pending = { loss, at: potNow() + LIMIT_WAIT_MS };  // looser or off: after the wait
+    else L.pending = null;                                                          // the limit it already has: cancel a change
+    save();
+    return limitsView(u);
+  });
+}));
 
 // the most the house could owe right now: every balance, every open run's pot (a special's prize), every open pot
 function owedLamports() {
@@ -387,7 +436,7 @@ function settle(u, run, status) {
   let payout = 0;
   if (status === 'cashout' || status === 'maxwin' || status === 'final') {
     payout = Math.floor(run.bet * run.total);
-    u.balance += payout;
+    u.balance += payout; dayWon(u, payout);
   }
   run.payout = payout;
   u.returned += payout; u.runs++;
@@ -415,10 +464,11 @@ app.post('/api/run/start', wrap(async (req) => {
     const max = maxBetFor(u, di);
     if (bet > max) throw bad(`Maximum bet on ${E.DIFFS[di].name} is ${sol(max)} SOL`);
     if (bet > u.balance) throw bad('Not enough balance for that bet');
+    checkLimit(u, bet);
     // the house must be able to cover the biggest possible win plus every player balance
     const need = bet * E.DIFFS[di].maxWin;
     if ((await houseLamports()) - owedLamports() < need) throw bad('The house can’t cover a bet that size right now. Try a smaller bet.');
-    u.balance -= bet; u.wagered += bet; u.runPlayed = runPlayed(u) + bet;
+    u.balance -= bet; u.wagered += bet; u.runPlayed = runPlayed(u) + bet; dayBet(u, bet);
     const paid = missionPlay(u, bet);
     const run = {
       id: crypto.randomUUID(), address: u.address, di, bet,
@@ -521,7 +571,7 @@ function runPlayed(u) {
   }
   return u.runPlayed;
 }
-const unlockText = () => `Play ${+(CFG.specialUnlock / LAMPORTS).toFixed(4)} SOL in regular runs to unlock the special levels`;
+const unlockText = () => `Bet ${+(CFG.specialUnlock / LAMPORTS).toFixed(4)} SOL in regular runs to unlock the special levels`;
 function specialView(u) {
   const { day, fee, list } = specialsToday(u);
   const t = u && u.special && u.special.day === day ? u.special : null;
@@ -547,8 +597,9 @@ app.post('/api/special/start', wrap(async (req) => {
     if (runPlayed(u) < CFG.specialUnlock) throw bad(unlockText());
     const { day, fee, list } = specialsToday(u), s = list[slot];
     if (u.balance < fee) throw bad('Not enough balance for the entry');
+    checkLimit(u, fee);
     if ((await houseLamports()) - owedLamports() < s.prize) throw bad('The house can’t cover the prize right now. Try again later.');
-    u.balance -= fee; u.wagered += fee;
+    u.balance -= fee; u.wagered += fee; dayBet(u, fee);
     const paid = missionPlay(u, fee);
     if (!u.special || u.special.day !== day || !Array.isArray(u.special.tries)) u.special = { day, tries: [0, 0, 0], wins: [0, 0, 0] };
     u.special.tries[slot]++;
@@ -589,7 +640,7 @@ app.post('/api/special/finish', wrap(async (req) => {
     const status = won ? 'won' : 'lost';
     run.status = status; run.endedAt = Date.now();
     const payout = won ? run.prize : 0;
-    run.payout = payout; u.balance += payout; u.returned += payout; u.runs++;
+    run.payout = payout; u.balance += payout; u.returned += payout; u.runs++; dayWon(u, payout);
     if (won && u.special && u.special.day === run.day && Array.isArray(u.special.wins)) u.special.wins[run.slot]++;
     if (!u.flagged && u.runs >= CFG.sharpMinRuns && u.wagered > 0 && u.returned / u.wagered > CFG.sharpRtp) u.flagged = { reason: 'high return', at: Date.now() };
     if (!u.flagged && u.hoops >= 120 && u.swishes / u.hoops > 0.97) u.flagged = { reason: 'superhuman swish rate', at: Date.now() };

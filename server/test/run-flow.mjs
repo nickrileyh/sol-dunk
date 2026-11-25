@@ -304,6 +304,41 @@ function playTaps(seed, di, L, skill, salt) {
   check((await poorS.api('/api/special/start', { clientSeed: 'poor1', slot: 0 })).status === 400, 'special entry without balance refused');
   srv4.kill();
 
+  // play limits: a daily loss limit refuses what would pass it; lowering works at once, raising waits a day
+  const srv5 = await boot(8803, { POT_ENTRY_LAMPORTS: '50000000' });
+  const Lc = client_(8803); await Lc.signIn(); await Lc.api('/api/dev/faucet', { lamports: 2e9 });
+  const l0 = await Lc.api('/api/limits');
+  check(l0.status === 200 && l0.lossLamports === 0 && l0.pending === null && l0.lossTodayLamports === 0, 'limits: none to begin with ' + JSON.stringify(l0));
+  const l1 = await Lc.api('/api/limits', { lossLamports: 100_000_000 });
+  check(l1.lossLamports === 100_000_000 && l1.pending === null, 'limits: a new limit works at once');
+  // lose 0.06 SOL: a run that hits the floor at once
+  const lr = await Lc.api('/api/run/start', { difficulty: 0, lamports: 60_000_000, clientSeed: 'lim1' });
+  await Lc.api('/api/run/level', { runId: lr.runId, level: 1, taps: [0] });
+  check((await Lc.api('/api/limits')).lossTodayLamports === 60_000_000, 'limits: the day\'s loss counts the lost bet');
+  const over = await Lc.api('/api/run/start', { difficulty: 0, lamports: 50_000_000, clientSeed: 'lim2' });
+  check(over.status === 400 && /loss limit/.test(over.error || '') && /0\.04 SOL more/.test(over.error), 'limits: a bet past the limit is refused: ' + over.error);
+  const potOver = await Lc.api('/api/pot/enter', {});
+  check(potOver.status === 400 && /loss limit/.test(potOver.error || ''), 'limits: a pot entry past the limit is refused');
+  const fits = await Lc.api('/api/run/start', { difficulty: 0, lamports: 40_000_000, clientSeed: 'lim3' });
+  check(fits.status === 200, 'limits: a bet that fits under the limit plays');
+  await Lc.api('/api/run/level', { runId: fits.runId, level: 1, taps: [0] });
+  const full = await Lc.api('/api/run/start', { difficulty: 0, lamports: 10_000_000, clientSeed: 'lim4' });
+  check(full.status === 400 && /reached your daily loss limit/.test(full.error || ''), 'limits: once reached, every bet is refused: ' + full.error);
+  const raise = await Lc.api('/api/limits', { lossLamports: 500_000_000 });
+  check(raise.lossLamports === 100_000_000 && raise.pending && raise.pending.lossLamports === 500_000_000 && raise.pending.at > Date.now() + 23 * 3600e3, 'limits: raising waits a day ' + JSON.stringify(raise));
+  check((await Lc.api('/api/run/start', { difficulty: 0, lamports: 10_000_000, clientSeed: 'lim5' })).status === 400, 'limits: a waiting raise changes nothing yet');
+  const off = await Lc.api('/api/limits', { lossLamports: 0 });
+  check(off.lossLamports === 100_000_000 && off.pending && off.pending.lossLamports === 0, 'limits: turning it off waits a day too');
+  const lower = await Lc.api('/api/limits', { lossLamports: 50_000_000 });
+  check(lower.lossLamports === 50_000_000 && lower.pending === null, 'limits: lowering works at once and drops a waiting change');
+  await Lc.api('/api/limits', { lossLamports: 200_000_000 });
+  await Lc.api('/api/dev/pot/advance', {});
+  const l2 = await Lc.api('/api/limits');
+  check(l2.lossLamports === 200_000_000 && l2.pending === null && l2.lossTodayLamports === 0, 'limits: a day later the raise applies and the day\'s loss resets ' + JSON.stringify(l2));
+  check((await Lc.api('/api/run/start', { difficulty: 0, lamports: 10_000_000, clientSeed: 'lim6' })).status === 200, 'limits: a new day plays again');
+  check((await Lc.api('/api/limits', { lossLamports: -5 })).status === 400, 'limits: a negative limit is refused');
+  srv5.kill();
+
   console.log(failures ? `${failures} check(s) failed` : 'all checks passed');
   process.exit(failures ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

@@ -34,7 +34,7 @@ async def main():
         need = sp['unlock']['need']
         check(sp['me']['locked'] and abs(need - 0.5) < 1e-9 and sp['unlock']['played'] == 0, 'a new player\'s specials are locked until 0.5 SOL of regular runs: ' + json.dumps(sp['unlock']))
         lk = await page.evaluate("[!!document.querySelector('#cBody .sp-unlock'), document.querySelector('#cBody .sp-unlock') ? document.querySelector('#cBody .sp-unlock').innerText : '', document.querySelectorAll('#cBody .spr .pill.off').length, [0,1,2].some((k) => !!document.getElementById('chSpPlay' + k))]")
-        check(lk[0] and 'Play 0.5 SOL in regular runs to unlock' in lk[1] and lk[2] == 3 and not lk[3], 'the card shows the unlock bar and Locked in place of Play: ' + json.dumps(lk))
+        check(lk[0] and 'Bet 0.5 SOL in regular runs to unlock' in lk[1] and lk[2] == 3 and not lk[3], 'the card shows the unlock bar and Locked in place of Play: ' + json.dumps(lk))
         await page.screenshot(path=OUT + 'locked.png')
         await page.click('#cBody .spr-open[data-slot="0"]'); await page.wait_for_timeout(600)
         check(await page.evaluate("!document.getElementById('spPlay') && !!document.querySelector('#pgBody .sp-lock')"), 'a special\'s page shows the unlock in place of Play')
@@ -74,7 +74,7 @@ async def main():
         drawn = await page.evaluate("(() => { const c = document.getElementById('spCourse'); if (!c || !c.width) return 0; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; })()")
         check(drawn > 200, f'the sample course is drawn ({drawn} px)')
         ptxt = await page.evaluate("document.getElementById('pgBody').innerText")
-        check('This course is set for' in ptxt and R['course']['levelName'] in ptxt and 'over time you get back about 90%' in ptxt and 'They open once you’ve played 0.5 SOL' in ptxt, 'the page says the level the course is set for, and the rules')
+        check('Your level' in ptxt and R['course']['levelName'] in ptxt and 'over time you get back about 90%' in ptxt and 'They open once you’ve bet 0.5 SOL' in ptxt, 'the page says the level the course is set for, and the rules')
         await page.screenshot(path=OUT + 'page.png', full_page=True)
 
         async def attempt(skill, shot, how):
