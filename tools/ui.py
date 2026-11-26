@@ -3,9 +3,9 @@ level has its own check, tools/special_flow.py), the pages that push in over the
 Stats, Wallet, Settings, How to play, Odds & fairness) and their back button, the Locker opened from Profile (equip,
 try-on, its back button clears the try-on), the missions (daily on Challenges, weekly and career progress after a
 run), the player card editor, the settings, the pause card, and that items already earned under the newer unlock
-list are handed out on load. It also checks the free practice run (nothing is bet, recorded or earned), the play
-limits in Settings (a daily loss limit that stops bets past it, where raising it waits a day, and the break
-reminder on the result card) and the quick tour a new player sees (it ends in a practice run; How to play reopens it)."""
+list are handed out on load. It also checks the free practice run (nothing is bet, recorded or earned), that
+Settings holds only Sound and Vibration (the owner had the play limits removed) and the quick tour a new player
+sees (it ends in a practice run; How to play reopens it)."""
 import asyncio, json
 from playwright.async_api import async_playwright
 from _paths import URL, PAGE, SHOTS, CHROME
@@ -179,39 +179,12 @@ async def main():
         check(b1 == bal0 and r1 == runs0 and x1 == xp0, f'practice changes no balance, run count or XP ({bal0}->{b1}, {runs0}->{r1}, {xp0}->{x1})')
         check(await page.evaluate("document.getElementById('againT').textContent") == 'Practice again' and await page.evaluate("getComputedStyle(document.getElementById('shareBtn')).display") == 'none', 'its result offers Practice again and no share')
         await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
-        # play limits: a daily loss limit stops bets past it; lowering works at once, raising waits a day
         await page.click('#tabProfile'); await page.wait_for_timeout(400)
         await page.click('#pBody [data-page="settings"]'); await page.wait_for_timeout(450)
-        check(await page.evaluate("document.querySelectorAll('#limLoss button').length") == 6 and await page.evaluate("document.querySelectorAll('#limRemind button').length") == 3, 'Settings has the loss limit and the break reminder')
-        await page.click('#limLoss button[data-v="0.5"]'); await page.wait_for_timeout(300)
-        L = await page.evaluate("__solDunk.limits()")
-        check(L['loss'] == 0.5 and L['pending'] is None and 'Lost today' in await page.evaluate("document.getElementById('limNote').textContent"), f'setting a limit works at once {L}')
-        await page.click('#limLoss button[data-v="5"]'); await page.wait_for_timeout(300)
-        L = await page.evaluate("__solDunk.limits()")
-        note = await page.evaluate("document.getElementById('limNote').textContent")
-        check(L['loss'] == 0.5 and L['pending'] and L['pending']['loss'] == 5 and 'Goes up to 5 SOL' in note, f'raising it waits a day ({note})')
-        check('24 hours' in await page.evaluate("document.getElementById('toast').textContent"), 'a toast says the raise takes 24 hours')
-        await page.click('#limLoss button[data-v="0.5"]'); await page.wait_for_timeout(300)
-        check(await page.evaluate("__solDunk.limits().pending") is None, 'tapping the current limit cancels the raise')
-        await page.click('#limRemind button[data-v="30"]'); await page.wait_for_timeout(200)
-        check(await page.evaluate("__solDunk.prefs.remind") == 30 and '30 minutes' in await page.evaluate("document.getElementById('remNote').textContent"), 'the break reminder can be set to 30 minutes')
+        n = await page.evaluate("[document.querySelectorAll('#pgBody .switch').length, document.querySelectorAll('#pgBody .seg, #pgBody .sec-h').length]")
+        check(n == [2, 0] and 'limit' not in (await page.evaluate("document.getElementById('pgBody').textContent")).lower(), f'Settings is just Sound and Vibration, with no play limits {n}')
+        await page.click('#pgBack'); await page.wait_for_timeout(400)
         await page.click('#tabPlay'); await page.wait_for_timeout(400)
-        await page.fill('#betInput', '1'); await page.dispatch_event('#betInput', 'change'); await page.wait_for_timeout(200)
-        await page.click('#playBtn'); await page.wait_for_timeout(600)
-        err = await page.evaluate("document.getElementById('lobbyErr').textContent")
-        check(await page.evaluate('__solDunk.phase()') == 'lobby' and 'loss limit' in err, f'a bet past the limit is stopped ({err})')
-        # the break reminder: a sitting that began 31 minutes ago shows it on the next result card
-        await page.fill('#betInput', '0.1'); await page.dispatch_event('#betInput', 'change'); await page.wait_for_timeout(200)
-        await page.evaluate("(() => { const s = __solDunk.sitting, t = Date.now(); s.start = t - 31 * 60000; s.last = t; s.next = s.start + 30 * 60000; })()")
-        await page.click('#playBtn'); await page.wait_for_timeout(900)
-        check(await page.evaluate('__solDunk.mode()') == 'run', 'a bet under the limit plays')
-        await page.evaluate("__solDunk.tap()")  # one flap, then the ball falls to the floor
-        for i in range(150):  # the result card comes up a moment after the run ends
-            if await vis('#result'): break
-            await page.wait_for_timeout(100)
-        rem = await page.evaluate("document.getElementById('resRemind').textContent")
-        check('31 min' in rem and 'break' in rem, f'the result card suggests a break ({rem})')
-        await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
         await page.screenshot(path=SHOTS + '/ui_end.png')
         check(not errs, 'no page errors ' + json.dumps(errs))
         # the quick tour: a new player sees it once, it ends in a practice run, and How to play reopens it

@@ -284,12 +284,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .tour-skip:active { opacity: 0.55; }
 .how-tour { margin-top: 18px; }
 .vtitle + .how-tour + .how { margin-top: 14px; }
-/* the break reminder on the result card */
-.remind { margin: 0 0 14px; padding: 10px 14px; border-radius: 14px; background: var(--surface-2); font-size: 14px; font-weight: 550; line-height: 1.4; color: var(--label); }
-.remind:empty { display: none; }
-/* Settings: the play limits */
-.lim-seg button { height: 36px; font-size: 14px; }
-.lim-foot { margin-top: 26px; color: var(--label-3); }
 .err { min-height: 4px; margin: 4px 0 0; font-size: 13px; color: var(--red); text-align: center; }
 .err:empty { margin: 0; }
 .err .link { color: var(--accent-hi); font-weight: 650; font-size: 13px; padding: 2px 0; }

@@ -293,12 +293,6 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .tour-skip:active { opacity: 0.55; }
 .how-tour { margin-top: 18px; }
 .vtitle + .how-tour + .how { margin-top: 14px; }
-/* the break reminder on the result card */
-.remind { margin: 0 0 14px; padding: 10px 14px; border-radius: 14px; background: var(--surface-2); font-size: 14px; font-weight: 550; line-height: 1.4; color: var(--label); }
-.remind:empty { display: none; }
-/* Settings: the play limits */
-.lim-seg button { height: 36px; font-size: 14px; }
-.lim-foot { margin-top: 26px; color: var(--label-3); }
 .err { min-height: 4px; margin: 4px 0 0; font-size: 13px; color: var(--red); text-align: center; }
 .err:empty { margin: 0; }
 .err .link { color: var(--accent-hi); font-weight: 650; font-size: 13px; padding: 2px 0; }
@@ -1084,7 +1078,6 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     <div class="xp-bar"><i id="xpFill"></i></div>
   </div>
   <div class="gains" id="resGains"></div>
-  <p class="remind" id="resRemind" role="status"></p>
   <div class="stack">
     <button class="btn btn-primary" id="againBtn"><span id="againT">Play again</span> <span class="num" id="againAmt"></span></button>
     <div class="pair">
@@ -2782,7 +2775,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       const winners = sim.filter((x) => x.done !== null).length + (myDone ? 1 : 0);
       const r = POTS.split((sim.length + mine) * this.fee, s.carryIn, winners, false);
       const won = myDone ? round9(r.share) : 0;
-      if (won) { wallet.balance = round9(wallet.balance + won); DemoLimits.won(won); }
+      if (won) { wallet.balance = round9(wallet.balance + won); }
       this.last = { key: s.key, goal: POTS.goalFor(s.key).text, entrants: sim.length + mine, winners, share: round9(r.share), rolled: winners ? 0 : round9(r.carry), me: s.me ? { done: myDone, won } : null };
       const today = POTS.dayKey(now), sameDay = String(s.key).slice(0, 10) === today;
       const key = force && sameDay ? today + '#' + ((+String(s.key).split('#')[1] || 0) + 1) : today;
@@ -2807,8 +2800,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       if (s.me) throw new Error('You’re already in this pot');
       if (POTS.closesAt(s.key) - Date.now() < 60000) throw new Error('This pot is about to close. The next one opens at midnight UTC.');
       if (wallet.balance + 1e-12 < this.fee) throw new Error('Not enough demo SOL for the entry.');
-      DemoLimits.check(this.fee);
-      wallet.balance = round9(wallet.balance - this.fee); DemoLimits.bet(this.fee);
+      wallet.balance = round9(wallet.balance - this.fee);
       s.me = { at: Date.now(), done: false, best: 0 };
       this.save(); saveAll();
       return this.view();
@@ -2845,7 +2837,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     pay(paid) {
       let sum = 0;
       for (const p of paid) sum += p.amount;
-      if (sum) { wallet.balance = round9(wallet.balance + sum); stats.missionSol = round9((stats.missionSol || 0) + sum); DemoLimits.won(sum); }
+      if (sum) { wallet.balance = round9(wallet.balance + sum); stats.missionSol = round9((stats.missionSol || 0) + sum); }
       return paid;
     },
     play(amount) { const r = MS.play(profile.ms, amount, Date.now(), this.need); profile.ms = r.s; return this.pay(r.paid); },
@@ -2885,8 +2877,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       if (!sp) throw new Error('There’s no such special level today');
       if (v.me.locked) throw new Error('Bet ' + fmtBet(v.unlock.need) + ' SOL in regular runs to unlock the special levels.');
       if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
-      DemoLimits.check(v.fee);
-      wallet.balance = round9(wallet.balance - v.fee); DemoLimits.bet(v.fee);
+      wallet.balance = round9(wallet.balance - v.fee);
       const paid = DemoMissions.play(v.fee);
       const t = this.tally(); t.tries[slot]++; store.set('special', t);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
@@ -2900,45 +2891,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       this.cur = null;
       const r = E.replay(SP.generate(c.seed, c.recipe, c.g, c.n), taps), won = r.result === 'clear';
       if (won) {
-        wallet.balance = round9(wallet.balance + c.prize); DemoLimits.won(c.prize);
+        wallet.balance = round9(wallet.balance + c.prize);
         const t = this.tally(); if (t.day === c.day) { t.wins[c.slot]++; store.set('special', t); }
       }
       profile.skill = SP.addSpecial(profile.skill, c.slot, won, r.outcomes.length); // that special's level moves
       saveAll();
       return { status: won ? 'won' : 'lost', payout: won ? c.prize : 0, serverSeed: c.serverSeed, outcomes: r.outcomes, special: this.view() };
-    }
-  };
-
-  // ---------------------------------------------------------------- play limits (Settings): a daily loss limit
-  // Today's loss is what went into bets and entries today (UTC) less what came back. A bet or entry that would take it
-  // past the limit is refused. Setting or lowering a limit works at once; raising it or turning it off waits 24
-  // hours, so it can't be undone in the heat of a losing streak. The server keeps its own for real SOL.
-  const LIMIT_WAIT = 24 * 3600 * 1000;
-  const LOSS_STEPS = [0, 0.5, 1, 2, 5, 10]; // the choices on the Settings page, in SOL (0 is off)
-  const DemoLimits = {
-    day() { const key = POTS.dayKey(Date.now()); if (!stats.day || stats.day.key !== key) stats.day = { key, bet: 0, won: 0 }; return stats.day; },
-    lim() {
-      const L = prefs.limits || (prefs.limits = { loss: 0, pending: null });
-      if (L.pending && L.pending.at <= Date.now()) { L.loss = L.pending.loss; L.pending = null; saveAll(); }
-      return L;
-    },
-    lossToday() { const d = this.day(); return Math.max(0, round9(d.bet - d.won)); },
-    check(amount) {
-      const L = this.lim();
-      if (!L.loss) return;
-      const left = Math.max(0, round9(L.loss - this.lossToday()));
-      if (amount > left + 1e-9) throw new Error(left > 0 ? `That would pass your daily loss limit. You can bet ${fmtBet(left)} SOL more today.` : `You've reached your daily loss limit of ${fmtBet(L.loss)} SOL. It resets at midnight UTC.`);
-    },
-    bet(a) { const d = this.day(); d.bet = round9(d.bet + a); },
-    won(a) { if (a > 0) { const d = this.day(); d.won = round9(d.won + a); } },
-    view() { const L = this.lim(); return { loss: L.loss, pending: L.pending ? { loss: L.pending.loss, at: L.pending.at } : null, lossToday: this.lossToday(), resetsAt: POTS.closesAt(this.day().key) }; },
-    set(loss) {
-      const L = this.lim();
-      if (loss && (!L.loss || loss <= L.loss)) { L.loss = loss; L.pending = null; } // tighter: at once
-      else if (loss !== L.loss) L.pending = { loss, at: Date.now() + LIMIT_WAIT }; // looser: in 24 hours
-      else L.pending = null;
-      saveAll();
-      return this.view();
     }
   };
 
@@ -2950,8 +2908,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     async start(di, bet) {
       if (!(bet >= CFG.minBet)) throw new Error('Minimum bet is ' + CFG.minBet + ' SOL');
       if (bet > wallet.balance + 1e-12) throw new Error('Not enough demo SOL for that bet.');
-      DemoLimits.check(bet);
-      wallet.balance = round9(wallet.balance - bet); DemoLimits.bet(bet);
+      wallet.balance = round9(wallet.balance - bet);
       const paid = DemoMissions.play(bet);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
       saveAll();
@@ -2976,14 +2933,13 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     },
     async next() { const c = this.cur; c.level++; return { levelSeed: deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, c.level) }; },
     async cashout() { const payout = this._pay(), missions = DemoMissions.run(this.cur.levels); saveAll(); return { payout, serverSeed: this.cur.serverSeed, missions }; },
-    _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); DemoLimits.won(payout); saveAll(); return payout; },
+    _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); saveAll(); return payout; },
     pot: {
       async state() { DemoPot.roll(); return DemoPot.view(); },
       async enter() { return DemoPot.enter(); },
       async closeNow() { DemoPot.roll(true); return DemoPot.view(); } // demo only
     },
     missions: { view: () => DemoMissions.view(), async state() { return DemoMissions.view(); } },
-    limits: { view: () => DemoLimits.view(), async state() { return DemoLimits.view(); }, async set(loss) { return DemoLimits.set(loss); } },
     special: {
       async state() { return DemoSpecial.view(); },
       async start(slot) { return DemoSpecial.start(slot); },
@@ -3053,13 +3009,6 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     missions: {
       view() { return ServerBank.mv || MS.view(null, Date.now()); },
       async state() { ServerBank.mv = ServerBank.mconv(await ServerBank.api('/api/missions')); return ServerBank.mv; }
-    },
-    limits: {
-      v: null,
-      view() { return this.v || { loss: 0, pending: null, lossToday: 0, resetsAt: 0 }; },
-      conv(j) { const L = 1e9; return (this.v = { loss: j.lossLamports / L, pending: j.pending ? { loss: j.pending.lossLamports / L, at: j.pending.at } : null, lossToday: j.lossTodayLamports / L, resetsAt: j.resetsAt }); },
-      async state() { return this.conv(await ServerBank.api('/api/limits')); },
-      async set(loss) { return this.conv(await ServerBank.api('/api/limits', { lossLamports: Math.round(loss * 1e9) })); }
     },
     special: {
       view(j) {
@@ -3993,7 +3942,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     }
     run.busy = false;
     stats.runs++; stats.wagered = round9(stats.wagered + bet); stats.runPlayed = round9(stats.runPlayed + bet); saveAll();
-    sitTick(); enterRun(r.missions);
+    enterRun(r.missions);
   }
   // a special level attempt: the entry up front, one long level, the prize for clearing every ring
   async function startSpecial(slot) {
@@ -4015,23 +3964,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     }
     run.busy = false;
     stats.runs++; stats.wagered = round9(stats.wagered + run.bet); saveAll();
-    sitTick(); enterRun(r.missions);
-  }
-  // The break reminder (Settings): after that many minutes of play in one sitting (a 15-minute gap starts a new
-  // sitting), the result card says how long it's been and suggests a break, then again after as long.
-  const sitting = { start: 0, last: 0, next: 0 };
-  function sitTick() { // a run is starting
-    const now = Date.now();
-    if (!sitting.start || now - sitting.last > 15 * 60000) { sitting.start = now; sitting.next = now + (prefs.remind || 0) * 60000; }
-    sitting.last = now;
-  }
-  function breakLine() { // a run has ended
-    const now = Date.now();
-    sitting.last = now;
-    if (!prefs.remind || !sitting.start || now < sitting.next) return '';
-    sitting.next = now + prefs.remind * 60000;
-    const m = Math.max(1, Math.round((now - sitting.start) / 60000));
-    return `You've been playing for ${m >= 60 ? Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '') : m + ' min'}. Time for a break?`;
+    enterRun(r.missions);
   }
   // a free practice run on the picked mode: the bet is only there to show what a real run would have paid
   async function startPractice() {
@@ -4041,7 +3974,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     Object.assign(run, { mode: 'practice', recipe: null, prize: 0, di: prefs.di, bet: prefs.bet, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.levelSeed }, RUN_FRESH);
     run.log = []; run.told = {}; run.share = ''; run.potJust = false;
     $('lobbyErr').textContent = '';
-    sitTick(); enterRun(null);
+    enterRun(null);
   }
   function enterRun(missions) {
     closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vP, false); show(vC, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
@@ -4396,7 +4329,6 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     $('againT').textContent = prac ? 'Practice again' : sp ? 'Try again' : 'Play again';
     $('againAmt').textContent = prac ? '' : fmtBet(sp ? run.bet : prefs.bet) + ' SOL';
     $('lobbyBtn').textContent = sp || prac ? 'Back' : 'Change bet';
-    $('resRemind').textContent = breakLine();
     showProgress(pr);
     show(ui.res, true); armCard(ui.res, 600); refreshPot(); if (sp) refreshSpecial();
     if (cls === 'win') setTimeout(() => celebrate(run.total >= 5 || sp ? 150 : 100, ui.res), 140);
@@ -5789,8 +5721,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     star: '<path d="m12 3.3 2.6 5.4 5.9.8-4.3 4.1 1.1 5.9-5.3-2.9-5.3 2.9 1.1-5.9-4.3-4.1 5.9-.8z"/>',
     mission: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="m8.4 12.2 2.5 2.5 4.8-5"/>',
     trophy: '<path d="M7.6 3.8h8.8v5.4a4.4 4.4 0 0 1-8.8 0z"/><path d="M7.6 5.6H4.8v1.2a3.3 3.3 0 0 0 3.1 3.3M16.4 5.6h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 13.6v3.6M8.4 20.2h7.2"/>',
-    practice: '<circle cx="12" cy="12" r="9"/><path d="M10 8.4v7.2l5.6-3.6z" fill="currentColor"/>',
-    limit: '<circle cx="12" cy="13.4" r="7.6"/><path d="M12 13.4V9.4M9.4 2.9h5.2M18.6 5.6l1.4-1.4"/>'
+    practice: '<circle cx="12" cy="12" r="9"/><path d="M10 8.4v7.2l5.6-3.6z" fill="currentColor"/>'
   };
   function howHtml() {
     const row = (icon, tone, title, text) => `<div class="hrow"><span class="hic ${tone}"><svg viewBox="0 0 24 24" aria-hidden="true">${HOW_ICON[icon]}</svg></span><div><h3>${title}</h3><p>${text}</p></div></div>`;
@@ -5805,7 +5736,6 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       row('star', 'gold', 'Score and XP', `Rings score points, more for swishes and streaks. Points, missions and trophies earn XP, which unlocks balls, wings and trails. Neither changes what a run pays.`) +
       row('mission', 'purple', 'Missions', `New ones every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week.`) +
       row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
-      row('limit', 'blue', 'Play limits', `Set a daily loss limit or a break reminder in Settings.`) +
       `</div>`;
   }
   // ---------------------------------------------------------------- the quick tour
@@ -5938,25 +5868,9 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       <div class="sec-h"><h3>Recent runs</h3>${stats.history.length ? '<span>Newest first</span>' : ''}</div>
       ${runsHtml()}`;
   }
-  // Settings: sound, vibration and the play limits (a daily loss limit and a break reminder)
-  const REMIND_STEPS = [0, 30, 60]; // minutes (0 is off)
-  const remindName = (v) => (!v ? 'Off' : v === 60 ? '1 hour' : v + ' min');
-  const whenText = (t) => new Date(t).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
   function settingsHtml() {
     const sw = (k, ic, name) => `<div class="mrow-sw"><span class="mi mi-${k}">${ic}</span><span class="mn" id="sw-${k}">${name}</span><button class="switch" role="switch" data-set="${k}" aria-checked="${!!settings[k]}" aria-labelledby="sw-${k}"></button></div>`;
-    const seg = (id, label, vals, cur, name) => `<div class="seg lim-seg" id="${id}" role="radiogroup" aria-label="${label}">${vals.map((v) => `<button role="radio" data-v="${v}" aria-checked="${v === cur}">${name(v)}</button>`).join('')}</div>`;
-    const L = bank.limits.view(), rem = prefs.remind || 0;
-    const lossNote = L.pending ? (L.pending.loss ? `Goes up to <b>${fmtBet(L.pending.loss)} SOL</b> on ${whenText(L.pending.at)}.` : `Turns off on ${whenText(L.pending.at)}.`)
-      : L.loss ? `Lost today: <b>${fmtBet(L.lossToday)}</b> of ${fmtBet(L.loss)} SOL. It resets at midnight UTC.`
-      : 'The most you can lose in a day. Bets past it are stopped.';
-    return `<div class="menu-list">${sw('sound', ICON.sound, 'Sound')}${sw('haptics', ICON.buzz, 'Vibration')}</div>
-      <div class="sec-h"><h3>Daily loss limit</h3><span>SOL</span></div>
-      ${seg('limLoss', 'Daily loss limit in SOL', LOSS_STEPS, L.loss, (v) => (v ? fmtBet(v) : 'Off'))}
-      <p class="foot" id="limNote">${lossNote}</p>
-      <div class="sec-h"><h3>Break reminder</h3></div>
-      ${seg('limRemind', 'Break reminder', REMIND_STEPS, rem, remindName)}
-      <p class="foot" id="remNote">${rem ? `A reminder on the result card after ${rem === 60 ? 'an hour' : rem + ' minutes'} of play in a row.` : 'Get a reminder to take a break.'}</p>
-      <p class="foot lim-foot">Lowering your loss limit works at once. Raising it or turning it off takes 24 hours, so it can't be loosened on a bad day.</p>`;
+    return `<div class="menu-list">${sw('sound', ICON.sound, 'Sound')}${sw('haptics', ICON.buzz, 'Vibration')}</div>`;
   }
   function runsHtml() {
     if (!stats.history.length) return '<div class="empty">Your runs will show up here.</div>';
@@ -5977,22 +5891,6 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (kind === 'pot') {
       on('potEnter', enterPot);
       on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
-    }
-    if (kind === 'settings') {
-      document.querySelectorAll('#limLoss button').forEach((b) => b.addEventListener('click', async () => {
-        const v = +b.dataset.v, was = bank.limits.view();
-        Sound.click();
-        let L;
-        try { L = await bank.limits.set(v); } catch (e) { toast(e.message); return; }
-        if (v !== was.loss && L.pending) toast(L.pending.loss ? `Your limit goes up to ${fmtBet(L.pending.loss)} SOL in 24 hours` : 'Your limit turns off in 24 hours');
-        else if (v === was.loss && was.pending) toast('Change cancelled');
-        if (nav.page === 'settings') renderPage(true);
-      }));
-      document.querySelectorAll('#limRemind button').forEach((b) => b.addEventListener('click', () => {
-        prefs.remind = +b.dataset.v; saveAll(); Sound.click();
-        if (sitting.start) sitting.next = sitting.start + prefs.remind * 60000; // counts from the start of this sitting
-        renderPage(true);
-      }));
     }
     if (kind === 'how') on('howTour', () => { closePage(); setTimeout(() => showTour(0), 280); });
     if (kind === 'odds') document.querySelectorAll('#oddsSeg button').forEach((b) => b.addEventListener('click', () => { oddsTier = +b.dataset.t; Sound.click(); renderPage(true); }));
@@ -6042,7 +5940,6 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (!ui.panel.classList.contains('hide')) closePanel();
     Sound.click();
     if (kind === 'odds' && !nav.page) oddsTier = null; // from the Play sheet or Profile: the tier you have picked
-    if (kind === 'settings' && bank.real) bank.limits.state().then(() => { if (nav.page === 'settings') renderPage(true); }).catch(() => {});
     const fresh = !nav.page;
     nav.page = kind;
     $('pgBackT').textContent = phase === 'lobby' ? TAB_NAME[nav.tab] : 'Back';
@@ -6330,8 +6227,6 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     special: () => specState, // today's special level as the client sees it
     missions: () => mview(), // daily and weekly missions, with SOL and the play that unlocks it
     mode: () => run.mode, // 'run', 'special' or 'practice'
-    sitting, // the break reminder's clock: when this sitting started and when the next reminder is due
-    limits: () => bank.limits.view(), // the daily loss limit as the client sees it
     bal: () => bank.balance(),
     sfx: (name, args, secs) => Sound.render(name, args, secs), // a sound's samples, rendered offline
     ballScreen: () => ({ x: view.bsx, y: view.bsy }),

@@ -63,8 +63,8 @@ requests for the same player run one after the other.
 - **Deposits through other programs** (a transfer made inside another program's instruction, or from an exchange's
   wallet) aren't credited automatically: they show up as unmatched for the operator, or not at all for inner
   transfers. The page only ever asks the wallet for a plain transfer.
-- **No identity checks built in**, and of the player-protection tools only a daily loss limit the player sets
-  (`/api/limits`) and an operator-set daily deposit limit (`DEPOSIT_DAY_LIMIT_LAMPORTS`). The hooks are there (`kyc`
+- **No identity checks built in**, and of the player-protection tools only an operator-set daily deposit limit
+  (`DEPOSIT_DAY_LIMIT_LAMPORTS`): the owner had the player-set daily loss limit and the break reminder removed. The hooks are there (`kyc`
   status, `KYC_WITHDRAW_LAMPORTS`, holds); a licence will say what else is needed (self-exclusion, age checks).
 - **Dependencies:** `npm audit --omit=dev` reports moderate advisories in `@solana/web3.js` 1.x's JSON-RPC client
   (`jayson`: `uuid`, `stream-json`). The server uses that client only to call its own RPC provider. Moving to

@@ -311,7 +311,7 @@ export async function createServer(CFG, log) {
         for (const e of winners) {
           const u = await t.user(e.address);
           await t.credit(u, r.share, 'pot_win', p.day);
-          u.potWon = (u.potWon || 0) + r.share; dayWon(u, r.share);
+          u.potWon = (u.potWon || 0) + r.share;
           const { address, ...doc } = e;
           await t.putPotEntry(p.day, address, { ...doc, won: r.share });
         }
@@ -370,8 +370,7 @@ export async function createServer(CFG, log) {
       if (await t.potEntry(day, u.address)) throw bad('You’re already in today’s pot');
       if (POTS.closesAt(p.day) - potNow() < 60_000) throw bad('This pot is about to close. The next one opens at midnight UTC.');
       if (u.balance < p.fee) throw bad('Not enough balance for the entry');
-      checkLimit(u, p.fee);
-      await t.credit(u, -p.fee, 'pot_entry', day); dayBet(u, p.fee);
+      await t.credit(u, -p.fee, 'pot_entry', day);
       await t.addToPot(day, 'paidIn', p.fee);
       await t.putPotEntry(day, u.address, { at: potNow(), done: false, best: 0 });
       const p2 = await t.pot(day);
@@ -396,7 +395,7 @@ export async function createServer(CFG, log) {
     const out = paid.map((p) => { const lamports = Math.floor(p.amount); sum += lamports; return { win: p.win, slot: p.slot, k: p.k, n: p.n, lamports }; });
     if (sum) {
       await t.credit(u, sum, 'mission', null);
-      u.returned += sum; u.missionPaid = (u.missionPaid || 0) + sum; dayWon(u, sum); // counts in the player's return
+      u.returned += sum; u.missionPaid = (u.missionPaid || 0) + sum; // counts in the player's return
       await t.incSetting('missionPaid', sum);
     }
     return out;
@@ -414,51 +413,6 @@ export async function createServer(CFG, log) {
     return { outcomes: l.outcomes.slice(0, n), clear: l.result === 'clear' && !l.capped, mov: l.mov || '' };
   });
   app.get('/api/missions', wrap(async (req) => tx(async (t) => missionView(await auth(t, req)))));
-
-  // ---------------------------------------------------------------- play limits (Settings)
-  // A player can set a daily loss limit: a bet, special entry or pot entry that would take the UTC day's losses (what
-  // they staked that day minus what came back to them) past it is refused. Setting or lowering a limit works at once;
-  // raising it or turning it off waits LIMIT_WAIT_MS, so it can't be loosened in the middle of a losing streak.
-  const LIMIT_WAIT_MS = 24 * 3600 * 1000;
-  function dayTally(u) {
-    const key = POTS.dayKey(potNow());
-    if (!u.dayPlay || u.dayPlay.key !== key) u.dayPlay = { key, bet: 0, won: 0 };
-    return u.dayPlay;
-  }
-  function lossLimit(u) {
-    const L = u.limits || (u.limits = { loss: 0, pending: null });
-    if (L.pending && L.pending.at <= potNow()) { L.loss = L.pending.loss; L.pending = null; } // a waited-out change
-    return L;
-  }
-  const lossToday = (u) => { const d = dayTally(u); return Math.max(0, d.bet - d.won); };
-  function checkLimit(u, lamports) {
-    const L = lossLimit(u);
-    if (!L.loss) return;
-    const left = Math.max(0, L.loss - lossToday(u));
-    if (lamports > left) throw bad(left > 0 ? `That would pass your daily loss limit. You can bet ${solText(left)} SOL more today.` : `You’ve reached your daily loss limit of ${solText(L.loss)} SOL. It resets at midnight UTC.`);
-  }
-  const dayBet = (u, lamports) => { const d = dayTally(u); d.bet += lamports; };
-  const dayWon = (u, lamports) => { if (lamports > 0) { const d = dayTally(u); d.won += lamports; } };
-  function limitsView(u) {
-    const L = lossLimit(u);
-    return {
-      lossLamports: L.loss, pending: L.pending ? { lossLamports: L.pending.loss, at: L.pending.at - potClock } : null,
-      lossTodayLamports: lossToday(u), resetsAt: POTS.closesAt(dayTally(u).key) - potClock
-    };
-  }
-  app.get('/api/limits', wrap(async (req) => tx(async (t) => limitsView(await auth(t, req)))));
-  app.post('/api/limits', limit('money', 20, 60_000, who), wrap(async (req) => {
-    const loss = Math.floor(Number((req.body || {}).lossLamports));
-    if (!(loss >= 0 && loss <= 1e6 * LAMPORTS)) throw bad('Enter a loss limit in SOL, or 0 to turn it off');
-    return tx(async (t) => {
-      const u = await auth(t, req);
-      const L = lossLimit(u);
-      if (loss && (!L.loss || loss <= L.loss)) { L.loss = loss; L.pending = null; }   // tighter: at once
-      else if (loss !== L.loss) L.pending = { loss, at: potNow() + LIMIT_WAIT_MS };    // looser or off: after the wait
-      else L.pending = null;                                                           // the limit it already has: cancel a change
-      return limitsView(u);
-    });
-  }));
 
   // ---------------------------------------------------------------- reviews: limits, holds, big wins, bots
   async function review(t, u) {
@@ -498,7 +452,7 @@ export async function createServer(CFG, log) {
   async function settle(t, u, run, status) {
     run.status = status; run.endedAt = Date.now(); run.exposure = 0;
     let payout = 0;
-    if (OVER.includes(status)) { payout = Math.floor(run.bet * run.total); await t.credit(u, payout, 'payout', run.id); dayWon(u, payout); }
+    if (OVER.includes(status)) { payout = Math.floor(run.bet * run.total); await t.credit(u, payout, 'payout', run.id); }
     run.payout = payout;
     u.returned += payout; u.runs++;
     // missions move on from the levels the server verified (a voided run doesn't count)
@@ -528,7 +482,6 @@ export async function createServer(CFG, log) {
       const u = await auth(t, req);
       if (await t.openRun(u.address)) throw bad('You already have a run in progress');
       if (bet > u.balance) throw bad('Not enough balance for that bet');
-      checkLimit(u, bet);
       await t.bankrollLock(); // one bet at a time from here: the cover check sees every other open bet
       const owed = await t.owed(), free = reserves.total - owed.total;
       const max = maxBetFor(u, di, free);
@@ -536,7 +489,7 @@ export async function createServer(CFG, log) {
       const exposure = bet * E.DIFFS[di].maxWin;
       if (free - exposure + bet < 0) throw bad('The house can’t cover a bet that size right now. Try a smaller bet.');
       await t.credit(u, -bet, 'bet', null);
-      u.wagered += bet; u.runPlayed = (await runPlayed(t, u)) + bet; dayBet(u, bet);
+      u.wagered += bet; u.runPlayed = (await runPlayed(t, u)) + bet;
       const paid = await missionPlay(t, u, bet);
       const run = {
         id: crypto.randomUUID(), address: u.address, kind: 'run', di, bet, exposure,
@@ -657,12 +610,11 @@ export async function createServer(CFG, log) {
       if ((await runPlayed(t, u)) < CFG.specialUnlock) throw bad(unlockText());
       const { day, fee, list } = specialsToday(u), s = list[slot];
       if (u.balance < fee) throw bad('Not enough balance for the entry');
-      checkLimit(u, fee);
       await t.bankrollLock();
       const owed = await t.owed();
       if (reserves.total - owed.total - s.prize + fee < 0) throw bad('The house can’t cover the prize right now. Try again later.');
       await t.credit(u, -fee, 'special_entry', null);
-      u.wagered += fee; dayBet(u, fee);
+      u.wagered += fee;
       const paid = await missionPlay(t, u, fee);
       if (!u.special || u.special.day !== day || !Array.isArray(u.special.tries)) u.special = { day, tries: [0, 0, 0], wins: [0, 0, 0] };
       if (CFG.specialDayTries && u.special.tries[slot] >= CFG.specialDayTries) throw bad(`That special is limited to ${CFG.specialDayTries} attempts a day. It's back tomorrow.`);
@@ -709,7 +661,7 @@ export async function createServer(CFG, log) {
       run.status = status; run.endedAt = Date.now(); run.exposure = 0;
       const payout = won ? run.prize : 0;
       run.payout = payout;
-      if (payout) { await t.credit(u, payout, 'special_prize', run.id); dayWon(u, payout); }
+      if (payout) { await t.credit(u, payout, 'special_prize', run.id); }
       u.returned += payout; u.runs++;
       if (won && u.special && u.special.day === run.day && Array.isArray(u.special.wins)) u.special.wins[run.slot]++;
       await review(t, u);
