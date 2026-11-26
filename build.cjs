@@ -17,6 +17,18 @@ if (iconFile) {
 }
 // The display font (src/fonts, see OFL.txt there) is inlined as a data URI too. A comment keeps its file name, so
 // tools/split_build.py can turn a build back into src/fonts.
+// An unclosed block in style.css doesn't break the build, it quietly swallows every rule after it (a lost "}" after
+// a merge once left the last blocks inside a mouse-only @media, so phones never got them). Refuse to build that.
+{
+  const bare = r('style.css').replace(/\/\*[\s\S]*?\*\//g, '').replace(/"[^"\n]*"|'[^'\n]*'/g, '');
+  let depth = 0, line = 1, bad = 0;
+  for (const ch of bare) {
+    if (ch === '\n') line++;
+    else if (ch === '{') depth++;
+    else if (ch === '}' && --depth < 0) { bad = line; break; }
+  }
+  if (bad || depth) throw new Error('src/style.css: ' + (bad ? 'a "}" with no block to close' : depth + ' block(s) never closed') + ' — check the braces, usually after a merge');
+}
 const style = r('style.css').replace(/url\("fonts\/([\w.-]+\.woff2)"\)/g, (m, f) =>
   '/*fonts/' + f + '*/url("data:font/woff2;base64,' + fs.readFileSync(path.join(__dirname, 'src', 'fonts', f)).toString('base64') + '")');
 let html = r('index.html');

@@ -1618,7 +1618,7 @@
     if (!p) return '';
     const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
     const act = done ? '<span class="pill ok">Made it</span>' : inn ? '<span class="pill in">You’re in</span>' : `<button class="pill go" id="chPotEnter">Enter ${fmtBet(p.fee)} SOL</button>`;
-    return `<div class="cc pot"><div class="cc-h"><span class="cc-k">${ICON.trophy}Daily pot</span><span class="cc-t">Closes in ${leftOf(p.closesAt - Date.now())}</span></div><button class="cc-open" data-page="pot" aria-label="Daily pot: ${fmtAmt(p.pool)} SOL, ${p.goal.text}. Details"><span class="cc-big"><span class="num" data-count="${p.pool}">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></span><span class="cc-g">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span><span class="chev">${ICON.chev}</span></button>
+    return `<div class="cc pot"><div class="cc-h"><span class="cc-k">${ICON.trophy}Daily pot</span><span class="cc-t">Closes in ${leftOf(p.closesAt - Date.now())}<span class="chev">${ICON.chev}</span></span></div><button class="cc-open" data-page="pot" aria-label="Daily pot: ${fmtAmt(p.pool)} SOL, ${p.goal.text}. Details"><span class="cc-big"><span class="num" data-count="${p.pool}">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></span><span class="cc-g">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span></button>
       <div class="cc-act"><span class="cc-v">${p.entrants} ${p.entrants === 1 ? 'player' : 'players'} in</span>${act}</div></div>`;
   }
   let potCountAt = 0; // when the pot card's count-up started
@@ -3655,6 +3655,7 @@
   function trophiesHtml() {
     const got = ACH.filter((a) => profile.ach[a.id]).length;
     return `<p class="vsub">${got ? `${got} of ${ACH.length} earned. Each one adds XP, and some open titles for your player card.` : `None yet. Each one adds XP, and some open titles for your player card.`}</p>
+      <div class="tro-sum" aria-hidden="true"><b class="num">${got}<small> / ${ACH.length}</small></b><span class="tro-seg">${ACH.map((a) => `<i${profile.ach[a.id] ? ' class="on"' : ''}></i>`).join('')}</span></div>
       <div class="trophies">${ACH.map((a) => `<div class="tro${profile.ach[a.id] ? ' got' : ''}"><span class="ti">${ICON.medal}</span><b>${a.name}</b><span>${a.desc}</span></div>`).join('')}</div>`;
   }
   // recent runs: what each one ended as, on which tier, and what it paid
@@ -3848,8 +3849,8 @@
     const wDone = w.filter((c) => c.done).length;
     const C = CAREER[cs.ch], cDone = C ? cs.done.filter(Boolean).length : 4;
     const tile = (page, ic, name, val, f) => `<button class="ct ct-${page}" data-page="${page}"><span class="ct-ic">${ic}</span><span class="chev">${ICON.chev}</span><b>${name}</b><span class="ct-v">${val}</span><span class="ct-bar"><i style="width:${(f * 100).toFixed(1)}%"></i></span></button>`;
-    return `<div class="sec-h"><h3>Daily missions</h3><span>${ICON.clock}New in ${untilMidnight()}</span></div>
-      <div class="group">${needRow(mv, 'day')}${d.map((c, i) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i)).join('')}</div>
+    return `<div class="cc ms-cc"><div class="cc-h"><span class="cc-k">${ICON.target}Daily missions</span><span class="cc-t">New in ${untilMidnight()}</span></div>
+      ${needRow(mv, 'day')}${d.map((c, i) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i)).join('')}</div>
       <div class="ctiles">${tile('week', ICON.target, 'This week', wDone + ' of ' + w.length + ' done', w.length ? wDone / w.length : 0)}${tile('career', ICON.flag, 'Career', C ? 'Chapter ' + (cs.ch + 1) + ' of ' + CAREER.length : 'All done', cDone / 4)}</div>`;
   }
   function weekHtml() {

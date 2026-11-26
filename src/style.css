@@ -436,10 +436,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
    details on their pages ---------- */
 .cc { margin-top: 14px; border-radius: 22px; background: var(--surface); overflow: hidden; }
 .vtitle + .cc { margin-top: 16px; }
-.cc-open { display: grid; grid-template-columns: minmax(0, 1fr) 14px; column-gap: 10px; width: 100%; padding: 14px 16px 0 18px; text-align: left; transition: transform 0.3s var(--spring); }
+.cc-open { display: grid; grid-template-columns: minmax(0, 1fr); width: 100%; padding: 14px 16px 0 18px; text-align: left; transition: transform 0.3s var(--spring); }
 .cc-open:active { transform: scale(0.98); transition-duration: 0.08s; }
 .cc-open > span:not(.chev) { grid-column: 1; min-width: 0; }
-.cc-open .chev { grid-column: 2; grid-row: 1 / span 2; align-self: center; width: 14px; height: 14px; color: var(--label-3); }
+.cc-h .cc-t { display: inline-flex; align-items: center; gap: 6px; }
+.cc-h .cc-t .chev { display: inline-grid; width: 13px; height: 13px; color: var(--label-3); }
+.cc-h .cc-t .chev svg { width: 13px; height: 13px; }
 .cc-k { display: flex; align-items: center; gap: 7px; font-family: var(--font-round); font-size: 13px; font-weight: 700; color: var(--label); }
 .cc-k svg { flex: none; width: 15px; height: 15px; }
 .cc-n { margin-top: 4px; font-family: var(--font-title); font-size: 26px; font-weight: 700; line-height: 1.15; color: var(--label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -477,7 +479,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .spr-win { font-size: 12.5px; color: var(--label-2); white-space: nowrap; }
 .spr-win b { font-family: var(--font-round); font-size: 14px; font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }
 /* This week and Career: two tiles under the daily missions */
-.ctiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.ctiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 .ct { position: relative; display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 14px 14px 15px 16px; border-radius: 20px; background: var(--surface); text-align: left; transition: transform 0.3s var(--spring); }
 .ct:active { transform: scale(0.96); transition-duration: 0.08s; }
 .ct-ic { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--surface-2); color: var(--label); }
@@ -609,7 +611,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
 .item canvas { width: 76%; height: 76%; }
 .item:active { transform: scale(0.96); }
 .item.eq { box-shadow: inset 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--surface)); }
-.item.locked canvas { opacity: 0.22; filter: grayscale(1); }
+.item.locked canvas { opacity: 0.34; filter: grayscale(1); }
 .item .lock { position: absolute; top: 7px; right: 7px; width: 12px; height: 12px; color: var(--label-3); }
 .item .new { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; border-radius: 4px; background: var(--green); }
 .reset-note { margin: 8px 4px 0; font-size: 12px; color: var(--label-3); }
@@ -625,8 +627,7 @@ button.gain { font: inherit; font-size: 12px; font-weight: 600; color: var(--lab
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 11;
   height: calc(var(--tab-h) + var(--safe-b)); padding: 0 8px var(--safe-b);
   display: grid; grid-template-columns: repeat(3, minmax(0, 128px)); justify-content: center;
-  background: rgba(0, 0, 0, 0.9);
-  -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px);
+  background: #050308; /* solid: a scrolling page never shows through its labels */
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.09);
   transition: transform 0.4s cubic-bezier(.2, .9, .2, 1), opacity 0.25s;
   touch-action: manipulation;
@@ -807,7 +808,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 .vscroll .bests { margin-top: 10px; }
 .trophies { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .tro { padding: 14px 8px 12px; border-radius: 16px; background: var(--surface); text-align: center; }
-.tro .ti { width: 42px; height: 42px; margin: 0 auto 8px; border-radius: 21px; display: grid; place-items: center; background: var(--surface-2); color: var(--label-3); }
+.tro .ti { width: 42px; height: 42px; margin: 0 auto 8px; border-radius: 21px; display: grid; place-items: center; background: var(--surface-2); color: var(--label-2); }
 .tro .ti svg { width: 21px; height: 21px; }
 .tro.got .ti { background: var(--green); color: var(--green-ink); }
 .tro b { display: block; font-size: 12.5px; font-weight: 650; line-height: 1.2; color: var(--label); }
@@ -1035,6 +1036,8 @@ body.desk.hud-lobby #toast { left: calc(50% + var(--side) / 2); }
   body.desk #tabbar button:hover { color: var(--label); }
   .tiers button:hover .tn, .lk-cats button:hover { color: var(--label); }
   .foot-link:hover, .practice-link:hover, .back:hover, .tour-skip:hover, .panel .close:hover { opacity: 0.75; }
+}
+
 /* ---------- depth: light in the dark hall (the owner chose the same colours with soft glows, gradients and lighting).
    Still Solana purple and green only, and never gradient text; glows are soft and sit on things that are lit:
    keys, the multiplier on a streak, lit segments, the cards over the court. ---------- */
@@ -1097,3 +1100,20 @@ body.hud-play:has(.card:not(.hide)) #dim { opacity: 1; }
   .card, .card.hide { transition: opacity 0.2s; }
   #heatPulse { display: none; }
 }
+
+/* ---------- tidy-ups (the owner asked for a cleaner, more organized, sleeker UI) ---------- */
+/* a scrolling page fades out above the tab bar, as it does under the top bar, instead of being cut by it */
+#tabbar::after { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 28px; pointer-events: none; background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.92)); }
+body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: none; } /* not on the Play tab, which doesn't scroll */
+/* the daily missions: a card under a band, like the specials and the pot above it */
+.ms-cc .mneed { box-shadow: inset 0 -1px 0 var(--sep); }
+.ms-cc .mneed + .mrow { box-shadow: none; }
+.ms-cc + .ctiles { margin-top: 14px; }
+/* trophies: how many are won, as a meter with a segment for each one */
+.tro-sum { display: flex; align-items: center; gap: 16px; margin: 14px 0 12px; padding: 14px 18px; border: 1px solid var(--hair); border-radius: 18px; background: var(--surface); }
+.tro-sum b { font-family: var(--font-round); font-size: 26px; font-weight: 700; line-height: 1; color: var(--label); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.tro-sum b small { font-size: 14px; font-weight: 600; color: var(--label-3); }
+.tro-seg { flex: 1; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; height: 8px; }
+.tro-seg i { border-radius: 1px; background: var(--track); }
+.tro-seg i.on { background: var(--green); box-shadow: 0 0 7px rgba(20, 241, 149, 0.6); }
+
