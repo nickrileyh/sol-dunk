@@ -1117,3 +1117,32 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
 .tro-seg i { border-radius: 1px; background: var(--track); }
 .tro-seg i.on { background: var(--green); box-shadow: 0 0 7px rgba(20, 241, 149, 0.6); }
 
+/* ---------- light on the pages (the owner asked for everything to look better, again): the depth pass lit the run;
+   this carries the same light, softly, to the pages. Still purple and green only, never on plain text. ---------- */
+/* the hall's haze reaches the top of every page, so a page isn't a dead black sheet: very faint, and gone by a third
+   of the way down. Painted with the page's own background (and one overlay on Play and the Locker, whose black is
+   the window's shadow), so nothing extra is composited while a page scrolls. */
+.view { background: radial-gradient(130% 360px at 50% -90px, rgba(153, 69, 255, 0.15), rgba(153, 69, 255, 0.05) 55%, rgba(153, 69, 255, 0) 100%), var(--bg); }
+.home::before { content: ""; position: absolute; left: 0; right: 0; top: 0; z-index: 0; height: 300px; pointer-events: none;
+  background: radial-gradient(130% 360px at 50% -90px, rgba(153, 69, 255, 0.15), rgba(153, 69, 255, 0.05) 55%, rgba(153, 69, 255, 0) 100%); }
+/* panels are lit from above, like the cards over the court: their top edge catches a little more light */
+.group, .cc, .tiles, .bests, .how, .tbl, .chap, .chlist, .runs, .menu-list, .pcard, .ct, .bet, .sp-card, .pot-me, .pot-demo, .empty, .tro, .tro-sum, .vscroll .list, .pe-name, .lk-grid .item {
+  border-top-color: rgba(255, 255, 255, 0.12);
+}
+.hero { box-shadow: 0 0 0 100vmax var(--bg), inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.12); }
+.hud-lobby #balBtn { box-shadow: inset 0 0 0 1px var(--hair), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+/* what's yours and what's picked is lit: the emblem, the picked mode, the worn item, the picked segment, the tab */
+.pav { background: linear-gradient(180deg, #ad66ff, #8a37ee); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 8px 22px rgba(153, 69, 255, 0.32); }
+.tiers button[aria-checked="true"] { box-shadow: inset 0 0 0 1.5px var(--accent), 0 3px 0 var(--accent-edge), 0 10px 24px rgba(153, 69, 255, 0.2); }
+.item.eq { box-shadow: inset 0 0 0 2px var(--accent), 0 0 18px rgba(153, 69, 255, 0.28); }
+.seg button[aria-checked="true"], .seg button[aria-pressed="true"] { background: linear-gradient(180deg, #3b3454, #2b2540); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+#tabbar button::before { box-shadow: 0 0 10px rgba(153, 69, 255, 0.75), 0 0 2px rgba(153, 69, 255, 0.9); }
+.pe-ems button[aria-pressed="true"] { background: linear-gradient(180deg, #ad66ff, #8a37ee); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 6px 16px rgba(153, 69, 255, 0.3); }
+/* the player card is the one panel that's yours: it sits in the same light as its emblem */
+.pcard { background: linear-gradient(180deg, #1a1230, #120d1b 62%, var(--surface)); }
+/* an empty list says what will be there, with its picture */
+.empty.rich { display: flex; align-items: center; gap: 14px; padding: 16px; }
+.empty.rich > i { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--surface-2); color: var(--label-2); }
+.empty.rich > i svg { width: 20px; height: 20px; }
+.empty.rich b { display: block; margin-bottom: 2px; font-family: var(--font-title); font-size: 15px; font-weight: 700; color: var(--label); }
+

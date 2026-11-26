@@ -3680,7 +3680,7 @@
     return `<div class="menu-list">${sw('sound', ICON.sound, 'Sound')}${sw('haptics', ICON.buzz, 'Vibration')}</div>`;
   }
   function runsHtml() {
-    if (!stats.history.length) return '<div class="empty">Your runs will show up here.</div>';
+    if (!stats.history.length) return `<div class="empty rich"><i>${ICON.chart}</i><span><b>No runs yet</b>Each run shows up here with how it ended and what it made.</span></div>`;
     const spName = (h) => (SP.BY[h.recipe] ? SP.BY[h.recipe].name : 'Special level');
     const what = (h) => (h.kind === 'special' ? (h.result === 'won' ? 'Cleared ' + spName(h) + ' · ' + fmtMult(h.mult) : 'Missed ' + spName(h))
       : h.result === 'bust' ? 'Out on level ' + h.level : h.result === 'maxwin' ? 'Max win · ' + fmtMult(h.mult) : h.result === 'final' ? 'All ' + NL + ' levels · ' + fmtMult(h.mult) : 'Cashed out at ' + fmtMult(h.mult));
