@@ -1308,6 +1308,30 @@ body.desk .ms-panels .msp { display: block; }
   .rd { padding: 8px 7px 9px; }
   .rd b { font-size: 12px; }
 }
+
+/* ---------- desktop, second pass (the owner asked to improve the desktop version) ----------
+   Play: the bet sits beside the middle of the arena's window, a size up, so the page reads as one console and not a
+   phone's controls parked in a corner. The sidebar's rows and the legend show the keys that work between runs. In a
+   run the pointer gets out of the way (game.js; the hall carrying on at the sides is drawn on the canvas). */
+body.desk #lobby .controls { align-self: center; padding-bottom: 36px; }
+body.desk #lobby .tiers { gap: 12px; }
+body.desk #lobby .tiers button { height: 76px; border-radius: 18px; }
+body.desk #lobby .tiers .tn { font-size: 13.5px; }
+body.desk #lobby .tiers .tx { font-size: 25px; }
+body.desk #lobby .foot-row { margin-top: 2px; }
+body.desk #lobby .bet { margin-top: 14px; padding: 10px 10px 12px; border-radius: 24px; }
+body.desk #lobby .bet .round { width: 50px; height: 50px; }
+body.desk #lobby .bet-input { height: 48px; font-size: 32px; }
+body.desk #lobby .win { margin: 14px 0 16px; font-size: 16px; }
+body.desk #lobby #playBtn { height: 62px; border-radius: 18px; font-size: 19px; }
+body.desk #lobby .practice-link { margin-top: 6px; }
+body.desk.kb #tabbar .kc { display: inline-grid; flex: none; min-width: 21px; padding: 0 5px; margin-left: auto; background: rgba(255, 255, 255, 0.06); color: var(--label-3); font-family: var(--font); }
+body.desk.kb #tabbar .badge.on + .kc { margin-left: 0; }
+body.desk #tabbar svg { flex: none; }
+body.desk.kb #tabbar button[aria-selected="true"] .kc { color: var(--label-2); }
+body:not([data-tab="play"]) #keys .k-play, body:not(.fs-ok) #keys .k-fs { display: none; }
+body.nocursor, body.nocursor * { cursor: none !important; }
+body.desk.kb.hud-play #keys { left: 14px; bottom: 12px; padding: 12px 14px 12px 12px; border-radius: 14px; background: rgba(6, 4, 11, 0.62); }   /* over the hall, on a quiet plate */
 </style>
 </head>
 <body class="hud-lobby">
@@ -1388,10 +1412,10 @@ body.desk .ms-panels .msp { display: block; }
 
 <nav id="tabbar" role="tablist" aria-label="Sections">
   <div class="side-brand" aria-hidden="true">SOL DUNK</div>
-  <button role="tab" data-tab="play" id="tabPlay" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M3.6 12h16.8M12 3.4v17.2M6.1 5.9c2.4 1.6 3.4 3.8 3.4 6.1s-1 4.5-3.4 6.1M17.9 5.9c-2.4 1.6-3.4 3.8-3.4 6.1s1 4.5 3.4 6.1"/></svg><span>Play</span></button>
-  <button role="tab" data-tab="challenges" id="tabChallenges" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.6 3.8h8.8v5.4a4.4 4.4 0 0 1-8.8 0z"/><path d="M7.6 5.6H4.8v1.2a3.3 3.3 0 0 0 3.1 3.3M16.4 5.6h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 13.6v3.6M8.4 20.2h7.2M9.8 20.2l.6-3h3.2l.6 3"/></svg><span>Challenges</span><i class="badge" id="badgeC"></i></button>
-  <button role="tab" data-tab="missions" id="tabMissions" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="4.7"/><circle class="fill" cx="12" cy="12" r="1.5"/></svg><span>Missions</span><i class="badge" id="badgeM"></i></button>
-  <button role="tab" data-tab="profile" id="tabProfile" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20.4c.8-3.9 3.7-6.1 7.4-6.1s6.6 2.2 7.4 6.1"/></svg><span>Profile</span><i class="badge" id="badgeP"></i></button>
+  <button role="tab" data-tab="play" id="tabPlay" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M3.6 12h16.8M12 3.4v17.2M6.1 5.9c2.4 1.6 3.4 3.8 3.4 6.1s-1 4.5-3.4 6.1M17.9 5.9c-2.4 1.6-3.4 3.8-3.4 6.1s1 4.5 3.4 6.1"/></svg><span>Play</span><kbd class="kc">1</kbd></button>
+  <button role="tab" data-tab="challenges" id="tabChallenges" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.6 3.8h8.8v5.4a4.4 4.4 0 0 1-8.8 0z"/><path d="M7.6 5.6H4.8v1.2a3.3 3.3 0 0 0 3.1 3.3M16.4 5.6h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 13.6v3.6M8.4 20.2h7.2M9.8 20.2l.6-3h3.2l.6 3"/></svg><span>Challenges</span><i class="badge" id="badgeC"></i><kbd class="kc">2</kbd></button>
+  <button role="tab" data-tab="missions" id="tabMissions" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="4.7"/><circle class="fill" cx="12" cy="12" r="1.5"/></svg><span>Missions</span><i class="badge" id="badgeM"></i><kbd class="kc">3</kbd></button>
+  <button role="tab" data-tab="profile" id="tabProfile" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20.4c.8-3.9 3.7-6.1 7.4-6.1s6.6 2.2 7.4 6.1"/></svg><span>Profile</span><i class="badge" id="badgeP"></i><kbd class="kc">4</kbd></button>
 </nav>
 
 <section id="pauseCard" class="card hide" aria-label="Paused" tabindex="-1">
@@ -1459,10 +1483,13 @@ body.desk .ms-panels .msp { display: block; }
 <!-- desktop, with a keyboard: what the keys do -->
 <div id="keys" aria-hidden="true">
   <div><kbd>Space</kbd><span class="k-lobby">Play</span><span class="k-run">Flap</span></div>
+  <div class="k-lobby k-play"><kbd>← →</kbd><span>Mode</span></div>
+  <div class="k-lobby k-play"><kbd>↑ ↓</kbd><span>Bet</span></div>
   <div class="k-run"><kbd>C</kbd><span>Cash out</span></div>
   <div class="k-run"><kbd>Enter</kbd><span>Keep going</span></div>
   <div><kbd>Esc</kbd><span class="k-lobby">Back</span><span class="k-run">Pause</span></div>
   <div><kbd>M</kbd><span>Sound</span></div>
+  <div class="k-fs"><kbd>F</kbd><span>Full screen</span></div>
 </div>
 <div id="toast" class="glass" role="status"></div>
 <canvas id="fxLayer" aria-hidden="true"></canvas>
@@ -5913,6 +5940,19 @@ body.desk .ms-panels .msp { display: block; }
     view.camY = lerp(view.camY, camYT, 1 - Math.exp(-dt * 4));
   }
 
+  // the gradients at the play column's sides on a wide screen: made when the window changes, not every frame
+  const SIDE_G = { key: '' }, SIDE_DIM = 0.42, SIDE_RAMP = 220;
+  function sideGrads(c, L, r0) {
+    const key = L + '|' + r0 + '|' + vw;
+    if (SIDE_G.key === key) return SIDE_G;
+    const R = r0 + 40, lin = (x0, x1, stops) => { const g = c.createLinearGradient(x0, 0, x1, 0); stops.forEach(([t, a]) => g.addColorStop(t, 'rgba(6,4,11,' + a + ')')); return g; };
+    SIDE_G.key = key;
+    SIDE_G.l = lin(L, L + 46, [[0, 1], [1, 0]]); SIDE_G.r = lin(r0 - 6, R, [[0, 0], [1, 1]]);
+    const ramp = [[0, 1], [0.12, 0.8], [0.4, 0.6], [1, SIDE_DIM]]; // dark right beside the column, then the hall comes up
+    SIDE_G.dl = lin(L, L - SIDE_RAMP, ramp); SIDE_G.dr = lin(R, R + SIDE_RAMP, ramp);
+    return SIDE_G;
+  }
+
   // how far the view pulls back on a level: rings spread out 4% a level, the view widens 3.5%
   const levelZoom = (L) => 1 / (1 + 0.035 * (L - 1));
 
@@ -5992,18 +6032,32 @@ body.desk .ms-panels .msp { display: block; }
       c.globalCompositeOperation = 'source-over';
     }
 
-    // wide screens: fade the sides so everyone sees the same distance ahead
+    // Wide screens: everyone sees the same distance ahead. Past the play column the course fades out; where there's
+    // room, the hall itself (sky, crowd, board and floor, with no rings, walls or labels in it) carries on to the
+    // window's edges, dim, so a run fills a big screen without showing any more of what's coming.
     if (offX > 2 && (phase !== 'lobby' || (view.zoom > 0.98 && !desk))) {
+      // the edges sit on whole device pixels, and the fills overlap by one: two fills that only meet on a part-covered
+      // pixel leave a bright hairline down the screen (they did, at both edges of the column)
+      const L = Math.floor((offX - 40) * dpr) / dpr, r0 = Math.ceil((offX + VIEW_W * scale) * dpr) / dpr, R = r0 + 40, G = sideGrads(c, L, r0), px = 1 / dpr;
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const l = c.createLinearGradient(offX - 40, 0, offX + 6, 0);
-      l.addColorStop(0, EDGE); l.addColorStop(1, EDGE0);
-      c.fillStyle = EDGE; c.fillRect(0, 0, Math.max(0, offX - 40), vh);
-      c.fillStyle = l; c.fillRect(offX - 40, 0, 46, vh);
-      const r0 = offX + VIEW_W * scale;
-      const r = c.createLinearGradient(r0 - 6, 0, r0 + 40, 0);
-      r.addColorStop(0, EDGE0); r.addColorStop(1, EDGE);
-      c.fillStyle = r; c.fillRect(r0 - 6, 0, 46, vh);
-      c.fillStyle = EDGE; c.fillRect(r0 + 40, 0, vw, vh);
+      if (L > 60) {
+        c.save();
+        c.beginPath(); c.rect(0, 0, L, vh); c.rect(R, 0, vw - R, vh); c.clip();
+        c.fillStyle = EDGE; c.fillRect(0, 0, vw, vh);
+        c.drawImage(backdrop(), bgX, 0, vw, vh);
+        c.setTransform(k, 0, 0, k, (ox + sx) * dpr - view.camX * k, (oy + sy) * dpr - view.camY * k);
+        drawFar(c, worldLeft, worldW);
+        drawCourt(c, worldLeft, worldW, S, bx, by, null);
+        c.setTransform(dpr, 0, 0, dpr, 0, 0);
+        c.fillStyle = G.dl; c.fillRect(0, 0, L, vh); // darkest beside the play column, so the lit lane stands out
+        c.fillStyle = G.dr; c.fillRect(R, 0, vw - R, vh);
+        c.restore();
+      } else {
+        c.fillStyle = EDGE; c.fillRect(0, 0, Math.max(0, L), vh);
+        c.fillRect(R, 0, vw, vh);
+      }
+      c.fillStyle = G.l; c.fillRect(L - px, 0, 46 + px, vh);
+      c.fillStyle = G.r; c.fillRect(r0 - 6, 0, 46 + px, vh);
     }
   }
 
@@ -6765,8 +6819,9 @@ body.desk .ms-panels .msp { display: block; }
   // ---------------------------------------------------------------- input
   function flapInput() {
     Sound.unlock();
-    if (phase === 'ready') { beginPlay(); return; }
-    if (phase === 'play') { pendingTap = true; return; }
+    const still = KB && performance.now() - mouseAt > 1500; // flown by keyboard: the pointer steps aside
+    if (phase === 'ready') { beginPlay(); if (still) hideCursor(); return; }
+    if (phase === 'play') { pendingTap = true; if (still) hideCursor(); return; }
     if (phase === 'paused') resume();
   }
   cv.addEventListener('touchstart', (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
@@ -6778,7 +6833,9 @@ body.desk .ms-panels .msp { display: block; }
   }, { passive: false });
   window.addEventListener('keydown', (e) => {
     const tag = document.activeElement && document.activeElement.tagName;
-    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+    if (e.code === 'ArrowUp' && phase === 'lobby' && nav.tab === 'play' && !nav.page && tag !== 'INPUT' && !tourOpen() && ui.panel.classList.contains('hide')) {
+      e.preventDefault(); $('betUp').click(); // between runs the up arrow raises the bet (in a run it flaps)
+    } else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
       const onPlayTab = document.activeElement && document.activeElement.id === 'tabPlay' && nav.tab === 'play'; // Space on the open Play tab plays, like the button says
       if (tag === 'INPUT' || (tag === 'BUTTON' && !onPlayTab && phase !== 'play' && phase !== 'ready' && phase !== 'paused')) return;
       if (nav.page) return; // a page is open: Space scrolls it, and nothing starts or resumes behind it
@@ -6795,6 +6852,10 @@ body.desk .ms-panels .msp { display: block; }
       if (e.code === 'KeyC') cashOut(); else keepGoing();
     } else if (e.code === 'KeyM' && tag !== 'INPUT' && !e.metaKey && !e.ctrlKey && !e.altKey) {
       toggleSetting('sound');
+    } else if (e.code === 'KeyF' && tag !== 'INPUT' && !e.metaKey && !e.ctrlKey && !e.altKey && FS_OK && !e.repeat) {
+      toggleFullscreen();
+    } else if (lobbyKeys(e, tag)) {
+      e.preventDefault();
     } else if (e.code === 'KeyP' && tag !== 'INPUT' && !e.metaKey && !e.ctrlKey && !e.altKey && (phase === 'play' || phase === 'paused') && !nav.page) {
       if (phase === 'play') pause(); else resume();
     } else if (e.code === 'Escape') {
@@ -6807,6 +6868,39 @@ body.desk .ms-panels .msp { display: block; }
       else if (phase === 'lobby' && nav.tab !== 'play') setTab('play');
     }
   });
+  // Between runs, a keyboard does what the pointer does: 1 to 4 open the tabs in the sidebar's order; on Play, left and right pick
+  // the mode and up and down step the bet. (In a run the up arrow flaps, so these only work in the lobby.)
+  function lobbyKeys(e, tag) {
+    if (phase !== 'lobby' || tag === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey || tourOpen() || !ui.panel.classList.contains('hide')) return false;
+    const tab = TABS[{ Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3 }[e.code]];
+    if (tab) { if (!e.repeat && (nav.page || nav.tab !== tab)) { setTab(tab); Sound.click(); } return true; }
+    if (nav.tab !== 'play' || nav.page) return false;
+    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+      const el = $('diff' + clamp(prefs.di + (e.code === 'ArrowRight' ? 1 : -1), 0, E.DIFFS.length - 1));
+      if (el && !e.repeat && el.getAttribute('aria-checked') !== 'true') el.click();
+      return true;
+    }
+    if (e.code === 'ArrowDown') { $('betDown').click(); return true; }
+    return false;
+  }
+  // Full screen (F), where the page is allowed to ask for it (an embedded page often isn't: then the key isn't shown)
+  const FS_OK = !!(document.fullscreenEnabled && document.documentElement.requestFullscreen);
+  document.body.classList.toggle('fs-ok', FS_OK);
+  function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else { const p = document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => {}); }
+    } catch (e) { /* not allowed here */ }
+  }
+  // With a mouse, the pointer gets out of the way of a run: it hides after a moment's stillness while the ball is
+  // flying, and comes back the moment the mouse moves (the cards need it).
+  let mouseAt = 0, cursorTimer = 0;
+  const hideCursor = () => { if (KB && phase === 'play') document.body.classList.add('nocursor'); };
+  if (KB) window.addEventListener('mousemove', () => {
+    mouseAt = performance.now();
+    if (document.body.classList.contains('nocursor')) document.body.classList.remove('nocursor');
+    clearTimeout(cursorTimer); cursorTimer = setTimeout(hideCursor, 1800);
+  }, { passive: true });
   document.addEventListener('visibilitychange', () => { if (document.hidden && phase === 'play') pause(); });
   // Resuming counts in 3-2-1, so the ball doesn't drop the moment you tap (faster levels leave little slack)
   let resumeTimer = 0, resuming = false;

@@ -1,7 +1,8 @@
 """Checks the desktop layout (a window at least 1024 x 600): the sidebar in place of the tab bar, the arena's window
 beside the bet on Play and beside the collection in the Locker (with the demo ball flying inside it), Challenges
-and Profile in two columns, pages in a reading column beside the sidebar, the keys (Space, C, Enter, Esc, P, M)
-through a run, and that a smaller window goes back to the phone layout."""
+and Profile in two columns, pages in a reading column beside the sidebar, the keys between runs (1 to 4 for the
+tabs, the arrows for the mode and the bet) and through a run (Space, C, Enter, Esc, P, M), the hall carrying on dimly
+at the sides of a run with the pointer out of the way, and that a smaller window goes back to the phone layout."""
 import asyncio, json
 from playwright.async_api import async_playwright
 from _paths import URL, SHOTS, CHROME
@@ -27,6 +28,7 @@ async def main():
             hero, ctl, bal = await rect('#hero'), await rect('#lobby .controls'), await rect('#balBtn')
             check(hero['l'] >= tb['r'] and hero['r'] <= ctl['l'] and ctl['r'] <= W and hero['w'] >= 220 and hero['h'] >= H * 0.7, tag + f"Play: the window stands between the sidebar and the bet ({round(hero['w'])} x {round(hero['h'])})")
             check(ctl['b'] <= H and bal['l'] >= hero['r'] and bal['b'] <= ctl['t'], tag + 'Play: the bet fits under the balance')
+            check(abs((ctl['t'] + ctl['b']) / 2 - (hero['t'] + hero['b']) / 2) < H * 0.1, tag + 'Play: the bet sits beside the middle of the window')
             inside = n = 0
             for i in range(50):
                 s = await page.evaluate('__solDunk.ballScreen()'); n += 1
@@ -65,6 +67,26 @@ async def main():
                 await page.keyboard.press('KeyM'); await page.wait_for_timeout(100)
                 check(await page.evaluate('__solDunk.settings.sound') != snd, 'M turns the sound off and on')
                 await page.keyboard.press('KeyM')
+                # between runs: 1, 2 and 3 open the tabs, the arrows pick the mode and step the bet
+                tab = lambda: page.evaluate('__solDunk.nav.tab')
+                chips = await page.evaluate("[...document.querySelectorAll('#tabbar .kc')].map((e) => [e.textContent, getComputedStyle(e).display])")
+                check([c[0] for c in chips] == ['1', '2', '3', '4'] and all(c[1] != 'none' for c in chips), 'the sidebar rows show their keys ' + json.dumps(chips))
+                await page.keyboard.press('Digit2'); await page.wait_for_timeout(300); t2 = await tab()
+                await page.keyboard.press('Digit3'); await page.wait_for_timeout(300); t3 = await tab()
+                await page.keyboard.press('Digit4'); await page.wait_for_timeout(300); t4 = await tab()
+                await page.keyboard.press('ArrowRight'); await page.wait_for_timeout(100); off = await page.evaluate('__solDunk.prefs.di')
+                await page.keyboard.press('Digit1'); await page.wait_for_timeout(400)
+                check([t2, t3, t4, await tab()] == ['challenges', 'missions', 'profile', 'play'] and off == 0, '1 to 4 open the tabs (and the arrows do nothing away from Play)')
+                await page.keyboard.press('ArrowRight'); await page.wait_for_timeout(150); d1 = await page.evaluate('__solDunk.prefs.di')
+                await page.keyboard.press('ArrowLeft'); await page.wait_for_timeout(150)
+                check(d1 == 1 and await page.evaluate('__solDunk.prefs.di') == 0, 'left and right pick the mode')
+                b0 = await page.evaluate('__solDunk.prefs.bet')
+                await page.keyboard.press('ArrowUp'); await page.wait_for_timeout(150); b1 = await page.evaluate('__solDunk.prefs.bet')
+                await page.keyboard.press('ArrowDown'); await page.wait_for_timeout(150)
+                check(b1 > b0 and await page.evaluate('__solDunk.prefs.bet') == b0 and await phase() == 'lobby', f'up and down step the bet ({b0} to {b1} and back)')
+                legend = await page.evaluate("[...document.querySelectorAll('#keys > div')].filter((e) => getComputedStyle(e).display !== 'none').map((e) => e.textContent.trim().replace(/\\s+/g, ' '))")
+                check(any('Mode' in x for x in legend) and any('Bet' in x for x in legend), 'the legend lists them on Play ' + json.dumps(legend))
+                await page.wait_for_timeout(900)
                 await page.keyboard.press('Space'); await page.wait_for_timeout(1300)
                 check(await phase() == 'ready', 'Space starts a run from Play')
                 check(await page.evaluate("document.getElementById('promptText').textContent") == 'Press Space to fly', 'the prompt names the key')
@@ -73,6 +95,14 @@ async def main():
                 check(abs((hud['l'] + hud['r']) / 2 - W / 2) < 2 and abs(hud['w'] - w) < 2, 'in a run the HUD sits over the centred court')
                 await page.evaluate("__solDunk.autoplay('pro')"); await page.keyboard.press('Space'); await page.wait_for_timeout(600)
                 check(await phase() == 'play', 'Space flaps')
+                # the hall carries on at the sides of the play column, dim, and the column's edge stays dark
+                SUM = "(a) => { const cv = document.getElementById('game'), k = cv.width / innerWidth, g = cv.getContext('2d'); let m = 0; for (let y = a[1]; y < a[2]; y += 4) { const d = g.getImageData(Math.round(a[0] * k), Math.round(y * k), 1, 1).data; m = Math.max(m, d[0] + d[1] + d[2]); } return m; }"
+                side, seam = await page.evaluate(SUM, [150, 600, 890]), await page.evaluate(SUM, [(W - w) / 2 - 40, 100, 890])
+                check(side > 60 and seam < 45, f'in a run the hall carries on at the sides (brightest {side}) and the column\'s edge is dark ({seam})')
+                check(await page.evaluate("document.body.classList.contains('nocursor')"), 'the pointer hides while the ball flies')
+                await page.mouse.move(700, 450); await page.wait_for_timeout(100)
+                check(not await page.evaluate("document.body.classList.contains('nocursor')"), 'and comes back when the mouse moves')
+                await page.screenshot(path=f'{SHOTS}/desk_run.png')
                 await page.keyboard.press('KeyP'); await page.wait_for_timeout(300)
                 check(await phase() == 'paused', 'P pauses')
                 await page.keyboard.press('Escape')

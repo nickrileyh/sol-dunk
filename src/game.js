@@ -2696,6 +2696,19 @@
     view.camY = lerp(view.camY, camYT, 1 - Math.exp(-dt * 4));
   }
 
+  // the gradients at the play column's sides on a wide screen: made when the window changes, not every frame
+  const SIDE_G = { key: '' }, SIDE_DIM = 0.42, SIDE_RAMP = 220;
+  function sideGrads(c, L, r0) {
+    const key = L + '|' + r0 + '|' + vw;
+    if (SIDE_G.key === key) return SIDE_G;
+    const R = r0 + 40, lin = (x0, x1, stops) => { const g = c.createLinearGradient(x0, 0, x1, 0); stops.forEach(([t, a]) => g.addColorStop(t, 'rgba(6,4,11,' + a + ')')); return g; };
+    SIDE_G.key = key;
+    SIDE_G.l = lin(L, L + 46, [[0, 1], [1, 0]]); SIDE_G.r = lin(r0 - 6, R, [[0, 0], [1, 1]]);
+    const ramp = [[0, 1], [0.12, 0.8], [0.4, 0.6], [1, SIDE_DIM]]; // dark right beside the column, then the hall comes up
+    SIDE_G.dl = lin(L, L - SIDE_RAMP, ramp); SIDE_G.dr = lin(R, R + SIDE_RAMP, ramp);
+    return SIDE_G;
+  }
+
   // how far the view pulls back on a level: rings spread out 4% a level, the view widens 3.5%
   const levelZoom = (L) => 1 / (1 + 0.035 * (L - 1));
 
@@ -2775,18 +2788,32 @@
       c.globalCompositeOperation = 'source-over';
     }
 
-    // wide screens: fade the sides so everyone sees the same distance ahead
+    // Wide screens: everyone sees the same distance ahead. Past the play column the course fades out; where there's
+    // room, the hall itself (sky, crowd, board and floor, with no rings, walls or labels in it) carries on to the
+    // window's edges, dim, so a run fills a big screen without showing any more of what's coming.
     if (offX > 2 && (phase !== 'lobby' || (view.zoom > 0.98 && !desk))) {
+      // the edges sit on whole device pixels, and the fills overlap by one: two fills that only meet on a part-covered
+      // pixel leave a bright hairline down the screen (they did, at both edges of the column)
+      const L = Math.floor((offX - 40) * dpr) / dpr, r0 = Math.ceil((offX + VIEW_W * scale) * dpr) / dpr, R = r0 + 40, G = sideGrads(c, L, r0), px = 1 / dpr;
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const l = c.createLinearGradient(offX - 40, 0, offX + 6, 0);
-      l.addColorStop(0, EDGE); l.addColorStop(1, EDGE0);
-      c.fillStyle = EDGE; c.fillRect(0, 0, Math.max(0, offX - 40), vh);
-      c.fillStyle = l; c.fillRect(offX - 40, 0, 46, vh);
-      const r0 = offX + VIEW_W * scale;
-      const r = c.createLinearGradient(r0 - 6, 0, r0 + 40, 0);
-      r.addColorStop(0, EDGE0); r.addColorStop(1, EDGE);
-      c.fillStyle = r; c.fillRect(r0 - 6, 0, 46, vh);
-      c.fillStyle = EDGE; c.fillRect(r0 + 40, 0, vw, vh);
+      if (L > 60) {
+        c.save();
+        c.beginPath(); c.rect(0, 0, L, vh); c.rect(R, 0, vw - R, vh); c.clip();
+        c.fillStyle = EDGE; c.fillRect(0, 0, vw, vh);
+        c.drawImage(backdrop(), bgX, 0, vw, vh);
+        c.setTransform(k, 0, 0, k, (ox + sx) * dpr - view.camX * k, (oy + sy) * dpr - view.camY * k);
+        drawFar(c, worldLeft, worldW);
+        drawCourt(c, worldLeft, worldW, S, bx, by, null);
+        c.setTransform(dpr, 0, 0, dpr, 0, 0);
+        c.fillStyle = G.dl; c.fillRect(0, 0, L, vh); // darkest beside the play column, so the lit lane stands out
+        c.fillStyle = G.dr; c.fillRect(R, 0, vw - R, vh);
+        c.restore();
+      } else {
+        c.fillStyle = EDGE; c.fillRect(0, 0, Math.max(0, L), vh);
+        c.fillRect(R, 0, vw, vh);
+      }
+      c.fillStyle = G.l; c.fillRect(L - px, 0, 46 + px, vh);
+      c.fillStyle = G.r; c.fillRect(r0 - 6, 0, 46 + px, vh);
     }
   }
 
@@ -3548,8 +3575,9 @@
   // ---------------------------------------------------------------- input
   function flapInput() {
     Sound.unlock();
-    if (phase === 'ready') { beginPlay(); return; }
-    if (phase === 'play') { pendingTap = true; return; }
+    const still = KB && performance.now() - mouseAt > 1500; // flown by keyboard: the pointer steps aside
+    if (phase === 'ready') { beginPlay(); if (still) hideCursor(); return; }
+    if (phase === 'play') { pendingTap = true; if (still) hideCursor(); return; }
     if (phase === 'paused') resume();
   }
   cv.addEventListener('touchstart', (e) => { if (e.cancelable) e.preventDefault(); }, { passive: false });
@@ -3561,7 +3589,9 @@
   }, { passive: false });
   window.addEventListener('keydown', (e) => {
     const tag = document.activeElement && document.activeElement.tagName;
-    if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
+    if (e.code === 'ArrowUp' && phase === 'lobby' && nav.tab === 'play' && !nav.page && tag !== 'INPUT' && !tourOpen() && ui.panel.classList.contains('hide')) {
+      e.preventDefault(); $('betUp').click(); // between runs the up arrow raises the bet (in a run it flaps)
+    } else if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
       const onPlayTab = document.activeElement && document.activeElement.id === 'tabPlay' && nav.tab === 'play'; // Space on the open Play tab plays, like the button says
       if (tag === 'INPUT' || (tag === 'BUTTON' && !onPlayTab && phase !== 'play' && phase !== 'ready' && phase !== 'paused')) return;
       if (nav.page) return; // a page is open: Space scrolls it, and nothing starts or resumes behind it
@@ -3578,6 +3608,10 @@
       if (e.code === 'KeyC') cashOut(); else keepGoing();
     } else if (e.code === 'KeyM' && tag !== 'INPUT' && !e.metaKey && !e.ctrlKey && !e.altKey) {
       toggleSetting('sound');
+    } else if (e.code === 'KeyF' && tag !== 'INPUT' && !e.metaKey && !e.ctrlKey && !e.altKey && FS_OK && !e.repeat) {
+      toggleFullscreen();
+    } else if (lobbyKeys(e, tag)) {
+      e.preventDefault();
     } else if (e.code === 'KeyP' && tag !== 'INPUT' && !e.metaKey && !e.ctrlKey && !e.altKey && (phase === 'play' || phase === 'paused') && !nav.page) {
       if (phase === 'play') pause(); else resume();
     } else if (e.code === 'Escape') {
@@ -3590,6 +3624,39 @@
       else if (phase === 'lobby' && nav.tab !== 'play') setTab('play');
     }
   });
+  // Between runs, a keyboard does what the pointer does: 1 to 4 open the tabs in the sidebar's order; on Play, left and right pick
+  // the mode and up and down step the bet. (In a run the up arrow flaps, so these only work in the lobby.)
+  function lobbyKeys(e, tag) {
+    if (phase !== 'lobby' || tag === 'INPUT' || e.metaKey || e.ctrlKey || e.altKey || tourOpen() || !ui.panel.classList.contains('hide')) return false;
+    const tab = TABS[{ Digit1: 0, Digit2: 1, Digit3: 2, Digit4: 3, Numpad1: 0, Numpad2: 1, Numpad3: 2, Numpad4: 3 }[e.code]];
+    if (tab) { if (!e.repeat && (nav.page || nav.tab !== tab)) { setTab(tab); Sound.click(); } return true; }
+    if (nav.tab !== 'play' || nav.page) return false;
+    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+      const el = $('diff' + clamp(prefs.di + (e.code === 'ArrowRight' ? 1 : -1), 0, E.DIFFS.length - 1));
+      if (el && !e.repeat && el.getAttribute('aria-checked') !== 'true') el.click();
+      return true;
+    }
+    if (e.code === 'ArrowDown') { $('betDown').click(); return true; }
+    return false;
+  }
+  // Full screen (F), where the page is allowed to ask for it (an embedded page often isn't: then the key isn't shown)
+  const FS_OK = !!(document.fullscreenEnabled && document.documentElement.requestFullscreen);
+  document.body.classList.toggle('fs-ok', FS_OK);
+  function toggleFullscreen() {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else { const p = document.documentElement.requestFullscreen(); if (p && p.catch) p.catch(() => {}); }
+    } catch (e) { /* not allowed here */ }
+  }
+  // With a mouse, the pointer gets out of the way of a run: it hides after a moment's stillness while the ball is
+  // flying, and comes back the moment the mouse moves (the cards need it).
+  let mouseAt = 0, cursorTimer = 0;
+  const hideCursor = () => { if (KB && phase === 'play') document.body.classList.add('nocursor'); };
+  if (KB) window.addEventListener('mousemove', () => {
+    mouseAt = performance.now();
+    if (document.body.classList.contains('nocursor')) document.body.classList.remove('nocursor');
+    clearTimeout(cursorTimer); cursorTimer = setTimeout(hideCursor, 1800);
+  }, { passive: true });
   document.addEventListener('visibilitychange', () => { if (document.hidden && phase === 'play') pause(); });
   // Resuming counts in 3-2-1, so the ball doesn't drop the moment you tap (faster levels leave little slack)
   let resumeTimer = 0, resuming = false;

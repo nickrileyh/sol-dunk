@@ -1299,3 +1299,27 @@ body.desk .ms-panels .msp { display: block; }
   .rd { padding: 8px 7px 9px; }
   .rd b { font-size: 12px; }
 }
+
+/* ---------- desktop, second pass (the owner asked to improve the desktop version) ----------
+   Play: the bet sits beside the middle of the arena's window, a size up, so the page reads as one console and not a
+   phone's controls parked in a corner. The sidebar's rows and the legend show the keys that work between runs. In a
+   run the pointer gets out of the way (game.js; the hall carrying on at the sides is drawn on the canvas). */
+body.desk #lobby .controls { align-self: center; padding-bottom: 36px; }
+body.desk #lobby .tiers { gap: 12px; }
+body.desk #lobby .tiers button { height: 76px; border-radius: 18px; }
+body.desk #lobby .tiers .tn { font-size: 13.5px; }
+body.desk #lobby .tiers .tx { font-size: 25px; }
+body.desk #lobby .foot-row { margin-top: 2px; }
+body.desk #lobby .bet { margin-top: 14px; padding: 10px 10px 12px; border-radius: 24px; }
+body.desk #lobby .bet .round { width: 50px; height: 50px; }
+body.desk #lobby .bet-input { height: 48px; font-size: 32px; }
+body.desk #lobby .win { margin: 14px 0 16px; font-size: 16px; }
+body.desk #lobby #playBtn { height: 62px; border-radius: 18px; font-size: 19px; }
+body.desk #lobby .practice-link { margin-top: 6px; }
+body.desk.kb #tabbar .kc { display: inline-grid; flex: none; min-width: 21px; padding: 0 5px; margin-left: auto; background: rgba(255, 255, 255, 0.06); color: var(--label-3); font-family: var(--font); }
+body.desk.kb #tabbar .badge.on + .kc { margin-left: 0; }
+body.desk #tabbar svg { flex: none; }
+body.desk.kb #tabbar button[aria-selected="true"] .kc { color: var(--label-2); }
+body:not([data-tab="play"]) #keys .k-play, body:not(.fs-ok) #keys .k-fs { display: none; }
+body.nocursor, body.nocursor * { cursor: none !important; }
+body.desk.kb.hud-play #keys { left: 14px; bottom: 12px; padding: 12px 14px 12px 12px; border-radius: 14px; background: rgba(6, 4, 11, 0.62); }   /* over the hall, on a quiet plate */
