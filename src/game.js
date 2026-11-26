@@ -932,6 +932,13 @@
   const RV = P.R; // drawn ball radius = collision radius
   const cv = $('game'), cx = cv.getContext('2d');
   let vw = 0, vh = 0, dpr = 1, scale = 1, offX = 0, offY = 0;
+  // A run's window onto the court, in screen px: [runL, runR], with the ball at runBX. On a phone it's the play column
+  // (VIEW_W wide). On a desktop it's wider (the owner asked for the play area to be wider than a phone's), but only
+  // behind the ball: the window's right edge stays (VIEW_W - BALL_SX) * scale ahead of the ball, the same distance
+  // ahead as a phone at every level, so nobody sees more of the course coming. The payout tables are priced for that
+  // view. The extra width shows the rings already passed, and the ball sits DESK_BALL_F of the way across.
+  const DESK_BALL_F = 0.44;
+  let runL = 0, runR = 0, runBX = 0;
   // canvas sharpness: up to 2x, stepped down if a phone can't keep up during play (see frame)
   let dprCap = 2;
   const perf = { avg: 1 / 60, slow: 0 };
@@ -955,7 +962,10 @@
     scale = Math.min(vw / VIEW_W, vh / VIEW_H);
     offX = (vw - VIEW_W * scale) / 2;
     offY = (vh - VIEW_H * scale) / 2 - VIEW_TOP * scale;
-    document.documentElement.style.setProperty('--col', Math.round(VIEW_W * scale) + 'px'); // the play column, for the HUD
+    const ahead = (VIEW_W - BALL_SX) * scale, runW = desk ? Math.min(vw, Math.max(VIEW_W * scale, ahead / (1 - DESK_BALL_F))) : VIEW_W * scale;
+    runL = (vw - runW) / 2; runR = runL + runW; runBX = runR - ahead;
+    document.documentElement.style.setProperty('--col', Math.round(VIEW_W * scale) + 'px'); // the play column, for the HUD and the pages
+    document.documentElement.style.setProperty('--runw', Math.round(runW) + 'px'); // a run's window (wider on a desktop)
   }
   window.addEventListener('resize', resize);
   resize();
@@ -2852,7 +2862,7 @@
     if (HUD_DIRTY.on || !(view.time - view.hudAt < 2)) { // where the HUD ends, so ring labels float below it (small phones)
       view.hudAt = view.time; HUD_DIRTY.on = false;
       let b = 0;
-      for (const q of HUD_Q) { const e = document.querySelector(q), r = e && e.getBoundingClientRect(); if (r && r.height && r.right > offX && r.left < offX + VIEW_W * scale) b = Math.max(b, r.bottom); }
+      for (const q of HUD_Q) { const e = document.querySelector(q), r = e && e.getBoundingClientRect(); if (r && r.height && r.right > runL && r.left < runR) b = Math.max(b, r.bottom); }
       view.hudBot = b;
     }
   }
@@ -3022,7 +3032,7 @@
     // spot on screen at every speed, and bounces still read as motion. In a run the ball keeps its
     // level-1 spot on screen whatever the zoom, so all of the extra view lies ahead of it, on every
     // screen size alike (wide screens fade their sides to the same window).
-    const ballSX = offX + BALL_SX * scale, ox0 = (vw - VIEW_W * S) / 2;
+    const ballSX = runBX, ox0 = (vw - VIEW_W * S) / 2;
     // between runs on a desktop the window sits beside the controls: the demo ball flies 30% into it
     const deskLobby = desk && phase === 'lobby' && centreY != null;
     view.bgX = lerp(view.bgX || 0, deskLobby ? (heroL + heroR - vw) / 2 : 0, 1 - Math.exp(-dt * 7)); // the spotlight stands over the window
@@ -3090,7 +3100,7 @@
     view.bsx = ox + sx + (bx - view.camX) * S; view.bsy = oy + sy + (by - view.camY) * S;
     view.bsr = P.R * S;
     const worldLeft = view.camX - ox / S, worldW = vw / S;
-    view.wl = view.camX + (offX - ox) / S; view.wr = view.camX + (offX + VIEW_W * scale - ox) / S; // the window everyone sees
+    view.wl = view.camX + (runL - ox) / S; view.wr = view.camX + (runR - ox) / S; // the window onto the court (as far ahead as everyone sees)
     if (desk && phase === 'lobby') { view.wl = view.camX + (heroL - ox) / S; view.wr = view.camX + (heroR - ox) / S; } // between runs, the page's window
     view.wt = view.hudBot ? view.camY + (view.hudBot - oy) / S : null;
     const st = view.st;
@@ -3134,10 +3144,10 @@
     // Wide screens: everyone sees the same distance ahead. Past the play column the course fades out; where there's
     // room, the hall itself (sky, crowd, board and floor, with no rings, walls or labels in it) carries on to the
     // window's edges, dim, so a run fills a big screen without showing any more of what's coming.
-    if (offX > 2 && (phase !== 'lobby' || (view.zoom > 0.98 && !desk))) {
+    if (runL > 2 && (phase !== 'lobby' || (view.zoom > 0.98 && !desk))) {
       // the edges sit on whole device pixels, and the fills overlap by one: two fills that only meet on a part-covered
       // pixel leave a bright hairline down the screen (they did, at both edges of the column)
-      const L = Math.floor((offX - 40) * dpr) / dpr, r0 = Math.ceil((offX + VIEW_W * scale) * dpr) / dpr, R = r0 + 40, G = sideGrads(c, L, r0), px = 1 / dpr;
+      const L = Math.floor((runL - 40) * dpr) / dpr, r0 = Math.ceil(runR * dpr) / dpr, R = r0 + 40, G = sideGrads(c, L, r0), px = 1 / dpr;
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (L > 60) {
         c.save();
@@ -4695,7 +4705,7 @@
   }
   if (hot && hot.ready) hot.ready(boot); else boot((hot && hot.data) || {});
   window.__solDunk = {
-    run, stats, wallet, view, E, PAY, ball, profile, nav, settings, prefs, geom: () => ({ scale, offX, offY }),
+    run, stats, wallet, view, E, PAY, ball, profile, nav, settings, prefs, geom: () => ({ scale, offX, offY, runL, runR, runBX, ahead: (VIEW_W - BALL_SX) * scale }),
     phase: () => phase,
     dbg,
     unfreeze: () => { dbg.frozen = false; goPlay(); },

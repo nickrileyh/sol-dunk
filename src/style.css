@@ -1364,3 +1364,7 @@ body.desk.kb.hud-play #keys { left: 14px; bottom: 12px; padding: 12px 14px 12px 
 @media (hover: hover) and (pointer: fine) { .m-claim:hover { filter: brightness(1.08); } }
 .quiet .m-claim { animation: claimGlow 2.4s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .quiet .m-claim { animation: none; } }
+/* a run on a desktop: the window onto the court is wider than a phone's (behind the ball only; game.js), and the HUD
+   and the frame of heat sit over all of it */
+body.desk:not(.hud-lobby) #hud { width: min(100%, max(var(--runw, var(--col)), 400px)); }
+body.desk #heatFrame, body.desk #heatPulse { width: min(100%, var(--runw, var(--col))); }

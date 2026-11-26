@@ -92,12 +92,19 @@ async def main():
                 check(await page.evaluate("document.getElementById('promptText').textContent") == 'Press Space to fly', 'the prompt names the key')
                 check((await rect('#tabbar'))['r'] <= 1, 'the sidebar slides away for the run')
                 hud, w = await rect('#hud'), await page.evaluate("parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--col'))")
-                check(abs((hud['l'] + hud['r']) / 2 - W / 2) < 2 and abs(hud['w'] - w) < 2, 'in a run the HUD sits over the centred court')
+                g = await page.evaluate('__solDunk.geom()')
+                runw = g['runR'] - g['runL']
+                check(abs((hud['l'] + hud['r']) / 2 - W / 2) < 2 and abs(hud['w'] - runw) < 2, f"in a run the HUD sits over the centred court ({round(hud['w'])} px)")
+                # wider than a phone's, but only behind the ball: the window ends as far ahead of the ball as a phone's
+                check(runw > w * 1.3 and abs(g['runR'] - g['runBX'] - g['ahead']) < 0.5 and abs(g['ahead'] - (352 - 56) * g['scale']) < 0.5, f"a run's window is wider than a phone's ({round(runw)} px against {round(w)}) with the same view ahead ({round(g['ahead'])} px)")
                 await page.evaluate("__solDunk.autoplay('pro')"); await page.keyboard.press('Space'); await page.wait_for_timeout(600)
                 check(await phase() == 'play', 'Space flaps')
+                await page.wait_for_timeout(700)
+                bs, v = await page.evaluate('__solDunk.ballScreen()'), await page.evaluate('({ wr: __solDunk.view.wr, x: __solDunk.view.drawX, z: __solDunk.view.zoom })')
+                check(abs(bs['x'] - g['runBX']) < 6 and abs((v['wr'] - v['x']) - 296 / v['z']) < 3, f"the ball flies at its spot and sees {round(v['wr'] - v['x'])} units ahead, a phone's {round(296 / v['z'])}")
                 # the hall carries on at the sides of the play column, dim, and the column's edge stays dark
                 SUM = "(a) => { const cv = document.getElementById('game'), k = cv.width / innerWidth, g = cv.getContext('2d'); let m = 0; for (let y = a[1]; y < a[2]; y += 4) { const d = g.getImageData(Math.round(a[0] * k), Math.round(y * k), 1, 1).data; m = Math.max(m, d[0] + d[1] + d[2]); } return m; }"
-                side, seam = await page.evaluate(SUM, [150, 600, 890]), await page.evaluate(SUM, [(W - w) / 2 - 40, 100, 890])
+                side, seam = await page.evaluate(SUM, [150, 600, 890]), await page.evaluate(SUM, [g['runL'] - 40, 100, 890])
                 check(side > 60 and seam < 45, f'in a run the hall carries on at the sides (brightest {side}) and the column\'s edge is dark ({seam})')
                 check(await page.evaluate("document.body.classList.contains('nocursor')"), 'the pointer hides while the ball flies')
                 await page.mouse.move(700, 450); await page.wait_for_timeout(100)
