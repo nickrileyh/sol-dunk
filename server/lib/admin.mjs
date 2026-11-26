@@ -39,7 +39,7 @@ export function mountAdmin(app, ctx) {
       (select count(*) from unmatched_deposits where status = 'open')::int as unmatched,
       (select count(*) from users where hold is not null)::int as held,
       (select count(*) from users where flagged is not null)::int as limited`);
-    const s = await tx(async (t) => ({ pause: await t.setting('pause', {}), houseRake: Number(await t.setting('houseRake', 0)), missionPaid: Number(await t.setting('missionPaid', 0)) }));
+    const s = await tx(async (t) => ({ pause: await t.setting('pause', {}), houseRake: Number(await t.setting('houseRake', 0)), missionPaid: Number(await t.setting('missionPaid', 0)), rakebackPaid: Number(await t.setting('rakebackPaid', 0)) }));
     return { network: CFG.network, house: chain.address, cold: CFG.coldAddress || null, access: CFG.access, bankroll: b, counts, ...s };
   }));
 

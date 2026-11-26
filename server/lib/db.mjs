@@ -315,9 +315,10 @@ export class Tx {
       (select coalesce(sum(balance), 0) from users)::bigint as balances,
       (select coalesce(sum(exposure), 0) from runs where status in ('playing', 'checkpoint'))::bigint as runs,
       (select coalesce(sum(coalesce((doc->>'carryIn')::bigint, 0) + coalesce((doc->>'paidIn')::bigint, 0)), 0) from pots where not settled)::bigint as pots,
-      (select coalesce(sum(lamports), 0) from withdrawals where status in ('review', 'queued', 'sending'))::bigint as withdrawals`);
+      (select coalesce(sum(lamports), 0) from withdrawals where status in ('review', 'queued', 'sending'))::bigint as withdrawals,
+      (select coalesce(ceil(sum(coalesce((doc->'rb'->>'acc')::numeric, 0) + coalesce((doc->'rb'->>'ready')::numeric, 0))), 0) from users)::bigint as rakeback`);
     const o = r.rows[0];
-    return { ...o, total: o.balances + o.runs + o.pots + o.withdrawals };
+    return { ...o, total: o.balances + o.runs + o.pots + o.withdrawals + o.rakeback }; // rakeback: set aside for players, claimed or not
   }
   // one transaction at a time past this point (run starts: the cover check must see every other start)
   bankrollLock() { return this.q(`select pg_advisory_xact_lock(7311001)`); }

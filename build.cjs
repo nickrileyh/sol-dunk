@@ -41,6 +41,7 @@ const parts = {
   '/*@@POTS@@*/': r('pots.cjs'),
   '/*@@MISSIONS@@*/': r('missions.cjs'),
   '/*@@SPECIAL@@*/': r('special.cjs'),
+  '/*@@LEVELS@@*/': r('levels.cjs'),
   '/*@@GAME@@*/': r('game.js')
 };
 for (const [k, v] of Object.entries(parts)) {

@@ -34,6 +34,7 @@ const PAY = require('../src/paytable.cjs');
 const POTS = require('../src/pots.cjs');
 const MS = require('../src/missions.cjs');
 const SP = require('../src/special.cjs');
+const LV = require('../src/levels.cjs');
 
 export class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
 const bad = (msg) => new HttpError(400, msg);
@@ -129,7 +130,16 @@ export async function createServer(CFG, log) {
     return u;
   }
   const maybeAuth = async (t, req) => { try { return await auth(t, req, { lock: false }); } catch { return null; } };
-  const publicMe = (u) => ({ address: u.address, balance: u.balance, flagged: !!u.flagged, hold: !!u.hold, kyc: u.kyc || 'none' });
+  // rakeback (rules in src/levels.cjs): every bet sets 20% of the house's cut of it aside, and a level up releases it
+  // to claim. The level is the server's own: XP from the runs and missions it verifies.
+  const rakeView = (u) => { const s = LV.fix(u.rb); return { accLamports: Math.floor(s.acc), readyLamports: s.ready, paidLamports: s.paid, level: LV.lvlOf(u.xp || 0).l }; };
+  const rakeAdd = (u, kind, lamports) => { u.rb = LV.add(u.rb, kind, lamports); };
+  function xpAdd(u, xp) {
+    const before = LV.stepsOf(u.xp || 0);
+    u.xp = (u.xp || 0) + Math.max(0, Math.floor(xp));
+    if (LV.stepsOf(u.xp) > before) { u.rb = LV.fix(u.rb); LV.release(u.rb, true); }
+  }
+  const publicMe = (u) => ({ address: u.address, balance: u.balance, flagged: !!u.flagged, hold: !!u.hold, kyc: u.kyc || 'none', rakeback: rakeView(u) });
 
   // ---------------------------------------------------------------- app
   const app = express();
@@ -371,6 +381,7 @@ export async function createServer(CFG, log) {
       if (POTS.closesAt(p.day) - potNow() < 60_000) throw bad('This pot is about to close. The next one opens at midnight UTC.');
       if (u.balance < p.fee) throw bad('Not enough balance for the entry');
       await t.credit(u, -p.fee, 'pot_entry', day);
+      rakeAdd(u, 'pot', p.fee);
       await t.addToPot(day, 'paidIn', p.fee);
       await t.putPotEntry(day, u.address, { at: potNow(), done: false, best: 0 });
       const p2 = await t.pot(day);
@@ -388,11 +399,12 @@ export async function createServer(CFG, log) {
   }
 
   // ---------------------------------------------------------------- missions (rules in src/missions.cjs)
-  // Three missions a UTC day and three a week. Every run counts toward them whatever the bet; each pays SOL once the
-  // player has played the window's need (run bets and special entries), so the rewards stay inside the house's edge.
+  // Missions come in rounds of three, three rounds a UTC day and three a week; finishing a round opens the next. Every
+  // run counts toward them whatever the bet; each pays SOL once the player has played its round's need in the window
+  // (run bets and special entries), so the rewards stay inside the house's edge.
   async function missionPay(t, u, paid) {
     let sum = 0;
-    const out = paid.map((p) => { const lamports = Math.floor(p.amount); sum += lamports; return { win: p.win, slot: p.slot, k: p.k, n: p.n, lamports }; });
+    const out = paid.map((p) => { const lamports = Math.floor(p.amount); sum += lamports; return { win: p.win, slot: p.slot, round: p.round, k: p.k, n: p.n, lamports }; });
     if (sum) {
       await t.credit(u, sum, 'mission', null);
       u.returned += sum; u.missionPaid = (u.missionPaid || 0) + sum; // counts in the player's return
@@ -402,8 +414,13 @@ export async function createServer(CFG, log) {
   }
   function missionView(u) {
     u.ms = MS.roll(u.ms, potNow());
-    const v = MS.view(u.ms, potNow(), CFG.missionNeed), fix = (l) => l.map((m) => ({ k: m.k, n: m.n, xp: m.xp, sum: m.sum, p: m.p, done: m.done, paid: m.paid, rewardLamports: Math.floor(m.reward) }));
-    return { day: v.day, week: v.week, dayEnds: v.dayEnds - potClock, weekEnds: v.weekEnds - potClock, needLamports: v.need, playedLamports: v.played, daily: fix(v.daily), weekly: fix(v.weekly) };
+    const v = MS.view(u.ms, potNow(), CFG.missionNeed), fix = (l) => l.map((m) => ({ k: m.k, n: m.n, xp: m.xp, sum: m.sum, slot: m.slot, round: m.round, p: m.p, done: m.done, paid: m.paid, rewardLamports: Math.floor(m.reward), needLamports: m.need }));
+    // daily / weekly: the open round's three; all: every mission of the rounds opened so far; needLamports: what the
+    // open round's SOL waits for (baseNeedLamports is round 1's)
+    return {
+      day: v.day, week: v.week, dayEnds: v.dayEnds - potClock, weekEnds: v.weekEnds - potClock, rounds: v.rounds, round: v.round, days: v.days,
+      needLamports: v.need, baseNeedLamports: v.base, playedLamports: v.played, daily: fix(v.daily), weekly: fix(v.weekly), all: { day: fix(v.all.day), week: fix(v.all.week) }
+    };
   }
   // a bet or a special entry counts toward both windows' play; it may unlock rewards already earned
   async function missionPlay(t, u, lamports) { const r = MS.play(u.ms, lamports, potNow(), CFG.missionNeed); u.ms = r.s; return missionPay(t, u, r.paid); }
@@ -413,6 +430,18 @@ export async function createServer(CFG, log) {
     return { outcomes: l.outcomes.slice(0, n), clear: l.result === 'clear' && !l.capped, mov: l.mov || '' };
   });
   app.get('/api/missions', wrap(async (req) => tx(async (t) => missionView(await auth(t, req)))));
+  // claim the rakeback a level up has released
+  app.post('/api/rakeback/claim', limit('claims', 30, 60_000, who), wrap(async (req) => tx(async (t) => {
+    const u = await auth(t, req);
+    u.rb = LV.fix(u.rb);
+    const lamports = LV.claim(u.rb);
+    if (lamports > 0) {
+      await t.credit(u, lamports, 'rakeback', null);
+      u.returned += lamports; // counts in the player's return
+      await t.incSetting('rakebackPaid', lamports);
+    }
+    return { claimedLamports: lamports, ...publicMe(u) };
+  })));
 
   // ---------------------------------------------------------------- reviews: limits, holds, big wins, bots
   async function review(t, u) {
@@ -458,7 +487,8 @@ export async function createServer(CFG, log) {
     // missions move on from the levels the server verified (a voided run doesn't count)
     if (run.kind !== 'special' && status !== 'void') {
       const r = MS.run(u.ms, verifiedLevels(run), potNow(), CFG.missionNeed);
-      u.ms = r.s; run.missions = { done: r.done, paid: await missionPay(t, u, r.paid) };
+      u.ms = r.s; run.missions = { done: r.done, opened: r.opened, paid: await missionPay(t, u, r.paid) };
+      xpAdd(u, LV.runXp(r.facts) + r.done.reduce((a, d) => a + d.xp, 0)); // the XP the server can vouch for; a level up releases rakeback
     }
     await review(t, u);
     if (payout) await bigWin(t, u, run, payout);
@@ -490,6 +520,7 @@ export async function createServer(CFG, log) {
       if (free - exposure + bet < 0) throw bad('The house can’t cover a bet that size right now. Try a smaller bet.');
       await t.credit(u, -bet, 'bet', null);
       u.wagered += bet; u.runPlayed = (await runPlayed(t, u)) + bet;
+      rakeAdd(u, 'run', bet);
       const paid = await missionPlay(t, u, bet);
       const run = {
         id: crypto.randomUUID(), address: u.address, kind: 'run', di, bet, exposure,
@@ -615,6 +646,7 @@ export async function createServer(CFG, log) {
       if (reserves.total - owed.total - s.prize + fee < 0) throw bad('The house can’t cover the prize right now. Try again later.');
       await t.credit(u, -fee, 'special_entry', null);
       u.wagered += fee;
+      rakeAdd(u, 'special', fee);
       const paid = await missionPlay(t, u, fee);
       if (!u.special || u.special.day !== day || !Array.isArray(u.special.tries)) u.special = { day, tries: [0, 0, 0], wins: [0, 0, 0] };
       if (CFG.specialDayTries && u.special.tries[slot] >= CFG.specialDayTries) throw bad(`That special is limited to ${CFG.specialDayTries} attempts a day. It's back tomorrow.`);
@@ -664,6 +696,7 @@ export async function createServer(CFG, log) {
       if (payout) { await t.credit(u, payout, 'special_prize', run.id); }
       u.returned += payout; u.runs++;
       if (won && u.special && u.special.day === run.day && Array.isArray(u.special.wins)) u.special.wins[run.slot]++;
+      xpAdd(u, LV.specialXp(MS.facts([{ outcomes: r.outcomes.join(''), clear: false }]).points, won));
       await review(t, u);
       if (payout) await bigWin(t, u, run, payout);
       return { status, outcomes: r.outcomes, result: r.result, payoutLamports: payout, serverSeed: run.serverSeed, special: await specialView(t, u), ...publicMe(u) };

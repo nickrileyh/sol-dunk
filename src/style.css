@@ -1178,3 +1178,59 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   .tbl th:last-child, .tbl td:last-child { padding-right: 11px; }
 }
 .hero { box-shadow: 0 0 0 100vmax var(--bg), inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 44px rgba(0, 0, 0, 0.45); }
+
+/* mission rounds: the window's three rounds side by side (done, open, locked), and what finishing a round opens */
+.rounds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 12px 14px 0; }
+.rd { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px 9px; border-radius: 8px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--hair); min-width: 0; }
+.rd span { display: flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--label-2); white-space: nowrap; }
+.rd span svg { width: 11px; height: 11px; flex: none; }
+.rd b { font-family: var(--font-round); font-size: 13px; font-weight: 700; color: var(--label); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rd.now { background: var(--accent-tint); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.rd.now span { color: var(--accent-hi); }
+.rd.paid span, .rd.paid b { color: var(--green); }
+.rd.paid { background: var(--green-soft); box-shadow: none; }
+.rd.wait span svg { color: var(--green); }
+.rd.lock { background: none; }
+.rd.lock span, .rd.lock b { color: var(--label-3); }
+.mfoot { display: flex; align-items: center; gap: 7px; padding: 11px 16px 12px; font-size: 13px; color: var(--label-2); box-shadow: inset 0 1px 0 var(--sep); }
+.mfoot svg { width: 13px; height: 13px; flex: none; color: var(--label-3); }
+.mfoot span { flex: 1; min-width: 0; }
+.mfoot b { font-family: var(--font-round); font-weight: 700; color: var(--green); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mfoot.done, .mfoot.done svg { color: var(--green); }
+.ms-wk .mneed { box-shadow: inset 0 -1px 0 var(--sep); }
+.ms-wk .mneed + .mrow { box-shadow: none; }
+/* where the nearest mission stands: a quiet line on the checkpoint card, a row with a meter on the result card */
+.nx-g { display: flex; align-items: center; gap: 6px; margin-top: 9px; font-size: 13px; font-weight: 600; color: var(--label-2); }
+.nx-g svg { width: 14px; height: 14px; flex: none; color: var(--green); }
+.nx-g span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-g b { font-family: var(--font-round); font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }
+.nx-g:empty { display: none; }
+.res-next { margin: 0 0 14px; padding: 9px 12px 10px; border-radius: 10px; background: var(--surface-2); text-align: left; }
+.res-next:empty { display: none; }
+.rn-h { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--label); }
+.rn-h svg { width: 14px; height: 14px; flex: none; color: var(--green); }
+.rn-h span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rn-h b { font-family: var(--font-round); font-size: 12.5px; font-weight: 700; color: var(--label-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rn-bar { height: 5px; margin-top: 8px; border-radius: 1px; background: var(--track); overflow: hidden; }
+.rn-bar i { display: block; height: 100%; background: var(--green); box-shadow: 0 0 7px rgba(20, 241, 149, 0.6); }
+#notice.n-near .ni { background: var(--accent); color: var(--accent-ink); }
+@media (max-height: 719px) {
+  .res-next { margin-bottom: 10px; padding: 7px 11px 8px; }
+  .rn-bar { margin-top: 6px; }
+}
+/* rakeback: a level up releases it. On the result card it is a ticket with a green Claim; on Profile, a panel under the player card */
+.gain.claim svg { color: var(--green); }
+.gain.claim em { margin-left: 3px; padding: 2px 8px; border-radius: 6px; font-style: normal; font-weight: 700; background: var(--green); color: var(--green-ink); }
+.gain.claim.on { cursor: default; }
+.gain.claim.on em { background: var(--green-soft); color: var(--green); }
+.rake { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; margin-top: 10px; padding: 12px 14px 12px 14px; border: 1px solid var(--hair); border-top-color: rgba(255, 255, 255, 0.12); border-radius: 18px; background: var(--surface); }
+.rk-i { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--surface-2); color: var(--label-2); }
+.rk-i svg { width: 18px; height: 18px; }
+.rk-t { min-width: 0; }
+.rk-t b { display: flex; justify-content: space-between; gap: 10px; font-size: 15px; font-weight: 600; color: var(--label); }
+.rk-t b .num { font-family: var(--font-round); font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rk-t small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--label-3); }
+.rake.ready { border-color: rgba(20, 241, 149, 0.35); }
+.rake.ready .rk-i { background: var(--green-soft); color: var(--green); }
+.rake.ready .rk-t b .num { color: var(--green); }
+.rk-b { --edge: 3px; width: auto; min-height: 38px; margin: 0; padding: 0 16px; border-radius: 12px; font-size: 14px; }

@@ -1187,6 +1187,62 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   .tbl th:last-child, .tbl td:last-child { padding-right: 11px; }
 }
 .hero { box-shadow: 0 0 0 100vmax var(--bg), inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 44px rgba(0, 0, 0, 0.45); }
+
+/* mission rounds: the window's three rounds side by side (done, open, locked), and what finishing a round opens */
+.rounds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 12px 14px 0; }
+.rd { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px 9px; border-radius: 8px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--hair); min-width: 0; }
+.rd span { display: flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--label-2); white-space: nowrap; }
+.rd span svg { width: 11px; height: 11px; flex: none; }
+.rd b { font-family: var(--font-round); font-size: 13px; font-weight: 700; color: var(--label); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rd.now { background: var(--accent-tint); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.rd.now span { color: var(--accent-hi); }
+.rd.paid span, .rd.paid b { color: var(--green); }
+.rd.paid { background: var(--green-soft); box-shadow: none; }
+.rd.wait span svg { color: var(--green); }
+.rd.lock { background: none; }
+.rd.lock span, .rd.lock b { color: var(--label-3); }
+.mfoot { display: flex; align-items: center; gap: 7px; padding: 11px 16px 12px; font-size: 13px; color: var(--label-2); box-shadow: inset 0 1px 0 var(--sep); }
+.mfoot svg { width: 13px; height: 13px; flex: none; color: var(--label-3); }
+.mfoot span { flex: 1; min-width: 0; }
+.mfoot b { font-family: var(--font-round); font-weight: 700; color: var(--green); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.mfoot.done, .mfoot.done svg { color: var(--green); }
+.ms-wk .mneed { box-shadow: inset 0 -1px 0 var(--sep); }
+.ms-wk .mneed + .mrow { box-shadow: none; }
+/* where the nearest mission stands: a quiet line on the checkpoint card, a row with a meter on the result card */
+.nx-g { display: flex; align-items: center; gap: 6px; margin-top: 9px; font-size: 13px; font-weight: 600; color: var(--label-2); }
+.nx-g svg { width: 14px; height: 14px; flex: none; color: var(--green); }
+.nx-g span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nx-g b { font-family: var(--font-round); font-weight: 700; color: var(--label); font-variant-numeric: tabular-nums; }
+.nx-g:empty { display: none; }
+.res-next { margin: 0 0 14px; padding: 9px 12px 10px; border-radius: 10px; background: var(--surface-2); text-align: left; }
+.res-next:empty { display: none; }
+.rn-h { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; color: var(--label); }
+.rn-h svg { width: 14px; height: 14px; flex: none; color: var(--green); }
+.rn-h span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rn-h b { font-family: var(--font-round); font-size: 12.5px; font-weight: 700; color: var(--label-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rn-bar { height: 5px; margin-top: 8px; border-radius: 1px; background: var(--track); overflow: hidden; }
+.rn-bar i { display: block; height: 100%; background: var(--green); box-shadow: 0 0 7px rgba(20, 241, 149, 0.6); }
+#notice.n-near .ni { background: var(--accent); color: var(--accent-ink); }
+@media (max-height: 719px) {
+  .res-next { margin-bottom: 10px; padding: 7px 11px 8px; }
+  .rn-bar { margin-top: 6px; }
+}
+/* rakeback: a level up releases it. On the result card it is a ticket with a green Claim; on Profile, a panel under the player card */
+.gain.claim svg { color: var(--green); }
+.gain.claim em { margin-left: 3px; padding: 2px 8px; border-radius: 6px; font-style: normal; font-weight: 700; background: var(--green); color: var(--green-ink); }
+.gain.claim.on { cursor: default; }
+.gain.claim.on em { background: var(--green-soft); color: var(--green); }
+.rake { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; margin-top: 10px; padding: 12px 14px 12px 14px; border: 1px solid var(--hair); border-top-color: rgba(255, 255, 255, 0.12); border-radius: 18px; background: var(--surface); }
+.rk-i { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--surface-2); color: var(--label-2); }
+.rk-i svg { width: 18px; height: 18px; }
+.rk-t { min-width: 0; }
+.rk-t b { display: flex; justify-content: space-between; gap: 10px; font-size: 15px; font-weight: 600; color: var(--label); }
+.rk-t b .num { font-family: var(--font-round); font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rk-t small { display: block; margin-top: 2px; font-size: 12.5px; color: var(--label-3); }
+.rake.ready { border-color: rgba(20, 241, 149, 0.35); }
+.rake.ready .rk-i { background: var(--green-soft); color: var(--green); }
+.rake.ready .rk-t b .num { color: var(--green); }
+.rk-b { --edge: 3px; width: auto; min-height: 38px; margin: 0; padding: 0 16px; border-radius: 12px; font-size: 14px; }
 </style>
 </head>
 <body class="hud-lobby">
@@ -1290,6 +1346,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   <div class="next" id="cpNext">
     <div class="nx-h"><span id="cpNextL">Next: Level 2</span><b class="num" id="cpUpTo"></b></div>
     <div class="nx-s" id="cpStreak"></div>
+    <div class="nx-g" id="cpGoal"></div>
   </div>
   <div class="actions">
     <button class="btn btn-green" id="cashBtn">Cash out<small id="cashAmt">0 SOL</small><kbd class="kc">C</kbd></button>
@@ -1307,6 +1364,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     <div class="xp-bar"><i id="xpFill"></i></div>
   </div>
   <div class="gains" id="resGains"></div>
+  <div class="res-next" id="resNext"></div>
   <div class="stack">
     <button class="btn btn-primary" id="againBtn"><span id="againT">Play again</span> <span class="num" id="againAmt"></span><kbd class="kc">Space</kbd></button>
     <div class="pair">
@@ -2089,19 +2147,25 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
 </script>
 <script>/* SOL DUNK daily and weekly missions: shared by the browser, the server and the simulator.
  *
- * Three missions a day (easy, medium, hard) and three a week, the same for everyone in a window. Days are UTC days and
+ * Missions come in rounds of three (easy, medium, hard): three rounds a day and three a week, the same for everyone in
+ * a window. Finishing all three of a round opens the next one, with new missions and more SOL. Days are UTC days and
  * weeks start on Monday 00:00 UTC, so the server can judge them. Every run counts toward them, whatever the bet: they
- * are about how you play (swishes, streaks, clears, points). Each pays XP when done, as before, and SOL too.
+ * are about how you play (swishes, streaks, clears, points). Each pays XP when done, and SOL too.
  *
- * SOL. A window's SOL rewards pay once the player has played NEED in that window (bets on runs plus special level
- * entries), at once if that's already true when a mission is done, or the moment it becomes true. Rewards not
- * collected when the window ends are gone. The rewards in a window add up to RATE of its NEED, and RATE is half the
- * house's smallest edge against a good player (1%: Hard pays a good player back 99% at checkpoint 1), counting days
- * and weeks together. So a good player who plays just enough to collect everything still loses on average, and the
- * house keeps its edge however the player bets. Amounts are in whatever unit NEED is in (SOL here, lamports on the
- * server).
+ * SOL. A round's SOL rewards pay once the player has played that round's need in the window (bets on runs plus special
+ * level entries): NEED for round 1, then NEED × STEPS for the later rounds. A reward pays at once if that's already
+ * true when its mission is done, or the moment it becomes true. Rewards not collected when the window ends are gone.
+ *
+ * The house's edge. A round's rewards add up to the window's share (SHARE: 0.3% a day, 0.2% a week) of the play its
+ * need adds on top of the round before, so however far a player gets, what a window has paid is never more than that
+ * share of what they played in it. Later rounds pay more only because they ask for more play; the shares never rise.
+ * RATE, days and weeks together, is half the house's smallest edge against a good player (1%: Hard pays a good player
+ * back 99% at checkpoint 1), so a good player who plays just enough to collect everything still loses on average, and
+ * the house keeps its edge however the player bets. Amounts are in whatever unit NEED is in (SOL here, lamports on
+ * the server).
  *
  * Progress is judged from a run's verified ring outcomes per level, so the server decides it from the taps it replays.
+ * One weekly mission counts something else the server knows: the days on which the player finished a daily round.
  */
 (function (root, factory) {
   const M = factory(root.DunkEngine || (typeof require === 'function' ? require('./engine.cjs') : null));
@@ -2111,10 +2175,16 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   'use strict';
 
   const DAY_MS = 86400000, WEEK_MS = 7 * DAY_MS, HOOPS = 6, PERFECT_BONUS = 10;
-  const NEED = { day: 2, week: 10 };                                  // SOL played in the window before its rewards pay
-  const SHARE = { day: [0.0005, 0.001, 0.0015], week: [0.0004, 0.0006, 0.001] }; // reward per slot, as a share of NEED
+  const NEED = { day: 2, week: 10 };                                  // SOL played in the window before round 1's rewards pay
+  const ROUNDS = 3;                                                   // rounds of three missions in a window
+  const STEPS = [1, 2.5, 5];                                          // a round's rewards pay at NEED × its step (2, 5, 10 SOL a day)
+  const SHARE = { day: [0.0005, 0.001, 0.0015], week: [0.0004, 0.0006, 0.001] }; // reward per slot, as a share of the play a round adds
   // the most the rewards can add to a player's return: 0.3% of a day's play, and 0.2% of a week's on top
   const RATE = SHARE.day.reduce((a, b) => a + b, 0) + SHARE.week.reduce((a, b) => a + b, 0);
+  const SHARES = { day: SHARE.day.reduce((a, b) => a + b, 0), week: SHARE.week.reduce((a, b) => a + b, 0) };
+  // Later daily rounds ask for more: totals that add up over the day grow by GROW, and every mission pays XP_STEP more
+  // XP a round. Targets that have to happen within one run stay as they are (a round can't ask for a longer streak).
+  const GROW = [1, 1.5, 2], XP_STEP = 20;
 
   // Daily missions: [target, XP] for the easy, medium and hard slot. "sum" missions add up over the day; the others
   // have to happen within one run. Keys are run facts (see facts).
@@ -2126,7 +2196,10 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     { k: 'score', n: [[20, 40], [32, 60], [48, 100]] },
     { k: 'level', n: [[2, 40], [3, 60], [5, 100]] },
     { k: 'mov', sum: true, n: [[2, 40], [5, 60], [9, 100]] },
-    { k: 'perfect', sum: true, n: [[1, 50], [1, 70], [2, 110]] }
+    { k: 'perfect', sum: true, flat: true, n: [[1, 50], [1, 70], [2, 110]] },
+    { k: 'greens', sum: true, n: [[1, 40], [3, 60], [5, 100]] },
+    { k: 'fires', sum: true, n: [[1, 40], [2, 60], [3, 100]] },
+    { k: 'runs', sum: true, n: [[3, 40], [5, 60], [8, 100]] }
   ];
   // Weekly missions all add up over the week.
   const WEEKLY = [
@@ -2136,8 +2209,13 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     { k: 'mov', sum: true, n: [[12, 120], [22, 180], [36, 260]] },
     { k: 'perfect', sum: true, n: [[2, 140], [4, 200], [6, 280]] },
     { k: 'fires', sum: true, n: [[6, 120], [12, 180], [20, 260]] },
-    { k: 'novas', sum: true, n: [[2, 140], [4, 200], [7, 280]] }
+    { k: 'novas', sum: true, n: [[2, 140], [4, 200], [7, 280]] },
+    { k: 'greens', sum: true, n: [[8, 120], [14, 180], [22, 260]] },
+    { k: 'runs', sum: true, n: [[15, 120], [25, 180], [40, 260]] }
   ];
+  // Every week ties the days together: "finish a daily round on N days" sits in weekly round 1 (medium slot) and
+  // round 2 (hard slot). It counts days of this week, so the days before its round opened count too.
+  const WEEK_DAYS = [{ slot: 1, k: 'days', n: 3, xp: 180 }, { slot: 2, k: 'days', n: 5, xp: 260 }, null];
   const DAILY_BY = Object.fromEntries(DAILY.map((d) => [d.k, d]));
   const WEEKLY_BY = Object.fromEntries(WEEKLY.map((d) => [d.k, d]));
 
@@ -2148,23 +2226,37 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   const weekKey = (ts) => dayKey(weekStart(ts));
   const weekEnd = (ts) => weekStart(ts) + WEEK_MS;
 
-  // the window's three missions: one of each kind at most, drawn from the window's key
-  function pick(defs, by, seed) {
-    const rng = E.makeRng(seed), pool = defs.map((d) => d.k), list = [];
-    for (let slot = 0; slot < 3; slot++) {
-      const k = pool.splice(Math.floor(rng() * pool.length), 1)[0], [n, xp] = by[k].n[slot];
-      list.push({ k, n, xp, sum: !!by[k].sum, slot });
+  // a window's rounds, three missions each: no kind twice in a window, drawn from the window's key
+  const picked = new Map();
+  function pick(defs, by, seed, fixed, grow) {
+    if (picked.has(seed)) return picked.get(seed);
+    const rng = E.makeRng(seed), pool = defs.map((d) => d.k), rounds = [];
+    for (let round = 0; round < ROUNDS; round++) {
+      const list = [], f = fixed && fixed[round];
+      for (let slot = 0; slot < 3; slot++) {
+        if (f && f.slot === slot) { list.push({ k: f.k, n: f.n, xp: f.xp, sum: false, slot, round }); continue; }
+        const k = pool.splice(Math.floor(rng() * pool.length), 1)[0], [n, xp] = by[k].n[slot], up = grow && by[k].sum && !by[k].flat;
+        list.push({ k, n: up ? Math.round(n * GROW[round]) : n, xp: grow ? xp + XP_STEP * round : xp, sum: !!by[k].sum, slot, round });
+      }
+      rounds.push(list);
     }
-    return list;
+    if (picked.size > 40) picked.clear();
+    picked.set(seed, rounds);
+    return rounds;
   }
-  const daily = (day) => pick(DAILY, DAILY_BY, 'daily|' + day);
-  const weekly = (wk) => pick(WEEKLY, WEEKLY_BY, 'weekly|' + wk);
-  const reward = (win, slot, need) => (need == null ? NEED[win] : need) * SHARE[win][slot];
+  const dailyRounds = (day) => pick(DAILY, DAILY_BY, 'daily|' + day, null, true);
+  const weeklyRounds = (wk) => pick(WEEKLY, WEEKLY_BY, 'weekly|' + wk, WEEK_DAYS, false);
+  const daily = (day, round) => dailyRounds(day)[round | 0];
+  const weekly = (wk, round) => weeklyRounds(wk)[round | 0];
+  // what a round's rewards wait for, and what a mission pays: its slot's share of the play its round adds
+  const needAt = (win, round, need) => (need == null ? NEED[win] : need) * STEPS[round | 0];
+  const reward = (win, slot, need, round) => (need == null ? NEED[win] : need) * SHARE[win][slot] * (STEPS[round | 0] - (round ? STEPS[round - 1] : 0));
 
   // A run's facts from its verified levels, in order: [{ outcomes: 'SSRS..', clear: true, mov: '0110..' }, ...]
   // (mov: 1 where that ring was moving). The streak carries over from level to level, as in the game.
+  // greens: green (checkpoint) rings swished, the last ring of a cleared level; runs: the run itself.
   function facts(levels) {
-    let streak = 0, best = 0, swish = 0, score = 0, perfect = 0, clears = 0, mov = 0, fires = 0, novas = 0;
+    let streak = 0, best = 0, swish = 0, score = 0, perfect = 0, clears = 0, mov = 0, fires = 0, novas = 0, greens = 0;
     for (const lv of levels) {
       const o = String(lv.outcomes || ''), m = String(lv.mov || '');
       for (let i = 0; i < o.length; i++) {
@@ -2173,27 +2265,40 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
         if (streak > best) best = streak;
         if (streak === 3) fires++; else if (streak === 5) novas++;
       }
-      if (lv.clear) { clears++; if (o.length === HOOPS && !o.includes('R')) { perfect++; score += PERFECT_BONUS; } }
+      if (lv.clear) {
+        clears++;
+        if (o.length === HOOPS && !o.includes('R')) { perfect++; score += PERFECT_BONUS; }
+        if (o.length === HOOPS && o[HOOPS - 1] === 'S') greens++;
+      }
     }
-    return { swish, points: score, score, clears, best, level: levels.length, mov, perfect, fires, novas };
+    return { swish, points: score, score, clears, best, level: levels.length, mov, perfect, fires, novas, greens, runs: levels.length ? 1 : 0 };
   }
 
-  // ---- a player's mission state: { day, week, dp, wp (played this day / week), d: [3], w: [3] } with { p, done, paid }
+  // ---- a player's mission state: { day, week, dp, wp (played this day / week), d, w, wd, wdd }
+  // d and w hold { p, done, paid } for every mission of the rounds opened so far, three a round, in order; wd counts
+  // this week's days with a daily round finished and wdd is the last day counted.
   const blank = () => [0, 1, 2].map(() => ({ p: 0, done: false, paid: false }));
+  const okList = (a) => Array.isArray(a) && a.length >= 3 && a.length % 3 === 0 && a.length <= 3 * ROUNDS;
   function roll(s, ts) {
     s = s && typeof s === 'object' ? s : {};
     const day = dayKey(ts), wk = weekKey(ts);
-    if (s.day !== day || !Array.isArray(s.d) || s.d.length !== 3) { s.day = day; s.dp = 0; s.d = blank(); }
-    if (s.week !== wk || !Array.isArray(s.w) || s.w.length !== 3) { s.week = wk; s.wp = 0; s.w = blank(); }
+    if (s.day !== day || !okList(s.d)) { s.day = day; s.dp = 0; s.d = blank(); }
+    if (s.week !== wk || !okList(s.w)) { s.week = wk; s.wp = 0; s.w = blank(); s.wd = 0; s.wdd = ''; }
+    s.wd = s.wd | 0;
     return s;
   }
-  // pay what's due: every mission done and not paid in a window whose play has reached its need
+  const roundsOf = (s, win) => (win === 'day' ? dailyRounds(s.day) : weeklyRounds(s.week));
+  // pay what's due: every mission done and not paid whose round's need has been played in its window
   function collect(s, need) {
     const out = [];
     for (const [win, list, played] of [['day', s.d, s.dp], ['week', s.w, s.wp]]) {
-      if (!(played >= need[win] - 1e-9)) continue;
-      const defs = win === 'day' ? daily(s.day) : weekly(s.week);
-      list.forEach((m, slot) => { if (m.done && !m.paid) { m.paid = true; out.push({ win, slot, k: defs[slot].k, n: defs[slot].n, amount: reward(win, slot, need[win]) }); } });
+      const defs = roundsOf(s, win);
+      list.forEach((m, i) => {
+        const round = Math.floor(i / 3), slot = i % 3;
+        if (!m.done || m.paid || !(played >= needAt(win, round, need[win]) - 1e-9)) return;
+        m.paid = true;
+        out.push({ win, slot, round, k: defs[round][slot].k, n: defs[round][slot].n, amount: reward(win, slot, need[win], round) });
+      });
     }
     return out;
   }
@@ -2204,31 +2309,60 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     s.dp += amount; s.wp += amount;
     return { s, paid: collect(s, needOf(need)) };
   }
-  // a run ended: its verified levels move the missions on. Returns what it finished and what it paid.
+  // move a window's open round on with some facts; finishing all three opens the next round (it starts at the next run)
+  function advance(s, win, f, done, opened) {
+    const list = win === 'day' ? s.d : s.w, round = list.length / 3 - 1, defs = roundsOf(s, win)[round];
+    let all = true;
+    for (let slot = 0; slot < 3; slot++) {
+      const m = list[round * 3 + slot], c = defs[slot];
+      if (!m.done) {
+        const v = f[c.k] || 0;
+        m.p = Math.min(c.n, c.sum ? m.p + v : Math.max(m.p, v));
+        if (m.p >= c.n) { m.done = true; done.push({ win, slot, round, k: c.k, n: c.n, xp: c.xp }); }
+      }
+      all = all && m.done;
+    }
+    if (all && round < ROUNDS - 1) { list.push(...blank()); opened.push({ win, round: round + 1 }); return true; }
+    return false;
+  }
+  // a run ended: its verified levels move the missions on. Returns what it finished, the rounds it opened and what it paid.
   function run(s, levels, ts, need) {
     s = roll(s, ts);
-    const f = facts(levels), done = [];
-    for (const [win, list, defs] of [['day', s.d, daily(s.day)], ['week', s.w, weekly(s.week)]]) {
-      list.forEach((m, slot) => {
-        if (m.done) return;
-        const c = defs[slot], v = f[c.k] || 0;
-        m.p = Math.min(c.n, c.sum ? m.p + v : Math.max(m.p, v));
-        if (m.p >= c.n) { m.done = true; done.push({ win, slot, k: c.k, n: c.n, xp: c.xp }); }
-      });
-    }
-    return { s, facts: f, done, paid: collect(s, needOf(need)) };
+    const f = facts(levels), done = [], opened = [];
+    advance(s, 'day', f, done, opened);
+    // a day counts for the week once its first daily round is finished
+    if (s.d.length > 3 || s.d.every((m) => m.done)) { if (s.wdd !== s.day) { s.wd++; s.wdd = s.day; } }
+    // a weekly round opened by this run only takes the days so far, not this run's rings
+    if (advance(s, 'week', Object.assign({}, f, { days: s.wd }), done, opened)) advance(s, 'week', { days: s.wd }, done, opened);
+    return { s, facts: f, done, opened, paid: collect(s, needOf(need)) };
   }
-  // everything the Missions page shows
+  // Everything the missions pages show, from every opened mission of each window ({ ...def, p, done, paid, reward,
+  // need }), what was played and the base needs. daily / weekly: the open round's three; round: its number from 0;
+  // need: what the open round's SOL waits for; paid / waiting: SOL collected, and earned but waiting for play; due:
+  // the play that releases the first waiting reward; next: the round after this one; max: all a window can pay.
+  function shape(v) {
+    const out = Object.assign({}, v, { rounds: ROUNDS, round: {}, need: {}, paid: {}, waiting: {}, due: {}, next: {}, max: {} });
+    for (const win of ['day', 'week']) {
+      const all = v.all[win], r = all.length / 3 - 1, base = v.base[win];
+      const wait = all.filter((m) => m.done && !m.paid);
+      out.round[win] = r;
+      out.need[win] = needAt(win, r, base);
+      out.paid[win] = all.reduce((a, m) => a + (m.paid ? m.reward : 0), 0);
+      out.waiting[win] = wait.reduce((a, m) => a + m.reward, 0);
+      out.due[win] = wait.length ? Math.min(...wait.map((m) => m.need)) : null;
+      out.next[win] = r < ROUNDS - 1 ? { round: r + 1, need: needAt(win, r + 1, base), reward: base * SHARES[win] * (STEPS[r + 1] - STEPS[r]) } : null;
+      out.max[win] = base * SHARES[win] * STEPS[ROUNDS - 1];
+    }
+    out.daily = v.all.day.slice(-3); out.weekly = v.all.week.slice(-3);
+    return out;
+  }
   function view(s, ts, need) {
     s = roll(s, ts); need = needOf(need);
-    const one = (win, list, defs) => defs.map((c, slot) => Object.assign({}, c, list[slot], { reward: reward(win, slot, need[win]) }));
-    return {
-      day: s.day, week: s.week, dayEnds: dayEnd(ts), weekEnds: weekEnd(ts), need,
-      played: { day: s.dp, week: s.wp }, daily: one('day', s.d, daily(s.day)), weekly: one('week', s.w, weekly(s.week))
-    };
+    const one = (win, list) => { const defs = roundsOf(s, win); return list.map((m, i) => { const round = Math.floor(i / 3), slot = i % 3; return Object.assign({}, defs[round][slot], m, { reward: reward(win, slot, need[win], round), need: needAt(win, round, need[win]) }); }); };
+    return shape({ day: s.day, week: s.week, dayEnds: dayEnd(ts), weekEnds: weekEnd(ts), base: need, played: { day: s.dp, week: s.wp }, days: s.wd, all: { day: one('day', s.d), week: one('week', s.w) } });
   }
 
-  return { DAY_MS, WEEK_MS, NEED, SHARE, RATE, DAILY, WEEKLY, DAILY_BY, WEEKLY_BY, dayKey, dayEnd, weekKey, weekEnd, daily, weekly, reward, facts, roll, collect, play, run, view };
+  return { DAY_MS, WEEK_MS, NEED, ROUNDS, STEPS, GROW, SHARE, SHARES, RATE, DAILY, WEEKLY, WEEK_DAYS, DAILY_BY, WEEKLY_BY, dayKey, dayEnd, weekKey, weekEnd, daily, weekly, dailyRounds, weeklyRounds, needAt, reward, facts, roll, collect, play, run, shape, view };
 });
 </script>
 <script>/* SOL DUNK special levels: shared by the browser, the server and the simulator.
@@ -2678,10 +2812,79 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   };
 });
 </script>
+<script>/* SOL DUNK player levels and level-up rakeback: shared by the browser and the server.
+ *
+ * Levels. XP comes from how you play (points, clears, perfect levels, missions, trophies), never from what you bet.
+ * A level takes NEED_BASE XP plus NEED_STEP more for each level before it.
+ *
+ * Rakeback. Every bet sets a little SOL aside for the player: RATE (20%) of the house's cut of it. It builds up while
+ * they play and is released to claim each time they level up, so a level up always comes with SOL.
+ *
+ * The house's edge. Rakeback is a share of what was bet, not of what was lost. A share of losses would pay a player
+ * for the swings: bet big once, claim on a loss, keep a win, and the house is behind. The cut it counts is the least
+ * the house keeps of each kind of bet:
+ *   run      1%, its smallest edge against a good player (Hard pays one back 99% at checkpoint 1);
+ *   special  5%, half the 10% a settled special level keeps, since a strong player's first attempts do better;
+ *   pot      10%, the rake on every entry.
+ * So rakeback is 0.2% of run bets, 1% of special entries and 2% of pot entries. With the mission rewards (at most
+ * 0.5% of play, src/missions.cjs) a run bet gives back 0.7% at most, under the 1% the house keeps from a good player,
+ * so the house keeps its edge however fast anyone levels up. Levelling only decides when rakeback can be claimed,
+ * never how much there is, so nothing is gained by faking a level.
+ *
+ * Amounts are in whatever unit the bets are in (SOL in the demo, lamports on the server).
+ */
+(function (root, factory) {
+  const M = factory();
+  if (typeof module === 'object' && module.exports) module.exports = M;
+  else root.DunkLevels = M;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  // ---- levels
+  const NEED_BASE = 70, NEED_STEP = 35, MAX = 99;
+  const xpNeed = (l) => NEED_BASE + NEED_STEP * (Math.min(l, MAX) - 1); // XP from level l to l + 1
+  function lvlOf(xp) {
+    let l = 1, need = xpNeed(1);
+    while (xp >= need && l < MAX) { xp -= need; l++; need = xpNeed(l); }
+    return { l, into: xp, need };
+  }
+  // level ups so far, counting on past the top level (each further xpNeed(MAX) is one more), so rakeback keeps coming
+  function stepsOf(xp) { const v = lvlOf(xp); return v.l + (v.l >= MAX ? Math.floor(v.into / v.need) : 0); }
+  // XP saved under the first curve (50 + 25 a level) moves to this one at the same level and the same way through it
+  function fromOld(xp) {
+    let l = 1, need = 50;
+    while (xp >= need && l < MAX) { xp -= need; l++; need = 50 + 25 * (l - 1); }
+    let total = 0;
+    for (let k = 1; k < l; k++) total += xpNeed(k);
+    return Math.round(total + Math.min(1, xp / need) * xpNeed(l));
+  }
+  // the XP a run earns by itself, from its verified facts (src/missions.cjs facts); a special level's from its points
+  const runXp = (f) => (f.points || 0) + (f.clears || 0) * 5 + (f.perfect || 0) * 15;
+  const specialXp = (points, won) => points + (won ? 25 : 0);
+
+  // ---- rakeback: { acc (building up), ready (released, waiting to be claimed), paid (claimed so far) }
+  const RATE = 0.2;
+  const CUT = { run: 0.01, special: 0.05, pot: 0.1 };
+  const BACK = { run: RATE * CUT.run, special: RATE * CUT.special, pot: RATE * CUT.pot };
+  function fix(s) {
+    s = s && typeof s === 'object' ? s : {};
+    for (const k of ['acc', 'ready', 'paid']) if (!(s[k] > 0)) s[k] = 0;
+    return s;
+  }
+  // a bet of some kind was placed
+  function add(s, kind, amount) { s = fix(s); s.acc += amount * (BACK[kind] || 0); return s; }
+  // a level up: what has built up is released to claim (whole: in whole units, the rest keeps building)
+  function release(s, whole) { s = fix(s); const x = whole ? Math.floor(s.acc) : s.acc; s.acc -= x; s.ready += x; return x; }
+  // the player claims what is ready
+  function claim(s) { s = fix(s); const x = s.ready; s.ready = 0; s.paid += x; return x; }
+
+  return { NEED_BASE, NEED_STEP, MAX, xpNeed, lvlOf, stepsOf, fromOld, runXp, specialXp, RATE, CUT, BACK, fix, add, release, claim };
+});
+</script>
 <script>/* SOL DUNK — browser client. Rendering, input, audio, betting flow. */
 (() => {
   'use strict';
-  const E = window.DunkEngine, PAY = window.DunkPaytable, BOT = window.DunkBot, POTS = window.DunkPots, MS = window.DunkMissions, SP = window.DunkSpecial;
+  const E = window.DunkEngine, PAY = window.DunkPaytable, BOT = window.DunkBot, POTS = window.DunkPots, MS = window.DunkMissions, SP = window.DunkSpecial, LV = window.DunkLevels;
   const CFG = Object.assign({ serverUrl: null, network: 'devnet', demoStart: 10, minBet: 0.001, maxBet: 100, solIconUrl: null }, window.SOL_DUNK_CONFIG || {});
   const W = E.WORLD, P = E.PHYS, DT = E.DT, NL = E.LEVELS, NH = E.HOOPS_PER_LEVEL, EV = E.EV;
   const $ = (id) => document.getElementById(id);
@@ -2798,6 +3001,9 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     return p;
   }
   const profile = fixProfile(Object.assign({ xp: 0 }, store.get('profile', {})));
+  if (profile.xpv !== 2) { // levels take more XP now: saved XP moves to the new curve at the same level, the same way through it
+    profile.xp = profile.xp > 0 ? LV.fromOld(profile.xp) : 0; profile.xpv = 2; store.set('profile', profile);
+  }
   if (store.get('modes', 0) < 2) { // the four old tiers become the two modes (see fixProfile)
     const M = [0, 0, 1, 1];
     prefs.di = M[prefs.di] || 0;
@@ -2809,12 +3015,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   // Flappy-Dunk-style points: rim +1, swish +2, every swish in a row +1 more (up to +6). Perfect level +10.
   const ringPoints = (o, streak) => (o === 'S' ? 1 + Math.min(streak, 5) : 1);
   const PERFECT_BONUS = 10;
-  const xpNeed = (l) => 50 + 25 * (l - 1); // XP from level l to l + 1
-  function lvlOf(xp) {
-    let l = 1, need = xpNeed(1);
-    while (xp >= need && l < 99) { xp -= need; l++; need = xpNeed(l); }
-    return { l, into: xp, need };
-  }
+  const lvlOf = LV.lvlOf; // { l, into, need }: the level curve is in src/levels.cjs, shared with the server
 
   // Cosmetics. The ball is always drawn at its exact hitbox size whatever the skin, and rings at their exact
   // collision size. Three categories: ball, wings and trail. None of them changes the game. The game's colours are
@@ -2956,9 +3157,13 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   const DTEXT = {
     swish: (n) => `Swish ${n} rings`, points: (n) => `Score ${n} points`, clears: (n) => `Clear ${n} levels`,
     best: (n) => `Swish ${n} in a row`, score: (n) => `Score ${n} in one run`, level: (n) => `Reach level ${n}`,
-    mov: (n) => `Swish ${n} moving rings`, perfect: (n) => (n === 1 ? 'Swish every ring in a level' : `Swish every ring in ${n} levels`)
+    mov: (n) => `Swish ${n} moving rings`, perfect: (n) => (n === 1 ? 'Swish every ring in a level' : `Swish every ring in ${n} levels`),
+    greens: (n) => (n === 1 ? 'Swish a green ring' : `Swish ${n} green rings`), fires: (n) => (n === 1 ? 'Catch fire' : `Catch fire ${n} times`),
+    runs: (n) => `Play ${n} runs`
   };
-  const mview = () => bank.missions.view(); // { daily, weekly, need, played, dayEnds, weekEnds }
+  // Missions come in rounds of three: finishing all three opens the next round (three a day, three a week), each paying
+  // more SOL once more has been bet in the window.
+  const mview = () => bank.missions.view(); // MS.view: { daily, weekly (the open round), round, need, played, paid, waiting, due, next, all, .. }
   const dailySet = () => mview().daily;
   const dailyText = (c) => DTEXT[c.k](c.n);
   function leftOf(ms) {
@@ -2982,7 +3187,10 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     mov: (n) => (n === 1 ? 'Swish a moving ring' : `Swish ${n} moving rings`),
     perfect: (n, sum) => (sum ? (n === 1 ? 'Get a perfect level' : `Get ${n} perfect levels`) : `Get ${n} perfect levels in one run`),
     fires: (n) => (n === 1 ? 'Catch fire' : `Catch fire ${n} times`),
-    novas: (n) => (n === 1 ? 'Swish 5 in a row' : `Swish 5 in a row ${n} times`)
+    novas: (n) => (n === 1 ? 'Swish 5 in a row' : `Swish 5 in a row ${n} times`),
+    greens: (n) => (n === 1 ? 'Swish a green ring' : `Swish ${n} green rings`),
+    runs: (n) => `Play ${n} runs`,
+    days: (n) => `Finish a daily round on ${n} days`
   };
   const weeklySet = () => mview().weekly;
   const weeklyText = (c) => MTEXT[c.k](c.n, true);
@@ -3205,6 +3413,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       if (POTS.closesAt(s.key) - Date.now() < 60000) throw new Error('This pot is about to close. The next one opens at midnight UTC.');
       if (wallet.balance + 1e-12 < this.fee) throw new Error('Not enough demo SOL for the entry.');
       wallet.balance = round9(wallet.balance - this.fee);
+      DemoRake.add('pot', this.fee);
       s.me = { at: Date.now(), done: false, best: 0 };
       this.save(); saveAll();
       return this.view();
@@ -3245,7 +3454,20 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       return paid;
     },
     play(amount) { const r = MS.play(profile.ms, amount, Date.now(), this.need); profile.ms = r.s; return this.pay(r.paid); },
-    run(levels) { const r = MS.run(profile.ms, levels, Date.now(), this.need); profile.ms = r.s; return { done: r.done, paid: this.pay(r.paid) }; }
+    run(levels) { const r = MS.run(profile.ms, levels, Date.now(), this.need); profile.ms = r.s; return { done: r.done, opened: r.opened, paid: this.pay(r.paid) }; }
+  };
+  // ---------------------------------------------------------------- rakeback, demo (rules in src/levels.cjs)
+  // Every bet sets a little SOL aside (20% of the house's cut of it); each level up releases it to claim.
+  const DemoRake = {
+    s() { profile.rb = LV.fix(profile.rb); return profile.rb; },
+    view() { const s = this.s(); return { acc: s.acc, ready: s.ready, paid: s.paid }; },
+    add(kind, amount) { const s = LV.add(this.s(), kind, amount); s.acc = round9(s.acc); },
+    levelUp() { const s = this.s(), x = LV.release(s, false); s.acc = 0; s.ready = round9(s.ready); return x; },
+    async claim() {
+      const s = this.s(), x = round9(LV.claim(s));
+      if (x > 0) { wallet.balance = round9(wallet.balance + x); s.paid = round9(s.paid); stats.rakeback = round9((stats.rakeback || 0) + x); saveAll(); }
+      return x;
+    }
   };
   // a level as the banks verify it, for missions and the pot: only the rings that counted (a max win stops at the
   // capped ring, which isn't a clear), and which of them were moving
@@ -3282,6 +3504,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       if (v.me.locked) throw new Error('Bet ' + fmtBet(v.unlock.need) + ' SOL in regular runs to unlock the special levels.');
       if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
       wallet.balance = round9(wallet.balance - v.fee);
+      DemoRake.add('special', v.fee);
       const paid = DemoMissions.play(v.fee);
       const t = this.tally(); t.tries[slot]++; store.set('special', t);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
@@ -3313,6 +3536,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       if (!(bet >= CFG.minBet)) throw new Error('Minimum bet is ' + CFG.minBet + ' SOL');
       if (bet > wallet.balance + 1e-12) throw new Error('Not enough demo SOL for that bet.');
       wallet.balance = round9(wallet.balance - bet);
+      DemoRake.add('run', bet);
       const paid = DemoMissions.play(bet);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
       saveAll();
@@ -3344,6 +3568,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       async closeNow() { DemoPot.roll(true); return DemoPot.view(); } // demo only
     },
     missions: { view: () => DemoMissions.view(), async state() { return DemoMissions.view(); } },
+    rakeback: { view: () => DemoRake.view(), levelUp: () => DemoRake.levelUp(), claim: () => DemoRake.claim() },
     special: {
       async state() { return DemoSpecial.view(); },
       async start(slot) { return DemoSpecial.start(slot); },
@@ -3353,7 +3578,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
 
   // Real SOL: talks to server/server.mjs. Only active when SOL_DUNK_CONFIG.serverUrl is set.
   const ServerBank = {
-    real: true, token: null, address: null, bal: 0, runId: null, specId: null, mv: null, modeMax: null,
+    real: true, token: null, address: null, bal: 0, runId: null, specId: null, mv: null, modeMax: null, rb: { acc: 0, ready: 0, paid: 0 },
     // the most each mode takes right now: the server sets it from the house's bankroll
     async betLimits() { const c = await this.api('/api/config'); this.modeMax = (c.difficulties || []).map((d) => d.maxBet / 1e9); },
     async api(path, body) {
@@ -3365,6 +3590,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || ('Server error ' + res.status));
       if (typeof j.balance === 'number') this.bal = j.balance / 1e9;
+      if (j.rakeback) this.rb = { acc: j.rakeback.accLamports / 1e9, ready: j.rakeback.readyLamports / 1e9, paid: j.rakeback.paidLamports / 1e9 };
       return j;
     },
     provider() { return (window.phantom && window.phantom.solana) || (window.solana && window.solana.isPhantom ? window.solana : null) || window.solflare || null; },
@@ -3402,14 +3628,16 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     async cashout() { const j = await this.api('/api/run/cashout', { runId: this.runId }); return { payout: j.payoutLamports / 1e9, serverSeed: j.serverSeed, missions: this.mfrom(j.missions) }; },
     // the server's missions in SOL; keeps its latest view for the Missions page
     mconv(v) {
-      const L = 1e9, one = (m) => Object.assign({}, m, { reward: m.rewardLamports / L });
-      return { day: v.day, week: v.week, dayEnds: v.dayEnds, weekEnds: v.weekEnds, need: { day: v.needLamports.day / L, week: v.needLamports.week / L }, played: { day: v.playedLamports.day / L, week: v.playedLamports.week / L }, daily: v.daily.map(one), weekly: v.weekly.map(one) };
+      const L = 1e9, one = (m) => Object.assign({}, m, { reward: m.rewardLamports / L, need: m.needLamports / L }), sol = (o) => ({ day: o.day / L, week: o.week / L });
+      return MS.shape({ day: v.day, week: v.week, dayEnds: v.dayEnds, weekEnds: v.weekEnds, base: sol(v.baseNeedLamports), played: sol(v.playedLamports), days: v.days | 0, all: { day: v.all.day.map(one), week: v.all.week.map(one) } });
     },
     mfrom(j) {
       if (!j) return null;
       if (j.view) this.mv = this.mconv(j.view);
-      return { done: j.done || [], paid: (j.paid || []).map((p) => Object.assign({}, p, { amount: p.lamports / 1e9 })) };
+      return { done: j.done || [], opened: j.opened || [], paid: (j.paid || []).map((p) => Object.assign({}, p, { amount: p.lamports / 1e9 })) };
     },
+    // rakeback: the server sets it aside with every bet and releases it when its own count of your XP levels up
+    rakeback: { view: () => ServerBank.rb, levelUp: () => 0, async claim() { return (await ServerBank.api('/api/rakeback/claim', {})).claimedLamports / 1e9; } },
     missions: {
       view() { return ServerBank.mv || MS.view(null, Date.now()); },
       async state() { ServerBank.mv = ServerBank.mconv(await ServerBank.api('/api/missions')); return ServerBank.mv; }
@@ -3780,8 +4008,8 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   let phase = 'lobby'; // lobby | ready | play | clearing | checkpoint | over | paused
   let pendingTap = false, acc = 0;
   const run = { mode: 'run', recipe: null, prize: 0, di: 1, bet: 0.1, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, taps: [], seedHash: '', clientSeed: '', nonce: 0, serverSeed: '', levelSeed: '', st: null, busy: false,
-    score: 0, cleared: 0, perfect: 0, mov: 0, tilt: 0, fires: 0, novas: 0, lvlSw: 0, newBest: false, prog: null, lost: false };
-  const RUN_FRESH = { score: 0, cleared: 0, perfect: 0, mov: 0, tilt: 0, fires: 0, novas: 0, lvlSw: 0, newBest: false, prog: null, lost: false };
+    score: 0, cleared: 0, perfect: 0, greens: 0, mov: 0, tilt: 0, fires: 0, novas: 0, lvlSw: 0, newBest: false, prog: null, lost: false };
+  const RUN_FRESH = { score: 0, cleared: 0, perfect: 0, greens: 0, mov: 0, tilt: 0, fires: 0, novas: 0, lvlSw: 0, newBest: false, prog: null, lost: false };
   const attract = { st: null, bot: null, wait: 0, level: 1, streak: 0, acc: 0, tap: false };
   // navigation: which tab is open, the page pushed over it (if any), which page Challenges shows (ch), and what the
   // locker's live preview should show (fx: force a flame streak)
@@ -3981,7 +4209,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   }
   NOTE.el.innerHTML = '<span class="ni"></span><span class="nb"><span class="nt"></span><span class="ns"></span></span>';
   NOTE.parts = ['.ni', '.nt', '.ns'].map((q) => NOTE.el.querySelector(q));
-  [ICON.check, ICON.flag, ICON.medal, ICON.trophy, ICON.gift].concat(ACH.map((a) => troIcon(a.id))).forEach((i) => { if (i) noteIcon(i); }); // parsed now, not mid-run
+  [ICON.check, ICON.flag, ICON.medal, ICON.trophy, ICON.gift, ICON.target].concat(ACH.map((a) => troIcon(a.id))).forEach((i) => { if (i) noteIcon(i); }); // parsed now, not mid-run
   function notice(kind, icon, title, sub, first) {
     const n = { kind, icon, title, sub, first: !!first };
     if (first) NOTE.q.unshift(n); else NOTE.q.push(n);
@@ -4007,12 +4235,24 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   // every unfinished mission with where it would stand if the run ended now: daily first, then weekly, then career
   function openMissions(r) {
     const out = [];
-    for (const c of dailySet()) if (!c.done) out.push({ id: 'd:' + c.k, kind: 'daily', text: dailyText(c), p: dailyNow(c, r), n: c.n, xp: c.xp, sol: c.reward });
-    for (const c of weeklySet()) if (!c.done) out.push({ id: 'w:' + c.k, kind: 'weekly', text: weeklyText(c), p: Math.min(c.n, c.p + (r[c.k] || 0)), n: c.n, xp: c.xp, sol: c.reward });
+    for (const c of dailySet()) if (!c.done) out.push({ id: 'd:' + c.round + c.k, kind: 'daily', text: dailyText(c), p: dailyNow(c, r), p0: c.p, n: c.n, xp: c.xp, sol: c.reward });
+    for (const c of weeklySet()) if (!c.done) out.push({ id: 'w:' + c.round + c.k, kind: 'weekly', text: weeklyText(c), p: sumNow(c.p, c.n, r[c.k] || 0, c.sum), p0: c.p, n: c.n, xp: c.xp, sol: c.reward });
     const cs = careerState(), C = CAREER[cs.ch];
-    if (C) C.m.forEach((m, i) => { if (!cs.done[i]) out.push({ id: 'c:' + cs.ch + ':' + i, kind: 'career', text: careerText(m), p: sumNow(cs.p[i], m[1], r[m[0]] || 0, m[3]), n: m[1], xp: m[2] }); });
+    if (C) C.m.forEach((m, i) => { if (!cs.done[i]) out.push({ id: 'c:' + cs.ch + ':' + i, kind: 'career', text: careerText(m), p: sumNow(cs.p[i], m[1], r[m[0]] || 0, m[3]), p0: cs.p[i], n: m[1], xp: m[2] }); });
     return out;
   }
+  // the mission to chase: of those still open, the one nearest done; a daily or weekly one (they pay SOL) before a career one
+  function nearestMission(r) {
+    let best = null;
+    for (const m of openMissions(r)) {
+      if (m.p >= m.n || (run.told && run.told[m.id])) continue;
+      const v = (m.sol ? 1 : 0) + m.p / m.n;
+      if (!best || v > best.v + 1e-9) best = Object.assign({ v }, m);
+    }
+    return best;
+  }
+  // close enough to say so: most of the way there and only a ring or two (or a few points) short
+  const nearDone = (m) => m.n > 2 && m.p < m.n && m.p / m.n >= 0.6 && m.n - m.p <= (m.n >= 40 ? 6 : m.n >= 12 ? 2 : 1);
   const KIND_NAME = { daily: 'Daily mission', weekly: 'Weekly mission', career: 'Career mission' };
   function liveGoals() {
     if (!run.told || phase === 'lobby' || run.mode !== 'run') return; // specials and practice runs don't count toward goals
@@ -4021,8 +4261,12 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     const r = runFacts(0);
     const mv = mview(), met = { daily: mv.played.day >= mv.need.day - 1e-9, weekly: mv.played.week >= mv.need.week - 1e-9 };
     for (const m of openMissions(r)) {
-      if (run.told[m.id] || m.p < m.n) continue;
-      run.told[m.id] = 1; notice('n-' + m.kind, m.kind === 'career' ? ICON.flag : ICON.check, KIND_NAME[m.kind] + ' done', m.text + ' · +' + m.xp + ' XP' + (m.sol && met[m.kind] ? ' · +' + fmtSol(m.sol) + ' SOL' : ''));
+      if (run.told[m.id]) continue;
+      if (m.p < m.n) { // nearly done, and this run moved it: one nudge per mission
+        if (m.sol && !run.told['~' + m.id] && m.p > m.p0 && nearDone(m)) { run.told['~' + m.id] = 1; notice('n-near', ICON.target, 'Almost there', m.text + ' · ' + m.p + '/' + m.n + ' · ' + fmtBet(m.sol) + ' SOL'); }
+        continue;
+      }
+      run.told[m.id] = 1; notice('n-' + m.kind, m.kind === 'career' ? ICON.flag : ICON.check, KIND_NAME[m.kind] + ' done', m.text + ' · +' + m.xp + ' XP' + (m.sol && met[m.kind] ? ' · +' + fmtBet(m.sol) + ' SOL' : ''));
     }
     for (const a of ACH) {
       if (profile.ach[a.id] || run.told[a.id] || a.id === 'double' || a.id === 'swish100' || !a.test(r)) continue;
@@ -4035,8 +4279,8 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     if (practicing()) return 'Practice · nothing is at stake';
     const pl = potLine();
     if (pl) return pl;
-    for (const m of openMissions(runFacts(0))) if (!run.told[m.id] && m.p < m.n) return m.text + ' · ' + m.p + '/' + m.n;
-    return '';
+    const m = nearestMission(runFacts(0));
+    return m ? m.text + ' · ' + m.p + '/' + m.n : '';
   }
 
   function shareText(head) {
@@ -4456,7 +4700,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
     if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
     showPrompt(KB ? (run.level === 1 ? 'Press Space to fly' : 'Press Space to go') : run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL'
-      : run.level === 1 ? (practicing() ? 'Free practice: nothing is at stake' : newPlayer() ? 'Drop down through each ring' : potLine()) : '');
+      : run.level === 1 ? (practicing() ? 'Free practice: nothing is at stake' : newPlayer() ? 'Drop down through each ring' : goalLine()) : '');
   }
 
   function settleOffset() { ball.x += ball.ox; ball.y += ball.oy; ball.ox = 0; ball.oy = 0; }
@@ -4546,6 +4790,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   function onClear() {
     phase = 'clearing';
     run.cleared++;
+    if (run.streak > 0) run.greens++; // the level's last ring, the green one, was a swish
     if (run.mode === 'special') { specialFinish(true); return; }
     if (run.mode === 'run') profile.lv[run.di][run.level - 1][1]++;
     if (!REDUCED) {
@@ -4673,8 +4918,9 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     stats.history.unshift({ t: Date.now(), kind: 'special', slot: run.slot, recipe: run.recipe, g: run.g, n: run.n, di: run.di, bet: run.bet, payout, level: 1, mult: won ? run.prize / run.bet : 0, result: won ? 'won' : 'lost', seedHash: run.seedHash, serverSeed: run.serverSeed, clientSeed: run.clientSeed, nonce: run.nonce });
     stats.history.length = Math.min(stats.history.length, 30);
     // XP for the points; the special doesn't count toward missions, trophies or the pot
-    const before = lvlOf(profile.xp), xp = run.score + (won ? 25 : 0);
+    const before = lvlOf(profile.xp), steps = LV.stepsOf(profile.xp), xp = LV.specialXp(run.score, won);
     profile.tot.swish += run.swishes; profile.xp += xp;
+    if (LV.stepsOf(profile.xp) > steps) bank.rakeback.levelUp();
     run.prog = { xp, runXp: xp, before, after: lvlOf(profile.xp), newBest: false, prevBest: 0, achs: [], dailies: [], weeklies: [], careers: [], chapter: null, unlocks: grantUnlocks(), paid: [] };
     saveAll(); setBalance();
   }
@@ -4692,15 +4938,15 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   // What the run earned outside the bet: personal best, XP, achievements, missions, unlocks.
   function runFacts(payout) {
     return { di: run.di, score: run.score, points: run.score, swish: run.swishes, best: run.best, perfect: run.perfect,
-      clears: run.cleared, level: run.level, mov: run.mov, tilt: run.tilt, fires: run.fires, novas: run.novas, paid: payout > 0, total: run.total };
+      clears: run.cleared, level: run.level, mov: run.mov, tilt: run.tilt, fires: run.fires, novas: run.novas, greens: run.greens, runs: 1, paid: payout > 0, total: run.total };
   }
   function progress(payout, mres) {
-    const r = runFacts(payout), di = run.di, before = lvlOf(profile.xp);
+    const r = runFacts(payout), di = run.di, before = lvlOf(profile.xp), steps = LV.stepsOf(profile.xp);
     const prevBest = profile.best[di], newBest = run.score > prevBest;
     if (newBest) profile.best[di] = run.score;
     profile.deep[di] = Math.max(profile.deep[di], run.level);
     profile.tot.swish += run.swishes; profile.tot.perfect += run.perfect;
-    const runXp = run.score + run.cleared * 5 + run.perfect * 15;
+    const runXp = LV.runXp(r);
     let xp = runXp;
     const achs = ACH.filter((a) => !profile.ach[a.id] && a.test(r));
     for (const a of achs) { profile.ach[a.id] = Date.now(); xp += a.xp; }
@@ -4725,8 +4971,9 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     }
     profile.mNew += dailies.length + weeklies.length + careers.length;
     profile.xp += xp;
+    if (LV.stepsOf(profile.xp) > steps) bank.rakeback.levelUp(); // a level up releases the rakeback built up since the last one
     const unlocks = grantUnlocks();
-    return { xp, runXp, before, after: lvlOf(profile.xp), newBest, prevBest, achs, dailies, weeklies, careers, chapter, unlocks, paid: (mres && mres.paid) || [] };
+    return { xp, runXp, before, after: lvlOf(profile.xp), newBest, prevBest, achs, dailies, weeklies, careers, chapter, unlocks, paid: (mres && mres.paid) || [], opened: (mres && mres.opened) || [] };
   }
 
   function showCheckpoint() {
@@ -4756,6 +5003,8 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     const sk = $('cpStreak');
     sk.className = 'nx-s' + (run.streak >= 5 ? ' nova' : '');
     sk.innerHTML = run.streak > 1 ? ICON.flame + `Your ${run.streak}-swish streak carries over` : '';
+    const gm = pr ? null : nearestMission(runFacts(0)); // counted when the run ends, cash out or not
+    $('cpGoal').innerHTML = gm ? ICON.target + `<span>${gm.text}</span><b>${gm.p}/${gm.n}</b>` : '';
     $('cashAmt').textContent = pr ? 'Ends practice' : fmtAmt(pot) + ' SOL';
     $('goSub').textContent = 'Level ' + nx;
     show(ui.cp, true); armCard(ui.cp, 600); STK.el.classList.add('tuck');
@@ -4815,11 +5064,25 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       });
     });
   }
+  // Rakeback: released by a level up, claimed with one tap (on the result card or on Profile).
+  const rakeChip = (x) => `<button class="gain claim" id="rbChip" style="animation-delay:0.3s" aria-label="Claim ${fmtBet(x)} SOL of rakeback">${ICON.gift}<span>Level-up rakeback</span><em>Claim ${fmtBet(x)} SOL</em></button>`;
+  let rbBusy = false;
+  async function claimRakeback(el) {
+    if (rbBusy) return;
+    rbBusy = true;
+    let x = 0;
+    try { x = await bank.rakeback.claim(); } catch (e) { rbBusy = false; toast(e.message || 'Couldn\'t claim that. Try again.'); return; }
+    rbBusy = false;
+    if (!(x > 0)) return;
+    Sound.unlockItem(); buzz([10, 40, 10]); setBalance(); syncBadges();
+    if (el && el.id === 'rbChip') { el.classList.add('on'); el.disabled = true; el.querySelector('span').textContent = 'Rakeback claimed'; el.querySelector('em').textContent = '+' + fmtBet(x) + ' SOL'; }
+    else { toast('+' + fmtBet(x) + ' SOL rakeback claimed'); if (nav.tab === 'profile') renderProfileView(); }
+  }
   let xpTimers = [];
   function showProgress(pr) {
     const box = $('resXp'), fill = $('xpFill');
     xpTimers.forEach(clearTimeout); xpTimers = [];
-    if (!pr) { box.style.display = 'none'; $('resGains').innerHTML = ''; return; }
+    if (!pr) { box.style.display = 'none'; $('resGains').innerHTML = ''; $('resNext').innerHTML = ''; return; }
     box.style.display = '';
     const b = pr.before, a = pr.after, up = a.l > b.l;
     $('xpGain').textContent = '+' + pr.xp + ' XP';
@@ -4838,17 +5101,21 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       hudAnim(fill, 'fill', [{ width: '0%' }, { width: w }], { duration: REDUCED ? 1 : 600, easing: EASE_OUT });
       Sound.levelUp(); buzz([10, 40, 10]); celebrate(60, ui.res); // from the card's top corners, clear of its text
     }, 1100));
-    const g = [];
+    const g = [], rbReady = bank.rakeback.view().ready;
     if (run.potJust && potState) g.push(['pot', ICON.trophy, 'Pot challenge done · in for a share']);
     const paid = (pr.paid || []).reduce((a, p) => a + p.amount, 0);
     if (paid > 0) g.push(['pot', ICON.gift, 'Mission rewards · +' + fmtSol(paid) + ' SOL']);
     // mission SOL earned but waiting for the window's play: say how much more unlocks it
     if (run.mode !== 'special' && (pr.dailies.length || pr.weeklies.length)) {
       const mv = mview();
-      for (const [list, win, when] of [[mv.daily, 'day', 'today'], [mv.weekly, 'week', 'this week']]) {
-        const wait = list.filter((c) => c.done && !c.paid).reduce((a, c) => a + c.reward, 0), more = mv.need[win] - mv.played[win];
+      for (const [win, when] of [['day', 'today'], ['week', 'this week']]) {
+        const wait = mv.waiting[win], more = (mv.due[win] || 0) - mv.played[win];
         if (wait > 0 && more > 0) g.push(['', ICON.gift, `${fmtBet(wait)} SOL waiting · bet ${fmtBet(Math.ceil(more * 100) / 100)} SOL more ${when}`]);
       }
+      // a round finished: the next one is open, or the window's missions are all done
+      for (const o of pr.opened || []) g.push(['pot', ICON.spark, `${o.win === 'day' ? 'Daily' : 'Weekly'} round ${o.round + 1} open · ${fmtBet(roundSol(mv, o.win))} SOL more`]);
+      if (pr.dailies.length && mv.daily.every((c) => c.done)) g.push(['daily', ICON.check, 'All of today\'s missions done']);
+      if (pr.weeklies.length && mv.weekly.every((c) => c.done)) g.push(['daily', ICON.check, 'All of this week\'s missions done']);
     }
     pr.unlocks.forEach((u) => g.push(['unlock', '', 'New ' + itemName(u), u]));
     pr.achs.forEach((x) => g.push(['ach', troIcon(x.id), x.name + ' · +' + x.xp + ' XP']));
@@ -4858,14 +5125,15 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     pr.careers.forEach((m) => g.push(['daily', ICON.flag, careerText(m) + ' · +' + m[2] + ' XP']));
     const sNow = run.mode === 'special' && specState && specState.specials ? specState.specials[run.slot] : null;
     if (!g.length && sNow) g.push(['', ICON.trophy, `${sNow.recipe.name} today: ${sNow.me.wins} of ${sNow.me.tries} cleared`]);
-    else if (!g.length) { // nothing new this run: show the next mission, so there's always a goal
-      const m = openMissions(runFacts0())[0];
-      if (m) g.push(['', ICON.target, `${m.text} · ${m.p}/${m.n}`]);
-    }
-    const room = (vh < 720 ? 3 : 4) - (pr.unlocks.length ? 1 : 0), more = g.length > room ? g.length - (room - 1) : 0;
-    $('resGains').innerHTML = g.slice(0, more ? room - 1 : room).map((x, i) => (x[3] ? unlockChip(x[3], i) : gainChip(x[0], x[1], x[2], i))).join('') +
+    // the mission to go for next, with where it stands and what it pays: there's always a goal for the next run
+    const nm = run.mode === 'run' && !(vh < 720 && rbReady > 0) ? nearestMission(runFacts0()) : null, nx = $('resNext'); // a short screen shows the claim instead
+    nx.innerHTML = nm ? `<div class="rn-h">${ICON.target}<span>${nm.text}</span><b>${nm.p}/${nm.n}${nm.sol ? ' · ' + fmtBet(nm.sol) + ' SOL' : ' · ' + nm.xp + ' XP'}</b></div><div class="rn-bar"><i style="width:${(nm.p / nm.n * 100).toFixed(1)}%"></i></div>` : '';
+    const room = Math.max(1, (vh < 720 ? 3 : 4) - (pr.unlocks.length ? 1 : 0) - (nm && vh < 720 ? 1 : 0) - (rbReady > 0 ? 1 : 0)), more = g.length > room ? g.length - (room - 1) : 0;
+    $('resGains').innerHTML = (rbReady > 0 ? rakeChip(rbReady) : '') + g.slice(0, more ? room - 1 : room).map((x, i) => (x[3] ? unlockChip(x[3], i) : gainChip(x[0], x[1], x[2], i))).join('') +
       (more ? gainChip('', ICON.spark, '+' + more + ' more', room - 1) : '');
     wireUnlockChips();
+    const rc = $('rbChip');
+    if (rc) rc.addEventListener('click', () => { if (armed(ui.res)) claimRakeback(rc); });
     if (pr.achs.length || pr.unlocks.length || pr.dailies.length || pr.weeklies.length || pr.careers.length || paid > 0) xpTimers.push(setTimeout(() => Sound.unlockItem(), up ? 1500 : 500));
   }
   function backToLobby() {
@@ -6238,7 +6506,8 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     star: '<path d="m12 3.3 2.6 5.4 5.9.8-4.3 4.1 1.1 5.9-5.3-2.9-5.3 2.9 1.1-5.9-4.3-4.1 5.9-.8z"/>',
     mission: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="m8.4 12.2 2.5 2.5 4.8-5"/>',
     trophy: '<path d="M7.6 3.8h8.8v5.4a4.4 4.4 0 0 1-8.8 0z"/><path d="M7.6 5.6H4.8v1.2a3.3 3.3 0 0 0 3.1 3.3M16.4 5.6h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 13.6v3.6M8.4 20.2h7.2"/>',
-    practice: '<circle cx="12" cy="12" r="9"/><path d="M10 8.4v7.2l5.6-3.6z" fill="currentColor"/>'
+    practice: '<circle cx="12" cy="12" r="9"/><path d="M10 8.4v7.2l5.6-3.6z" fill="currentColor"/>',
+    back: '<circle cx="12" cy="12" r="8.6"/><path d="M15.8 12H8.4M11.4 8.9 8.3 12l3.1 3.1"/>'
   };
   function howHtml() {
     const row = (icon, tone, title, text) => `<div class="hrow"><span class="hic ${tone}"><svg viewBox="0 0 24 24" aria-hidden="true">${HOW_ICON[icon]}</svg></span><div><h3>${title}</h3><p>${text}</p></div></div>`;
@@ -6251,7 +6520,8 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the green ring ends the level. Cash out, or keep going for more.`) +
       row('practice', 'blue', 'Practice', `${KB ? 'Click' : 'Tap'} <b>Practice for free</b> under Play for a run with nothing at stake.`) +
       row('star', 'gold', 'Score and XP', `Rings score points, more for swishes and streaks. Points, missions and trophies earn XP, which unlocks balls, wings and trails. Neither changes what a run pays.`) +
-      row('mission', 'purple', 'Missions', `New ones every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week.`) +
+      row('mission', 'purple', 'Missions', `Three at a time, new every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week. Finish all three to open the next round, which pays more.`) +
+      row('back', 'green', 'Rakeback', `Every bet sets a little SOL aside for you: ${Math.round(LV.RATE * 100)}% of the house's cut. Level up to claim it.`) +
       row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
       `</div>`;
   }
@@ -6538,7 +6808,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   function syncBadges() {
     const newSpecial = !!specState && prefs.specSeen !== specState.day;
     $('badgeC').classList.toggle('on', (newSpecial || profile.mNew > 0) && nav.tab !== 'challenges');
-    $('badgeP').classList.toggle('on', profile.fresh.length > 0 && nav.tab !== 'locker');
+    $('badgeP').classList.toggle('on', (profile.fresh.length > 0 && nav.tab !== 'locker') || (bank.rakeback.view().ready > 0 && nav.tab !== 'profile'));
   }
   $('lkBack').addEventListener('click', () => setTab('profile'));
   document.querySelectorAll('#tabbar [data-tab]').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
@@ -6552,12 +6822,35 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       : `<b>+${xp} XP</b>` + (sol ? `<small>+${fmtBet(sol)} SOL</small>` : '');
     return `<div class="mrow${done ? ' done' : ''}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? 'Done' : p + ' / ' + n}</span></span><span class="mxp">${right}</span></div>`;
   }
-  // a window's SOL pays once this much has been played in it (bets on runs and special level entries)
+  // what one round of a window pays in all
+  const roundSol = (mv, win, r) => mv.base[win] * MS.SHARES[win] * (MS.STEPS[r == null ? mv.round[win] : r] - ((r == null ? mv.round[win] : r) ? MS.STEPS[(r == null ? mv.round[win] : r) - 1] : 0));
+  // The rounds of a window, side by side: done (its SOL paid, or waiting for play), open, or still locked.
+  function roundsRow(mv, win) {
+    const all = mv.all[win], cur = mv.round[win];
+    return `<div class="rounds">${MS.STEPS.map((x, r) => {
+      const mine = all.slice(r * 3, r * 3 + 3), done = mine.length === 3 && mine.every((c) => c.done), paid = done && mine.every((c) => c.paid);
+      const st = done ? (paid ? 'paid' : 'wait') : r === cur ? 'now' : 'lock';
+      return `<div class="rd ${st}"><span>${st === 'lock' ? ICON.lock : done ? ICON.check : ''}Round ${r + 1}</span><b>${fmtBet(roundSol(mv, win, r))} SOL</b></div>`;
+    }).join('')}</div>`;
+  }
+  // A round's SOL pays once this much has been bet in the window (run bets and special level entries). If SOL from an
+  // earlier round is still waiting, the bar shows what releases that first.
   function needRow(mv, win) {
-    const need = mv.need[win], got = mv.played[win], met = got >= need - 1e-9, when = win === 'day' ? 'today' : 'this week';
+    const got = mv.played[win], when = win === 'day' ? 'today' : 'this week';
+    const owed = mv.due[win] != null && got < mv.due[win] - 1e-9;
+    const need = owed ? mv.due[win] : mv.need[win], met = got >= need - 1e-9;
     const shown = Math.min(need, Math.floor(got * 100 + 1e-6) / 100);
-    return `<div class="mneed${met ? ' met' : ''}"><div class="mn-h"><span>${met ? 'SOL rewards unlocked ' + when : 'Bet ' + fmtBet(need) + ' SOL ' + when + ' to unlock SOL rewards'}</span><b>${fmtBet(shown)} / ${fmtBet(need)} SOL</b></div>
+    const text = met ? 'SOL rewards unlocked ' + when : owed ? `Bet ${fmtBet(need)} SOL ${when} to collect ${fmtBet(mv.waiting[win])} SOL` : `Bet ${fmtBet(need)} SOL ${when} to unlock SOL rewards`;
+    return `<div class="mneed${met ? ' met' : ''}"><div class="mn-h"><span>${text}</span><b>${fmtBet(shown)} / ${fmtBet(need)} SOL</b></div>
       <div class="bar"><i style="width:${(Math.min(1, got / need) * 100).toFixed(1)}%"></i></div></div>`;
+  }
+  // under a round's three missions: what finishing them opens
+  function roundFoot(mv, win) {
+    const nx = mv.next[win], list = win === 'day' ? mv.daily : mv.weekly, left = list.filter((c) => !c.done).length;
+    if (!left && nx) return `<div class="mfoot">${ICON.check}<span>Round ${nx.round + 1} opens with your next run</span><b>+${fmtBet(nx.reward)} SOL</b></div>`;
+    if (!left) return `<div class="mfoot done">${ICON.check}<span>All done. ${fmtBet(mv.paid[win] + mv.waiting[win])} SOL earned ${win === 'day' ? 'today' : 'this week'}.</span></div>`;
+    if (!nx) return `<div class="mfoot"><span>Last round ${win === 'day' ? 'today' : 'this week'}.</span></div>`;
+    return `<div class="mfoot">${ICON.lock}<span>Finish all three to open round ${nx.round + 1}</span><b>+${fmtBet(nx.reward)} SOL</b></div>`;
   }
   const rewardOf = (C) => { const [t, id] = C.reward.split(':'); return { t, id, u: UNLOCK_BY[C.reward] }; };
   function missionsHtml() {
@@ -6566,13 +6859,13 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     const C = CAREER[cs.ch], cDone = C ? cs.done.filter(Boolean).length : 4;
     const tile = (page, ic, name, val, f) => `<button class="ct ct-${page}" data-page="${page}"><span class="ct-ic">${ic}</span><span class="chev">${ICON.chev}</span><b>${name}</b><span class="ct-v">${val}</span><span class="ct-bar"><i style="width:${(f * 100).toFixed(1)}%"></i></span></button>`;
     return `<div class="cc ms-cc"><div class="cc-h"><span class="cc-k">${ICON.target}Daily missions</span><span class="cc-t">New in ${untilMidnight()}</span></div>
-      ${needRow(mv, 'day')}${d.map((c, i) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i)).join('')}</div>
-      <div class="ctiles">${tile('week', ICON.target, 'This week', wDone + ' of ' + w.length + ' done', w.length ? wDone / w.length : 0)}${tile('career', ICON.flag, 'Career', C ? 'Chapter ' + (cs.ch + 1) + ' of ' + CAREER.length : 'All done', cDone / 4)}</div>`;
+      ${roundsRow(mv, 'day')}${needRow(mv, 'day')}${d.map((c, i) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i)).join('')}${roundFoot(mv, 'day')}</div>
+      <div class="ctiles">${tile('week', ICON.target, 'This week', 'Round ' + (mv.round.week + 1) + ' · ' + wDone + ' of ' + w.length + ' done', (mv.round.week + wDone / 3) / mv.rounds)}${tile('career', ICON.flag, 'Career', C ? 'Chapter ' + (cs.ch + 1) + ' of ' + CAREER.length : 'All done', cDone / 4)}</div>`;
   }
   function weekHtml() {
     const mv = mview(), w = mv.weekly;
-    return `<p class="vsub">New missions in ${untilMonday()}.</p>
-      <div class="group">${needRow(mv, 'week')}${w.map((c, i) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i + 1)).join('')}</div>`;
+    return `<p class="vsub">New missions in ${untilMonday()}. Finish all three to open the next round.</p>
+      <div class="group ms-wk">${roundsRow(mv, 'week')}${needRow(mv, 'week')}${w.map((c, i) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i + 1)).join('')}${roundFoot(mv, 'week')}</div>`;
   }
   function careerHtml() {
     const cs = careerState(), C = CAREER[cs.ch];
@@ -6672,12 +6965,19 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       <button class="pcard" id="pfCard" aria-label="Edit your player card" style="${avStyle(profile.card.color)}"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
         <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span>
           <span class="plv"><span>Level ${v.l}</span><span class="num">${v.into} / ${v.need} XP</span></span><span class="pxp"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></span></span>
-        <span class="chev">${ICON.chev}</span></button>
+        <span class="chev">${ICON.chev}</span></button>${rakeHtml(v)}
       <div class="menu-list"><button id="pfLocker"><span class="mi mi-locker">${ICON.shirt}</span><span class="mn">Locker</span><span class="mv">${fresh ? '<i class="dot" aria-label="New items"></i>' : ''}</span><span class="chev">${ICON.chev}</span></button>${row('trophies', ICON.medal, 'Trophies', got + ' of ' + ACH.length)}${row('stats', ICON.chart, 'Stats', stats.runs === 1 ? '1 run' : stats.runs + ' runs')}</div>
       </div><div class="dk-col"><div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${row('settings', ICON.gear, 'Settings')}</div>
       <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.shield, 'Odds &amp; fairness')}</div></div></div></div>`;
     $('pfCard').addEventListener('click', () => openPanel('card'));
     $('pfLocker').addEventListener('click', () => setTab('locker'));
+    if ($('rbBtn')) $('rbBtn').addEventListener('click', () => claimRakeback(null));
+  }
+  // what has built up toward the next level, or what a level up has released to claim
+  function rakeHtml(v) {
+    const rb = bank.rakeback.view(), ready = rb.ready > 0;
+    const sub = ready ? (rb.acc > 0 ? `${fmtBet(rb.acc)} SOL more at level ${v.l + 1}` : 'Yours from levelling up') : rb.acc > 0 ? `Claim it at level ${v.l + 1}` : 'Every bet adds to it. Level up to claim it.';
+    return `<div class="rake${ready ? ' ready' : ''}"><span class="rk-i">${ICON.gift}</span><span class="rk-t"><b>Rakeback<span class="num">${fmtBet(ready ? rb.ready : rb.acc)} SOL</span></b><small>${sub}</small></span>${ready ? `<button class="btn btn-green rk-b" id="rbBtn">Claim</button>` : ''}</div>`;
   }
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   // the player card editor: name, emblem, colour and title
@@ -6748,6 +7048,8 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     pot: () => potState, // the challenge pot as the client sees it
     special: () => specState, // today's special level as the client sees it
     missions: () => mview(), // daily and weekly missions, with SOL and the play that unlocks it
+    rakeback: () => bank.rakeback.view(), // { acc: building up, ready: released by a level up, paid: claimed }
+    level: () => lvlOf(profile.xp),
     mode: () => run.mode, // 'run', 'special' or 'practice'
     bal: () => bank.balance(),
     sfx: (name, args, secs) => Sound.render(name, args, secs), // a sound's samples, rendered offline

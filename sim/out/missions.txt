@@ -1,0 +1,13 @@
+engine v15, Easy, 60 days per skill, up to 40 runs a day, cash out after level 3, 0.25 SOL a run
+needs a day 2 / 5 / 10 SOL, a week 10 / 25 / 50 SOL; rewards a day 0.006 / 0.009 / 0.015 SOL, a week 0.02 / 0.03 / 0.05 SOL
+
+daily rounds: runs needed to finish round 1 / 2 / 3 (median over the days it was finished), and the share of days it was
+casual     6 runs ( 85%)    17 runs ( 65%)    32 runs ( 37%)   left open most: level:5 ×16, perfect:2 ×11, perfect:1 ×5, points:280 ×2
+         weekly rounds finished by Sunday: 2 3 2 3 3 2 3 3   days with a daily round: 6 6 6 5 6 7 6 6
+average    5 runs ( 90%)    14 runs ( 78%)    24 runs ( 62%)   left open most: level:5 ×16, perfect:2 ×2, perfect:1 ×2, points:280 ×1
+         weekly rounds finished by Sunday: 3 3 3 3 3 3 3 3   days with a daily round: 6 6 6 6 7 7 6 7
+good       3 runs ( 92%)     9 runs ( 80%)    15 runs ( 73%)   left open most: level:5 ×16
+         weekly rounds finished by Sunday: 3 3 3 3 3 3 3 3   days with a daily round: 6 7 6 6 7 7 6 7
+
+most a window had paid against its share of the play: 100.0% (never over 100%)
+time 6s
