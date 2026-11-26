@@ -1,7 +1,8 @@
 // Pot challenge odds: the chance that one run makes each challenge, for casual, average and good players.
 // Runs start on level 1 of the challenge's own tier and play on until they bust (or clear all 8 levels).
 // Prints each challenge's measured chance next to its p in src/pots.cjs; copy the new numbers in after a
-// physics change. Extra challenges can be tried as kind:n@tier (kinds: best, swishes, score, perfect, clears).
+// physics change. Extra challenges can be tried as kind:n@tier (kinds: best, swishes, score, perfect, clears,
+// greens, hot, comeback, early).
 //   node sim/pots.cjs [runs per skill, default 20000] [best:7@1,score:90@1,...]
 const E = require('../src/engine.cjs');
 const B = require('../src/bot.cjs');

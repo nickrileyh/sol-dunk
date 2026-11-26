@@ -273,6 +273,29 @@ function playTaps(seed, di, L, skill, salt) {
   check((await poorS.api('/api/special/start', { clientSeed: 'poor1', slot: 0 })).status === 400, 'special entry without balance refused');
   srv4.kill();
 
+  // the newer pot challenges, judged from ring outcomes alone, and the special levels' rotation
+  {
+    const lv = (outcomes, clear = true) => ({ outcomes, clear });
+    const f1 = POTS.facts([lv('SSRSSS'), lv('SSSSSS'), lv('RSSSSR'), lv('SSS', false)]);
+    check(f1.greens === 2 && f1.hot === 2 && f1.comeback === 9 && f1.early === 11 && f1.perfect === 1, 'pots: green rings, checkpoints on fire, a streak after a rim hit and the first twelve rings ' + JSON.stringify(f1));
+    const f2 = POTS.facts([lv('SSSSSS'), lv('SSSS', false)]);
+    check(f2.comeback === 0 && f2.best === 10 && f2.greens === 1 && f2.hot === 1 && f2.early === 10, 'pots: a streak counts as a comeback only after a rim hit ' + JSON.stringify(f2));
+    check(POTS.progress('early8', [lv('SSSSSS'), lv('SSRRRR')], 0).done === false && POTS.progress('early8', [lv('SSSSSS'), lv('SSRRRR')], 1).done === true, 'pots: a Hard challenge needs a Hard run');
+    check(POTS.GOALS.length === 12 && new Set(POTS.GOALS.map((g) => g.id)).size === 12 && POTS.GOALS.every((g) => g.kind in f1 && g.p.length === 3), 'pots: twelve challenges, each of a kind the rules can judge');
+    let prev = [], bad = 0; const seen = {};
+    for (let d = 0; d < 120; d++) {
+      const ids = SP.specialsFor(new Date(Date.UTC(2026, 10, 1) + d * 86400000).toISOString().slice(0, 10)).map((x) => x.recipe.id);
+      if (new Set(ids).size !== 3 || ids.some((id) => prev.includes(id))) bad++;
+      ids.forEach((id) => { seen[id] = (seen[id] || 0) + 1; }); prev = ids;
+    }
+    check(SP.RECIPES.length === 12 && bad === 0 && Object.keys(seen).length === 12 && Object.values(seen).every((n) => n === 30), 'specials: twelve twists, each once every four days and never two days running');
+    check(SP.RECIPES.every((R) => SP.TABLES.sp[R.id] && SP.TABLES.sp[R.id].length === SP.GRADES.length), 'specials: every twist has measured tables');
+    for (const R of SP.RECIPES) { // a course of n rings is the first n rings of a longer one, inside the ring band
+      const a = SP.generate('t1', R.id, 4, 8).hoops, b = SP.generate('t1', R.id, 4, 20).hoops;
+      check(a.every((h, i) => h.x === b[i].x && h.y0 === b[i].y0 && h.w === b[i].w && h.amp === b[i].amp && h.phase === b[i].phase) && b.every((h) => h.y0 - h.amp >= E.Y_MIN - 1e-6 && h.y0 + h.amp <= E.Y_MAX + 1e-6 && h.w > 60), 'specials: ' + R.id + ' builds the same rings at any length, inside the ring band');
+    }
+  }
+
   await stopAll();
   console.log(failed() ? `${failed()} check(s) failed` : 'game flow: all checks passed');
   process.exitCode = failed() ? 1 : 0;

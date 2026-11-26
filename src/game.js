@@ -1575,7 +1575,7 @@
       <p class="foot">Clear it and the next course is harder. Miss and it gets a little easier.</p>
       <p class="pot-rules">Clear every ring to win the prize. Miss one and the entry is gone. Your level settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries, whatever your level: the house keeps about ${100 - pct}%. They open once you’ve bet ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs. New specials come every day at midnight UTC. Special rings don’t count toward missions or the pot.</p>`;
   }
-  // a sketch of a course: the rings in order, how far each one bobs, and the green finish
+  // a sketch of a course: the rings in order, how wide each is, how far it bobs, and the green finish
   function drawCourse(el, def) {
     const k = Math.min(window.devicePixelRatio || 1, 2), w = el.clientWidth || 340, ht = el.clientHeight || 118;
     el.width = Math.round(w * k); el.height = Math.round(ht * k);
@@ -1585,9 +1585,9 @@
     g.lineCap = 'round';
     g.strokeStyle = 'rgba(255,255,255,0.14)'; g.lineWidth = 1.4; g.setLineDash([2, 5]);
     g.beginPath(); g.moveTo(sx(0), sy(def.startY)); for (const h of hs) g.lineTo(sx(h.x), sy(h.y0)); g.stroke(); g.setLineDash([]);
-    const half = Math.max(5, Math.min(9, (w - pad * 2) / hs.length * 0.32));
+    const half0 = Math.max(5, Math.min(9, (w - pad * 2) / hs.length * 0.32)), wMax = Math.max(...hs.map((h) => h.w));
     for (const h of hs) {
-      const cx = sx(h.x), cy = sy(h.y0);
+      const cx = sx(h.x), cy = sy(h.y0), half = Math.max(2.6, half0 * Math.pow(h.w / wMax, 2.4)); // a tighter ring reads as clearly smaller
       if (h.amp) { g.strokeStyle = 'rgba(255,255,255,0.13)'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, sy(h.y0 - h.amp)); g.lineTo(cx, sy(h.y0 + h.amp)); g.stroke(); }
       const a = h.tilt * 1.8, dx = Math.cos(a) * half, dy = Math.sin(a) * half, col = h.cp ? '#14f195' : 'rgba(236,240,250,0.92)';
       g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 2.2;
@@ -3710,7 +3710,7 @@
       const rows = [];
       if (h.kind === 'special') {
         rows.push(`<li><span>Special</span><span class="mono-s">${deriveLevelSeed(h.serverSeed, h.clientSeed, h.nonce, 'special').slice(0, 16)}…</span></li>`);
-        if (h.g != null && SP.GRADES[h.g]) rows.push(`<li><span>Course</span><span>${h.n} rings, ${E.DIFFS[SP.GRADES[h.g][0]].name} level ${SP.GRADES[h.g][1]} rings</span></li>`);
+        if (h.g != null && SP.GRADES[h.g]) rows.push(`<li><span>Course</span><span>${h.n} rings, ${SP.gradeText(h.g)}</span></li>`);
       }
       else for (let L = 1; L <= h.level; L++) rows.push(`<li><span>Level ${L}</span><span class="mono-s">${deriveLevelSeed(h.serverSeed, h.clientSeed, h.nonce, L).slice(0, 16)}…</span></li>`);
       out.className = 'verify-out good';

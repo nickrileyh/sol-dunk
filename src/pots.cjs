@@ -44,7 +44,14 @@
     { id: 'score90', kind: 'score', n: 90, tier: 0, text: 'Score 90 in one run', p: [0.005, 0.06, 0.465] },
     { id: 'swish12', kind: 'swishes', n: 12, tier: 1, text: 'Swish 12 rings in one run', p: [0.008, 0.075, 0.422] },
     { id: 'streak5', kind: 'best', n: 5, tier: 1, text: 'Swish 5 in a row', p: [0.043, 0.123, 0.355] },
-    { id: 'clear6', kind: 'clears', n: 6, tier: 0, text: 'Clear level 6', p: [0.023, 0.108, 0.386] }
+    { id: 'clear6', kind: 'clears', n: 6, tier: 0, text: 'Clear level 6', p: [0.023, 0.108, 0.386] },
+    // five more kinds (the owner asked for more fun and unique challenges), measured the same way on engine v15 (5,000 runs per skill):
+    // the green ring itself, arriving at a checkpoint on fire, a streak after a rim hit, and a fast start
+    { id: 'green4', kind: 'greens', n: 4, tier: 0, text: 'Swish 4 green rings in one run', p: [0.018, 0.106, 0.408] },
+    { id: 'hot2', kind: 'hot', n: 2, tier: 0, text: 'Reach 2 checkpoints on fire', p: [0.029, 0.117, 0.426] },
+    { id: 'comeback7', kind: 'comeback', n: 7, tier: 0, text: 'Hit a rim, then swish 7 in a row', p: [0.032, 0.109, 0.351] },
+    { id: 'early10', kind: 'early', n: 10, tier: 0, text: 'Swish 10 of your first 12 rings', p: [0.015, 0.095, 0.341] },
+    { id: 'early8', kind: 'early', n: 8, tier: 1, text: 'Swish 8 of your first 12 rings', p: [0.029, 0.099, 0.352] }
   ];
   // challenges taken out of the rotation (engine v13 and v14): no new pot gets one, but a pot that opened with one
   // before an update is still shown and judged by it until it closes
@@ -95,18 +102,29 @@
   }
 
   // levels: [{ outcomes: 'SSRSSS', clear: true }, ...] in order, as verified so far
+  // best: longest swish streak; greens: green (checkpoint) rings swished; hot: checkpoints reached on fire (3 or more
+  // swishes in a row as the level ends); comeback: longest swish streak after the run's first rim hit; early: swishes
+  // among the run's first EARLY rings
+  const EARLY = 12, FIRE = 3;
   function facts(levels) {
-    let streak = 0, best = 0, swishes = 0, score = 0, perfect = 0, clears = 0;
+    let streak = 0, best = 0, swishes = 0, score = 0, perfect = 0, clears = 0, greens = 0, hot = 0, comeback = 0, early = 0, rings = 0, rimmed = false;
     for (const lv of levels) {
       const o = String(lv.outcomes || '');
       for (const c of o) {
-        if (c === 'S') { streak++; swishes++; } else streak = 0;
+        if (c === 'S') { streak++; swishes++; if (rings < EARLY) early++; } else { streak = 0; rimmed = true; }
+        rings++;
         score += ringPoints(c, streak);
         if (streak > best) best = streak;
+        if (rimmed && streak > comeback) comeback = streak;
       }
-      if (lv.clear) { clears++; if (o.length === HOOPS && !o.includes('R')) { perfect++; score += 10; } }
+      if (lv.clear) {
+        clears++;
+        if (o.length === HOOPS && !o.includes('R')) { perfect++; score += 10; }
+        if (o[o.length - 1] === 'S') greens++;
+        if (streak >= FIRE) hot++;
+      }
     }
-    return { best, swishes, score, perfect, clears };
+    return { best, swishes, score, perfect, clears, greens, hot, comeback, early };
   }
   // where a run stands on a challenge: { value, target, done }. A run below the challenge's tier never counts.
   function progress(goal, levels, tier) {

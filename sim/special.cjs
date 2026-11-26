@@ -9,8 +9,9 @@
 //    each attempt on the course set for their level, which then moves; with and without regular runs first, and good
 //    players and pros who lose their first attempts on purpose to bring the level down.
 //
-//   node sim/special.cjs [attempts per twist, grade and skill = 2000] [--write] [--refit] [--curves]
+//   node sim/special.cjs [attempts per twist, grade and skill = 2000] [--write] [--refit] [--curves] [--twists=a,b,c]
 //
+// --twists picks the twist steps 4 and 5 play in the 2x, 3x and 5x slots (by default the first, third and fifth).
 // --refit skips step 1's play and fits the saved curves; --curves stops after step 3. Re-run it in full whenever the
 // physics (src/engine.cjs), the bot or a twist changes.
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
@@ -168,7 +169,7 @@ function fit(hist, total) {
   const pc = (v) => (v * 100).toFixed(0).padStart(4) + '%';
   SP.TABLES.reg = reg; SP.TABLES.sp = sp;
   const tables = { reg, sp };
-  console.log('chance of clearing 12 rings, by grade (Easy 1, 3, 5, Hard 3, 4, 5, 6, 8), for ' + SP.ANCHORS.join(' / '));
+  console.log('chance of clearing 12 rings, by grade (Easy 1, 3, 5, Hard 3, 4, 5, 6, 8, and two steps past Hard 8), for ' + SP.ANCHORS.join(' / '));
   for (const R of SP.RECIPES) console.log('  ' + R.id.padEnd(9) + sp[R.id].map((cells, g) => SP.ANCHORS.map((a, k) => Math.round(SP.clearP(R.id, g, 12, k) * 100)).join('/').padStart(16)).join(''));
 
   // 3. write
@@ -183,10 +184,14 @@ function fit(hist, total) {
     console.log('\nwrote the tables into src/special.cjs');
   }
 
+  // the hardest course must be hard enough for a pro: what the course set for levels 3, 4 and 4.5 is expected to pay
+  console.log('\nexpected return of the course set for levels 3 / 4 / 4.5, for ' + SP.SLOTS.map((x) => x + '×').join(', ') + ' (over ' + Math.round(SP.TARGET * 100) + '% at level 4 means no course is hard enough)');
+  for (const R of SP.RECIPES) console.log('  ' + R.id.padEnd(10) + SP.SLOTS.map((x) => [3, 4, 4.5].map((d) => { const c = SP.courseFor(d, R.id, x); return `${Math.round(c.rtp * 100)}% (${c.g},${c.n})`.padStart(13); }).join('')).join('  |'));
+
   if (curvesOnly) { console.log(`\ntime ${((Date.now() - t0) / 1000).toFixed(0)} s`); return; }
 
   // 4. the course set for each skill's level, and for someone new, played by every bot
-  const SKILLS = SP.ANCHORS.concat('perfect'), checks = [], slotRecipe = (slot) => SP.RECIPES[slot * 2].id; // one twist per slot is enough
+  const SKILLS = SP.ANCHORS.concat('perfect'), checks = [], picked = ((args.find((x) => x.startsWith('--twists=')) || '').slice(9).split(',').filter((id) => SP.BY[id])), slotRecipe = (slot) => picked[slot] || SP.RECIPES[slot * 2].id; // one twist per slot is enough
   SP.SLOTS.forEach((x, slot) => {
     const recipe = slotRecipe(slot), fresh = SP.courseFor(SP.START, recipe, x);
     SKILLS.forEach((skill, k) => {
