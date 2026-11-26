@@ -35,14 +35,16 @@
   // again (node sim/pots.cjs, 3000 runs per skill). Hard's three drifted below the aim on Legend's rings and were
   // replaced in place by easier ones (Clear level 4, Swish 12 rings, Swish 5 in a row), and Score 120 by Clear
   // level 6 on Easy.
+  // Engine v15 (the outer half of the near rim falls off) moved them by under a point; p holds its measurement
+  // (5,000 runs per skill).
   const GOALS = [
-    { id: 'streak8', kind: 'best', n: 8, tier: 0, text: 'Swish 8 in a row', p: [0.022, 0.078, 0.327] },
-    { id: 'perfect1', kind: 'perfect', n: 1, tier: 0, text: 'Swish every ring in a level', p: [0.039, 0.124, 0.396] },
-    { id: 'clear4', kind: 'clears', n: 4, tier: 1, text: 'Clear level 4', p: [0.024, 0.102, 0.37] },
-    { id: 'score90', kind: 'score', n: 90, tier: 0, text: 'Score 90 in one run', p: [0.005, 0.059, 0.468] },
-    { id: 'swish12', kind: 'swishes', n: 12, tier: 1, text: 'Swish 12 rings in one run', p: [0.008, 0.069, 0.423] },
-    { id: 'streak5', kind: 'best', n: 5, tier: 1, text: 'Swish 5 in a row', p: [0.044, 0.12, 0.357] },
-    { id: 'clear6', kind: 'clears', n: 6, tier: 0, text: 'Clear level 6', p: [0.023, 0.112, 0.387] }
+    { id: 'streak8', kind: 'best', n: 8, tier: 0, text: 'Swish 8 in a row', p: [0.02, 0.087, 0.328] },
+    { id: 'perfect1', kind: 'perfect', n: 1, tier: 0, text: 'Swish every ring in a level', p: [0.037, 0.126, 0.399] },
+    { id: 'clear4', kind: 'clears', n: 4, tier: 1, text: 'Clear level 4', p: [0.024, 0.105, 0.372] },
+    { id: 'score90', kind: 'score', n: 90, tier: 0, text: 'Score 90 in one run', p: [0.005, 0.06, 0.465] },
+    { id: 'swish12', kind: 'swishes', n: 12, tier: 1, text: 'Swish 12 rings in one run', p: [0.008, 0.075, 0.422] },
+    { id: 'streak5', kind: 'best', n: 5, tier: 1, text: 'Swish 5 in a row', p: [0.043, 0.123, 0.355] },
+    { id: 'clear6', kind: 'clears', n: 6, tier: 0, text: 'Clear level 6', p: [0.023, 0.108, 0.386] }
   ];
   // challenges taken out of the rotation (engine v13 and v14): no new pot gets one, but a pot that opened with one
   // before an update is still shown and judged by it until it closes

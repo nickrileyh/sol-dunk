@@ -2845,9 +2845,10 @@
     if (back && h.st !== 2) {
       // each ring glows with its own light, so it sits in the dark hall: the one you're heading for breathes
       // brighter, the ones after it sit back, and a ring just passed flares as the ball goes through
-      const base = h.st === 1 ? 0.07 : next ? 0.3 + (REDUCED ? 0 : 0.07 * Math.sin(view.time * 3.4)) : 0.2 * (o.later || 1);
+      // (a third softer than the first pass: the owner found the rims' glow a little too high)
+      const base = h.st === 1 ? 0.05 : next ? 0.2 + (REDUCED ? 0 : 0.05 * Math.sin(view.time * 3.4)) : 0.135 * (o.later || 1);
       c.globalCompositeOperation = 'lighter';
-      softGlow(c, 0, 0, rx * 1.75, rx * 0.95, h.cp ? RING_GLOW.cp : RING_GLOW.ring, base + 0.5 * pop, 0.3);
+      softGlow(c, 0, 0, rx * 1.75, rx * 0.95, h.cp ? RING_GLOW.cp : RING_GLOW.ring, base + 0.4 * pop, 0.3);
       c.globalCompositeOperation = 'source-over';
     }
     if (pop > 0.01 && h.st === 1) c.scale(1 + 0.1 * pop, 1 + 0.1 * pop); // a passed ring only: rings in play stay at their collision size
@@ -3532,7 +3533,7 @@
     // one short idea a row; the details live on the pages they belong to
     return (phase === 'lobby' ? `<button class="btn btn-plain how-tour" id="howTour">Take the quick tour</button>` : '') + `<div class="how">` +
       row('tap', 'blue', KB ? 'Press Space to flap' : 'Tap to flap', `Each ${KB ? 'press (or click)' : 'tap'} flaps the ball up. Let it drop down through every ring. Miss a ring or hit the floor and the run is over.`) +
-      row('rim', 'red', 'Rims', `Touching the rim is fine: if the ball comes down over the opening, it drops in.`) +
+      row('rim', 'red', 'Rims', `Touching the rim is fine: if the ball comes down over the opening, it drops in. Land on the outer half of a rim and it falls off.`) +
       row('swish', 'green', 'Swish', `Go through without touching the rim. A swish pays more than a rim hit, and each swish in a row pays more, up to 5 in a row.`) +
       row('fire', 'heat', 'Fire', `Swish 3 in a row and the ball catches fire. At 5 it burns green. A rim hit puts it out.`) +
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the green ring ends the level. Cash out, or keep going for more.`) +

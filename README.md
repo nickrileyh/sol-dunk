@@ -42,9 +42,10 @@ What the server does for real money (`server/lib/`):
 
 ## How a run is kept honest
 
-- **Deterministic engine** (`src/engine.cjs`, v14): fixed 120 Hz physics, integer tap ticks, seeded PRNG, no implementation-dependent math. The same taps always give the same outcome in every browser and on the server.
+- **Deterministic engine** (`src/engine.cjs`, v15): fixed 120 Hz physics, integer tap ticks, seeded PRNG, no implementation-dependent math. The same taps always give the same outcome in every browser and on the server.
 - **Rim contact** (v7–v8): a firm knock bounces; gentle contact just rolls. Friction scales with how hard the hit was. After a knock the forward push fades back in over 0.45 s, so a back-rim hit clanks and drops (often in) instead of the ball ploughing on. The push is steady while the ball sits on a rim, so it can't balance on the edge. Rim effects fire once per knock.
 - **Fair rims** (v12): once the ball has touched a ring, while its centre is over the opening (and less than 100 units above it), the rim soaks up its forward speed (it fades at 5/s) and the forward push waits, so a ball that lands mostly inside drops in instead of rolling on over the back rim. Measured on Pro level 1 (Easy's since v14), a ball whose centre lands 8 or more units inside the end of the rim now rims out about 1% of the time (it was 11–41%); within 4 units of the end about 60% (was 95%); on or past the end it still bounces out. Rim-outs now come from drops that are visibly late.
+- **The outer half falls off** (v15): the owner found the rims a little too fair and asked that a ball whose centre lands on the outer half of a rim fall off. The middle of the rim tube is now the line on both rims. The far rim already threw such a ball forward and out. The near rim didn't: the forward push carried the ball over the tube and into the fair-rim zone, so a centre up to 6 units outside the tube's middle still dropped in every time. Now a ball that comes down on the near rim with its centre outside the middle loses its forward speed there, the push waits, and it rolls off the front (in about half a second; it can't balance on the tube). A tap takes the ball back. Measured with no taps after the landing: centres 1 unit or more inside the middle of the near rim drop in 100% of the time, as before; 1 unit or more outside, 0% (it was 100% up to 5 units outside and 20–40% at 8). The far rim is unchanged.
 - **Pace** (v9, v13): rings are spaced 1:1 with the ball's speed. The ball gets 4% faster each level and the rings, the first one included, spread out 4% with it, so every level leaves the same time between rims (about 1.6 s on Easy). Deeper levels get harder through tighter, moving and tilted rings and bigger height changes, not through less time to react. The client's camera pulls back 3.5% a level and keeps the ball about 16% in from the left, so most of the next ring is already on screen as you pass one.
 - **Ring heights** (v11): ring centres stay between y 220 and 500 (540 before), so even a bobbing ring's lowest point is 152 units above the floor instead of 112, leaving room to recover after the drop. The owner said some rings sat too low.
 - **Provably fair layouts**: before a run the server commits to `sha256(serverSeed)`. Each level's rings come from `HMAC-SHA256(serverSeed, clientSeed:nonce:level)`. The seed is revealed when the run ends, so anyone can check `GET /api/run/:id`.
@@ -72,12 +73,14 @@ Engine v13 spaces the rings 1:1 with that faster ball (the owner asked for it): 
 
 Engine v14 has two modes instead of four tiers (the owner asked for Easy and Hard): Easy has v13's Pro rings and Hard v13's Legend rings, so nothing about the rings changed, and the tables were re-simulated and recalibrated for the two. Rookie and All-Star are gone; the demo carries a player's Pro and Legend records over to Easy and Hard. A special level's course now has a time limit that grows with it (below); a regular level keeps 45 s.
 
+Engine v15 makes a ball that lands on the outer half of the near rim fall off (see above). The simulator's players rarely land there, so clear rates moved by a point at most (Hard level 8: 6.7% for the average player, was 7.7%); the tables were re-simulated and recalibrated all the same, and the special courses and pot challenges re-measured.
+
 Return to player when cashing out after checkpoint 1 / 2 / 3 / 8, from the simulation (no cap):
 
 | Mode | Average | Good | Pro | Best possible win |
 |---|---|---|---|---|
-| Easy | 90 / 80 / 67 / 6% | 98 / 97 / 97 / 97% | 100 / 104 / 112 / 595% | 90× |
-| Hard | 82 / 60 / 40 / 1% | 99 / 97 / 97 / 97% | 107 / 123 / 156 / 3262% | 1000× (cap) |
+| Easy | 90 / 79 / 67 / 6% | 98 / 97 / 97 / 97% | 100 / 105 / 112 / 577% | 88× |
+| Hard | 82 / 60 / 40 / 1% | 99 / 97 / 97 / 97% | 107 / 125 / 161 / 3073% | 1000× (cap) |
 
 Pros (the bot one step below perfect play) still beat the house deep into a run. `--cap-pro 0.99 --cap1-pro 1.01` keeps them behind at every checkpoint too, but because they clear the easy levels so reliably, the best possible win drops to about 4.5× on Easy and 210× on Hard (measured on engine v13's Pro and Legend, the same rings). Head-to-head play with a rake is the usual way to take an edge from everyone without that.
 
@@ -109,11 +112,11 @@ Three special levels a day (UTC), the same three twists for everyone that day (`
 
 | Prize | Novice | Casual | Average | Good | Pro |
 |---|---|---|---|---|---|
-| 2× | 69 / 71% | 83 / 83% | 90 / 89% | 99 / 92% | 106 / 94% |
-| 3× | 73 / 71% | 83 / 83% | 91 / 90% | 100 / 93% | 108 / 97% |
-| 5× | 71 / 73% | 83 / 84% | 92 / 92% | 102 / 94% | 117 / 104% |
+| 2× | 69 / 70% | 83 / 83% | 91 / 89% | 99 / 92% | 107 / 94% |
+| 3× | 73 / 73% | 84 / 83% | 91 / 90% | 99 / 93% | 108 / 95% |
+| 5× | 72 / 69% | 83 / 84% | 93 / 91% | 100 / 94% | 114 / 102% |
 
-  Over the first five attempts a pro gets back 109–119% after five regular runs, against 165–223% starting at 1.8. From the 16th attempt on, every skill gets back 77–101%. Good players and pros who lose their first six attempts on purpose get back 99–114% over the 40, no more than playing honestly.
+  Over the first five attempts a pro gets back 111–125% after five regular runs, against 163–213% starting at 1.8. From the 16th attempt on, every skill gets back 77–100%. Good players and pros who lose their first six attempts on purpose get back 98–114% over the 40, no more than playing honestly.
 - Players beyond the scale (the simulator's perfect bot) keep clearing even the hardest course. The server keeps accounts it has limited for beating the house (over 115% return after 150 runs, or a superhuman swish rate) out of the specials.
 - The specials don't count toward missions or the pot, but entries count as play for mission SOL. They share one card on the **Challenges** tab, a row each with its twist, length, prize and Play; a row opens the special's page: a sketch of a course set for you, the prize, today's tries and wins, the level it's set for and the rules.
 - API: `GET /api/special` (works signed out: the three specials, each with its prize and the course for the player's level, and the unlock; with a token, how much you've played toward it), `POST /api/special/start` (with `slot` 0, 1 or 2), `POST /api/special/finish`. `npm test` covers the unlock, the slots, the entry, the prize, the courses for a new player and for one with verified runs, the level rising after clears, refusals and the provably fair seed. `python3 tools/special_flow.py` plays them in the demo.

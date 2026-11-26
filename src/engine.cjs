@@ -18,7 +18,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 14; // v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
+  const VERSION = 15; // v15: a ball that lands with its centre on the outer half of the near rim falls off instead of being carried in; v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -44,8 +44,15 @@
     // Fair rims (v11): once the ball has touched a ring, while its centre is over the opening and not far above it,
     // the rim's curve soaks up its forward speed instead of letting it carry on over the back rim, so a ball that
     // lands mostly inside drops in. One that comes down on or past the end of the rim still bounces out.
+    // Outer half falls off (v15): the middle of the rim tube is the line. A ball that comes down on a rim with its
+    // centre outside that middle falls off the outside. The far rim always threw such a ball forward and out; the
+    // near rim used to let the forward push carry it over the tube and in (a centre up to 6 units outside still
+    // dropped in), so now the near rim takes its forward speed and the push waits while it rolls off the front.
+    // A tap takes the ball back.
     SETTLE_H: 100,  // how far above the rim line this reaches
-    SETTLE_D: 5     // how fast forward speed fades while over the opening (1/s)
+    SETTLE_D: 5,    // how fast forward speed fades while over the opening (1/s)
+    OFF_A: 900,     // roll-off: how fast a ball resting on the outer half of the near rim picks up speed back off the front
+    OFF_V: 150      // and the most that push gives it, so it can't balance on the middle of the tube
   };
 
   // the swish gap (rim to rim, less the ball) = w - 2*(R + RP); keep it at the v9 value (R 17, RP 7)
@@ -218,7 +225,7 @@
     const hs = new Array(level.hoops.length);
     for (let i = 0; i < hs.length; i++) {
       const h = level.hoops[i];
-      hs[i] = { i: h.i, x: h.x, y0: h.y0, w: h.w, amp: h.amp, period: h.period, phase: h.phase, tilt: h.tilt, c: h.c, s: h.s, cp: h.cp, st: 0, touched: false };
+      hs[i] = { i: h.i, x: h.x, y0: h.y0, w: h.w, amp: h.amp, period: h.period, phase: h.phase, tilt: h.tilt, c: h.c, s: h.s, cp: h.cp, st: 0, touched: false, off: false };
     }
     return {
       level, hoops: hs, speed: level.speed,
@@ -262,6 +269,8 @@
           const vn2 = firm ? -P.REST * vn : 0, vt2 = vt * (1 - fr);
           b.vx = vn2 * nx + vt2 * tx;
           b.vy = vn2 * ny + vt2 * ty + hvy;
+          // the near rim, from above, with the ball's centre outside the middle of the tube: it falls off the front
+          if (side < 0 && dx * c + dy * s < 0 && -dx * s + dy * c < 0) { h.off = true; if (b.vx > 0) b.vx = 0; }
           if (firm || !h.touched) { st.impact = imp; st.rimHits++; ev |= EV.RIM; }
           if (firm) st.knockTick = st.tick;
           h.touched = true;
@@ -296,7 +305,7 @@
     if (st.done) return 0;
     const b = st.ball, P = PHYS;
     let ev = 0;
-    if (tap) { b.vy = -P.FLAP; st.flaps++; ev |= EV.FLAP; }
+    if (tap) { b.vy = -P.FLAP; st.flaps++; ev |= EV.FLAP; const ht = st.hoops[st.next]; if (ht) ht.off = false; }
     b.vy += P.G * DT; if (b.vy > P.VMAX) b.vy = P.VMAX;
     // Forward flight eases back to level speed. Right after a rim knock that push fades back in
     // from zero, so a bounce keeps its own direction instead of the ball ploughing on through the rim.
@@ -304,6 +313,7 @@
     const since = st.tick - st.knockTick;
     let kx = since >= P.RECOVER ? P.VX_K : P.VX_K * (since / P.RECOVER);
     const onRim = st.contact; st.contact = false;
+    let rollOff = false;
     // Fair rims: after a touch, while the ball is over the opening its forward speed fades and the push waits,
     // so it drops in instead of rolling on over the back rim. A ball past the end of the rim still bounces out.
     const hn = st.hoops[st.next];
@@ -311,8 +321,12 @@
       const dx = b.x - hn.x, dy = b.y - hoopY(hn, st.tick * DT);
       const lx = dx * hn.c + dy * hn.s, ly = -dx * hn.s + dy * hn.c, half = hn.w * 0.5;
       if (ly < 0 && ly > -P.SETTLE_H && lx > -half && lx < half) { kx = 0; b.vx -= b.vx * (P.SETTLE_D * DT); }
+      // Outer half falls off: after a landing outside the middle of the near rim, the push waits while the ball is
+      // still above the rim line and outside that end, so it rolls off the front (until a tap, or it has dropped past)
+      else if (hn.off) { if (ly < 0 && ly > -P.SETTLE_H && lx <= -half) { kx = 0; rollOff = onRim; } else hn.off = false; }
     }
-    if (onRim) { if (b.vx < st.speed) { b.vx += st.speed * (kx * DT); if (b.vx > st.speed) b.vx = st.speed; } }
+    if (rollOff) { if (b.vx > -P.OFF_V) { b.vx -= P.OFF_A * DT; if (b.vx < -P.OFF_V) b.vx = -P.OFF_V; } }
+    else if (onRim) { if (b.vx < st.speed) { b.vx += st.speed * (kx * DT); if (b.vx > st.speed) b.vx = st.speed; } }
     else b.vx += (st.speed - b.vx) * (kx * DT);
     b.x += b.vx * DT; b.y += b.vy * DT;
     st.tick++;
