@@ -25,7 +25,7 @@ function playRun(key, skill) {
 }
 const med = (a) => { const s = a.slice().sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : null; };
 let worst = 0;
-function inside(s) { // paid so far against the share of what was played, per window
+function inside(s) { // released so far (ready to claim or claimed) against the share of what was played, per window
   for (const [win, list, played] of [['day', s.d, s.dp], ['week', s.w, s.wp]]) {
     const paid = list.reduce((a, m, i) => a + (m.paid ? MS.reward(win, i % 3, null, Math.floor(i / 3)) : 0), 0);
     if (played > 0) worst = Math.max(worst, paid / (played * MS.SHARES[win]));

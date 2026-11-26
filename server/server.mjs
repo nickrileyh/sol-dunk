@@ -402,36 +402,51 @@ export async function createServer(CFG, log) {
 
   // ---------------------------------------------------------------- missions (rules in src/missions.cjs)
   // Missions come in rounds of three, three rounds a UTC day and three a week; finishing a round opens the next. Every
-  // run counts toward them whatever the bet; each pays SOL once the player has played its round's need in the window
-  // (run bets and special entries), so the rewards stay inside the house's edge.
-  async function missionPay(t, u, paid) {
-    let sum = 0;
-    const out = paid.map((p) => { const lamports = Math.floor(p.amount); sum += lamports; return { win: p.win, slot: p.slot, round: p.round, k: p.k, n: p.n, lamports }; });
-    if (sum) {
-      await t.credit(u, sum, 'mission', null);
-      u.returned += sum; u.missionPaid = (u.missionPaid || 0) + sum; // counts in the player's return
-      await t.incSetting('missionPaid', sum);
-    }
-    return out;
-  }
+  // run counts toward them whatever the bet; each releases SOL once the player has played its round's need in the
+  // window (run bets and special entries), so the rewards stay inside the house's edge. Released SOL waits in the
+  // player's mission state (u.ms.ready, counted as owed in the cover check) until they claim it (/api/missions/claim).
+  const missionReady = (list) => list.map((p) => ({ win: p.win, i: p.i, slot: p.slot, round: p.round, k: p.k, n: p.n, lamports: Math.floor(p.amount) }));
   function missionView(u) {
     u.ms = MS.roll(u.ms, potNow());
-    const v = MS.view(u.ms, potNow(), CFG.missionNeed), fix = (l) => l.map((m) => ({ k: m.k, n: m.n, xp: m.xp, sum: m.sum, slot: m.slot, round: m.round, p: m.p, done: m.done, paid: m.paid, rewardLamports: Math.floor(m.reward), needLamports: m.need }));
+    const v = MS.view(u.ms, potNow(), CFG.missionNeed), fix = (l) => l.map((m) => ({ k: m.k, n: m.n, xp: m.xp, sum: m.sum, slot: m.slot, round: m.round, i: m.i, p: m.p, done: m.done, paid: m.paid, ready: m.ready, claimed: m.claimed, rewardLamports: Math.floor(m.reward), needLamports: m.need }));
     // daily / weekly: the open round's three; all: every mission of the rounds opened so far; needLamports: what the
-    // open round's SOL waits for (baseNeedLamports is round 1's)
+    // open round's SOL waits for (baseNeedLamports is round 1's); readyLamports: all SOL ready to claim, earlier
+    // windows' too
     return {
       day: v.day, week: v.week, dayEnds: v.dayEnds - potClock, weekEnds: v.weekEnds - potClock, rounds: v.rounds, round: v.round, days: v.days,
-      needLamports: v.need, baseNeedLamports: v.base, playedLamports: v.played, daily: fix(v.daily), weekly: fix(v.weekly), all: { day: fix(v.all.day), week: fix(v.all.week) }
+      needLamports: v.need, baseNeedLamports: v.base, playedLamports: v.played, readyLamports: Math.floor(v.readyAll),
+      daily: fix(v.daily), weekly: fix(v.weekly), all: { day: fix(v.all.day), week: fix(v.all.week) }
     };
   }
-  // a bet or a special entry counts toward both windows' play; it may unlock rewards already earned
-  async function missionPlay(t, u, lamports) { const r = MS.play(u.ms, lamports, potNow(), CFG.missionNeed); u.ms = r.s; return missionPay(t, u, r.paid); }
+  // a bet or a special entry counts toward both windows' play; it may release rewards already earned
+  function missionPlay(t, u, lamports) { const r = MS.play(u.ms, lamports, potNow(), CFG.missionNeed); u.ms = r.s; return missionReady(r.ready); }
   // the rings of a run that counted, level by level (a max win ends the run at the capped ring, which isn't a clear)
   const verifiedLevels = (run) => run.levels.map((l) => {
     const n = l.counted == null ? l.outcomes.length : l.counted;
     return { outcomes: l.outcomes.slice(0, n), clear: l.result === 'clear' && !l.capped, mov: l.mov || '', tilt: l.tilt || '' };
   });
   app.get('/api/missions', wrap(async (req) => tx(async (t) => missionView(await auth(t, req)))));
+  // claim released mission SOL: one mission ({ win: 'day' | 'week', i: its place in that window's list }) or, with no
+  // win, everything ready (earlier windows' too)
+  app.post('/api/missions/claim', limit('claims', 60, 60_000, who), wrap(async (req) => tx(async (t) => {
+    const u = await auth(t, req), b = req.body || {};
+    u.ms = MS.roll(u.ms, potNow());
+    const win = b.win == null ? null : String(b.win), i = Number(b.i);
+    if (win != null && (!['day', 'week'].includes(win) || !Number.isInteger(i) || i < 0)) throw bad('Unknown mission');
+    const r = MS.claim(u.ms, win, i);
+    u.ms = r.s;
+    if (r.error === 'unknown') throw new HttpError(404, 'Mission not found');
+    if (r.error === 'claimed') throw bad('Already claimed');
+    if (r.error) throw bad('Finish this mission and bet its round’s need first');
+    const lamports = Math.floor(r.amount + 1e-6);
+    if (lamports > 0) {
+      await t.credit(u, lamports, 'mission', null);
+      u.returned += lamports; u.missionPaid = (u.missionPaid || 0) + lamports; // counts in the player's return
+      await t.incSetting('missionPaid', lamports);
+      await review(t, u);
+    }
+    return { claimedLamports: lamports, missions: missionView(u), ...publicMe(u) };
+  })));
   // claim the rakeback a level up has released
   app.post('/api/rakeback/claim', limit('claims', 30, 60_000, who), wrap(async (req) => tx(async (t) => {
     const u = await auth(t, req);
@@ -516,7 +531,7 @@ export async function createServer(CFG, log) {
     // missions move on from the levels the server verified (a voided run doesn't count)
     if (run.kind !== 'special' && status !== 'void') {
       const r = MS.run(u.ms, verifiedLevels(run), potNow(), CFG.missionNeed);
-      u.ms = r.s; run.missions = { done: r.done, opened: r.opened, paid: await missionPay(t, u, r.paid) };
+      u.ms = r.s; run.missions = { done: r.done, opened: r.opened, ready: missionReady(r.ready) };
       xpAdd(u, LV.runXp(r.facts) + r.done.reduce((a, d) => a + d.xp, 0)); // the XP the server can vouch for; a level up releases rakeback
       // trophies are earned from the same verified levels; their SOL is claimed separately (/api/trophies/claim)
       const tr = TR.run(u.tro, verifiedLevels(run), { paid: payout > 0, total: run.total, hard: run.di === E.DIFFS.length - 1, nl: E.LEVELS }, Date.now());
@@ -553,7 +568,7 @@ export async function createServer(CFG, log) {
       await t.credit(u, -bet, 'bet', null);
       u.wagered += bet; u.runPlayed = (await runPlayed(t, u)) + bet;
       rakeAdd(u, 'run', bet);
-      const paid = await missionPlay(t, u, bet);
+      const ready = missionPlay(t, u, bet);
       const run = {
         id: crypto.randomUUID(), address: u.address, kind: 'run', di, bet, exposure,
         serverSeed: crypto.randomBytes(32).toString('hex'), clientSeed, nonce: u.nonce++,
@@ -561,7 +576,7 @@ export async function createServer(CFG, log) {
         createdAt: Date.now(), potAt: potNow(), levelStartedAt: Date.now(), updatedAt: Date.now()
       };
       await t.insertRun(run);
-      return { runId: run.id, serverSeedHash: sha256Hex(run.serverSeed), nonce: run.nonce, level: 1, levelSeed: levelSeed(run, 1), missions: { paid, view: missionView(u) }, ...publicMe(u) };
+      return { runId: run.id, serverSeedHash: sha256Hex(run.serverSeed), nonce: run.nonce, level: 1, levelSeed: levelSeed(run, 1), missions: { ready, view: missionView(u) }, ...publicMe(u) };
     });
     limitCache.at = 0;
     return out;
@@ -686,7 +701,7 @@ export async function createServer(CFG, log) {
       await t.credit(u, -fee, 'special_entry', null);
       u.wagered += fee;
       rakeAdd(u, 'special', fee);
-      const paid = await missionPlay(t, u, fee);
+      const ready = missionPlay(t, u, fee);
       if (!u.special || u.special.day !== day || !Array.isArray(u.special.tries)) u.special = { day, tries: [0, 0, 0], wins: [0, 0, 0] };
       if (CFG.specialDayTries && u.special.tries[slot] >= CFG.specialDayTries) throw bad(`That special is limited to ${CFG.specialDayTries} attempts a day. It's back tomorrow.`);
       u.special.tries[slot]++;
@@ -700,7 +715,7 @@ export async function createServer(CFG, log) {
       return {
         runId: run.id, serverSeedHash: sha256Hex(run.serverSeed), nonce: run.nonce, seed: levelSeed(run, 'special'),
         slot, recipe: s.recipe.id, grade: s.g, rings: s.n, chance: s.chance, feeLamports: fee, prizeLamports: s.prize,
-        missions: { paid, view: missionView(u) }, special: await specialView(t, u), ...publicMe(u)
+        missions: { ready, view: missionView(u) }, special: await specialView(t, u), ...publicMe(u)
       };
     });
     limitCache.at = 0;
@@ -771,7 +786,7 @@ export async function createServer(CFG, log) {
       if (amount) await t.credit(u, amount, 'duel_prize', run.id);
       u.returned += amount; u.wagered += run.bet;
       rakeAdd(u, 'pot', run.bet);
-      await missionPlay(t, u, run.bet);
+      missionPlay(t, u, run.bet); // may release mission SOL, which waits for the player's claim
       if (c > 0) xpAdd(u, LV.specialXp(0, true)); // the win bonus, as for a cleared special
       const d = duelDay(u); d[c > 0 ? 'w' : c < 0 ? 'l' : 'd']++;
       d.last = { status: run.status, you: { rings: run.flight.rings, score: run.flight.score }, rival: { rings: other.flight.rings, score: other.flight.score }, payoutLamports: amount, t: Date.now() };
@@ -821,7 +836,7 @@ export async function createServer(CFG, log) {
       return {
         runId: run.id, serverSeedHash: sha256Hex(run.serverSeed), clientSeed: run.clientSeed, nonce: run.nonce, seed: levelSeed(run, 'duel'), feeLamports: fee, prizeLamports: DU.pot(fee),
         rival: mark ? { name: 'Rival', taps: mark.taps, rings: mark.flight.rings, score: mark.flight.score, cleared: mark.flight.cleared } : null,
-        missions: { paid: [], view: missionView(u) }, duel: await duelView(t, u), ...publicMe(u)
+        missions: { ready: [], view: missionView(u) }, duel: await duelView(t, u), ...publicMe(u)
       };
     });
   }));

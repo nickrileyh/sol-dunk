@@ -1,7 +1,9 @@
 """Missions that pay SOL, end to end in the demo: progress from every run, SOL that waits until the day's play reaches
-its round's need (the result card says how much more), paid the moment a bet gets there (a notice, the balance), the
-daily missions on the Challenges tab with their three rounds, a finished round opening the next, the next mission on
-the result card, and level-up rakeback (set aside by a bet, released by a level up, claimed once).
+its round's need (the result card says how much more), released to claim the moment a bet gets there (a notice, nothing
+credited yet), claimed with a mission's Claim key on the Missions tab (coins into the balance, the row says claimed) or
+the result card's ticket, SOL from an earlier day claimed from its own ticket, the daily missions with their three
+rounds, a finished round opening the next, the next mission on the result card, and level-up rakeback (set aside by a
+bet, released by a level up, claimed once).
 Screenshots to ./shots/missions_*.png. Usage: python3 tools/missions_flow.py"""
 import asyncio, json
 from playwright.async_api import async_playwright
@@ -62,16 +64,16 @@ async def main():
         check(abs(await bal() - (bc + 0.002)) < 1e-9 and rb2['ready'] == 0 and abs(rb2['paid'] - 0.002) < 1e-9, 'claiming pays it to the balance, once')
         check('Rakeback claimed' in await page.evaluate("document.getElementById('rbChip').innerText"), 'and the chip says so')
         await page.screenshot(path=OUT + 'rakeback.png')
-        # run 2: the bet reaches the need, so everything already done pays at once
+        # run 2: the bet reaches the need, so everything already done is released to claim (nothing is credited yet)
         b0 = await bal()
         await page.click('#againBtn'); await page.wait_for_timeout(500)
         b1 = await bal()
         m2 = await mv()
         owed = sum(c['reward'] for c in done1)
-        check(abs((b1 - b0) - (owed - 1)) < 1e-9, f'run 2 start: the bet is taken and {owed} SOL of rewards paid ({b0} -> {b1})')
-        check(all(c['paid'] for c in m2['all']['day'] if c['done'] and c['need'] <= m2['played']['day'] + 1e-9), 'every done daily mission whose round has been played for is paid')
+        check(abs((b1 - b0) + 1) < 1e-9 and abs(m2['readyAll'] - owed) < 1e-9, f'run 2 start: the bet is taken and {owed} SOL of rewards released to claim, not paid ({b0} -> {b1})')
+        check(all(c['paid'] and c['ready'] and not c['claimed'] for c in m2['all']['day'] if c['done'] and c['need'] <= m2['played']['day'] + 1e-9), 'every done daily mission whose round has been played for is ready to claim')
         note = await page.evaluate("document.getElementById('notice').innerText")
-        check('Mission rewards' in note, 'a notice says the rewards were paid: ' + note.replace('\n', ' | '))
+        check('Mission SOL ready' in note and 'to claim' in note, 'a notice says the SOL is ready to claim: ' + note.replace('\n', ' | '))
         await page.screenshot(path=OUT + 'paid.png')
         await page.evaluate("__solDunk.autoplay('perfect'); __solDunk.tap()")
         for i in range(900):
@@ -80,17 +82,44 @@ async def main():
             if ph == 'over': break
             await page.wait_for_timeout(100)
         await page.wait_for_timeout(2200)
+        ready = (await mv())['readyAll']
+        chip = await page.evaluate("document.getElementById('msChip') ? document.getElementById('msChip').innerText : ''")
+        check(ready > 0 and 'Mission SOL ready' in chip and ('Claim %g SOL' % round(ready, 4)) in chip, 'the result card offers the ready mission SOL: ' + chip.replace('\n', ' | '))
         await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
-        dot = await page.evaluate("document.getElementById('badgeM').classList.contains('on')")
-        await page.click('#tabMissions'); await page.wait_for_timeout(600)
-        txt = await page.evaluate("document.querySelector('#mBody .msp[data-seg=\"day\"]').innerText")
+        check(await page.evaluate("document.getElementById('badgeM').classList.contains('on')"), 'a dot on the Missions tab says there is SOL to claim')
+        await page.click('#tabMissions'); await page.wait_for_timeout(700)
+        day = '#mBody .msp[data-seg="day"]'
+        txt = await page.evaluate(f"document.querySelector('{day}').innerText")
         m3 = await mv()
-        check(dot if any(c['done'] for c in m3['daily']) else True, 'a dot on the Missions tab says a mission was finished')
-        check(not await page.evaluate("document.getElementById('badgeM').classList.contains('on')"), 'and opening the tab clears it')
-        met = m3['played']['day'] >= m3['need']['day'] - 1e-9
         check('Round 1' in txt and 'Round 2' in txt and 'Round 3' in txt, 'the daily missions on the Missions tab show their three rounds')
-        check(('SOL rewards unlocked today' in txt) if met else ('Bet %g SOL today' % m3['need']['day'] in txt), 'and what the open round\'s SOL waits for')
-        check(('SOL paid' in txt) if any(c['paid'] for c in m3['daily']) else True, 'paid missions say so')
+        check(('%g SOL ready to claim' % round(m3['ready']['day'], 4)) in txt if m3['ready']['day'] > 0 else True, 'and how much is ready to claim: ' + txt.replace('\n', ' | ')[:160])
+        keys = await page.evaluate(f"document.querySelectorAll('{day} .m-claim').length")
+        check(keys == sum(1 for c in m3['daily'] if c['ready']) and keys > 0, f'each ready mission has a Claim key ({keys})')
+        await page.screenshot(path=OUT + 'claim_keys.png')
+        # claim one: its SOL goes to the balance, coins fly, the balance counts up and the row says claimed
+        first = next(c for c in m3['daily'] if c['ready'])
+        bc = await bal()
+        await page.click(f'{day} .m-claim'); await page.wait_for_timeout(250)
+        await page.screenshot(path=OUT + 'claim_fly.png')
+        check(abs(await bal() - (bc + first['reward'])) < 1e-9 and await page.evaluate(f"document.querySelector('{day} .m-claim.got') !== null"), 'Claim pays that mission\'s SOL and the key turns to what it paid')
+        await page.wait_for_timeout(900)
+        gain = await page.evaluate("document.querySelector('.claim-gain') ? document.querySelector('.claim-gain').textContent : ''")
+        shown = await page.evaluate("document.getElementById('balTxt').textContent")
+        check(gain == '+%g SOL' % first['reward'] and abs(float(shown) - (bc + first['reward'])) <= 0.5 * 10 ** -len(shown.split('.')[1]) + 1e-9 and len(shown.split('.')[1]) >= 3, f'the balance counts up to show it ({shown}) with {gain} under it')
+        await page.wait_for_timeout(400)
+        txt = await page.evaluate(f"document.querySelector('{day}').innerText")
+        check('%g SOL claimed' % first['reward'] in txt and await page.evaluate(f"document.querySelectorAll('{day} .m-claim').length") == keys - 1, 'the row says it was claimed and the other keys stay')
+        await page.screenshot(path=OUT + 'claimed.png')
+        # claim the rest, one key at a time; then nothing is ready and the dot goes
+        for _ in range(8):
+            if not await page.evaluate(f"document.querySelector('{day} .m-claim:not(.got)') !== null"): break
+            await page.click(f'{day} .m-claim:not(.got)'); await page.wait_for_timeout(1300)
+        m4 = await mv()
+        check(m4['ready']['day'] == 0 and abs(await bal() - (bc + m3['ready']['day'])) < 1e-9, 'claiming every key pays all of the day\'s ready SOL, once')
+        check(not await page.evaluate("document.getElementById('badgeM').classList.contains('on')") or m4['readyAll'] > 0, 'and the dot goes once nothing is left to claim')
+        txt = await page.evaluate(f"document.querySelector('{day}').innerText")
+        met = m4['played']['day'] >= m4['need']['day'] - 1e-9
+        check(('SOL rewards unlocked today' in txt) if met else ('Bet %g SOL today' % m4['need']['day'] in txt), 'and what the open round\'s SOL waits for')
         check(('to open round %d' % (m3['round']['day'] + 2)) in txt if m3['next']['day'] and not all(c['done'] for c in m3['daily']) else True, 'and what finishing all three opens')
         await page.screenshot(path=OUT + 'page.png')
         # the special level's entry counts as play too
@@ -123,7 +152,7 @@ async def main():
         b0 = await page.evaluate('__solDunk.bal()')
         await page.click('#againBtn'); await page.wait_for_timeout(500)
         a2 = await mv()
-        check(abs(await page.evaluate('__solDunk.bal()') - (b0 - 1 + a1['waiting']['day'])) < 1e-9 and a2['waiting']['day'] == 0 and abs(a2['paid']['day'] - a1['waiting']['day']) < 1e-9, 'and pays the moment the day\'s play reaches it')
+        check(abs(await page.evaluate('__solDunk.bal()') - (b0 - 1)) < 1e-9 and a2['waiting']['day'] == 0 and abs(a2['paid']['day'] - a1['waiting']['day']) < 1e-9 and abs(a2['ready']['day'] - a1['waiting']['day']) < 1e-9, 'and is released to claim the moment the day\'s play reaches it')
         await page.evaluate("__solDunk.autoplay('perfect'); __solDunk.tap()")
         for i in range(900):
             ph = await page.evaluate('__solDunk.phase()')
@@ -131,6 +160,13 @@ async def main():
             if ph == 'over': break
             await page.wait_for_timeout(100)
         await page.wait_for_timeout(2200)
+        # the result card's ticket claims everything ready at once
+        r2 = (await mv())['readyAll']; b2 = await page.evaluate('__solDunk.bal()')
+        await page.screenshot(path=OUT + 'result_ticket.png')
+        await page.click('#msChip'); await page.wait_for_timeout(500)
+        chip = await page.evaluate("document.getElementById('msChip').innerText")
+        check(r2 > 0 and abs(await page.evaluate('__solDunk.bal()') - (b2 + r2)) < 1e-9 and (await mv())['readyAll'] == 0 and 'Mission SOL claimed' in chip, 'the result card\'s ticket claims it all: ' + chip.replace('\n', ' | '))
+        await page.screenshot(path=OUT + 'result_claimed.png')
         await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
         await page.click('#tabMissions'); await page.wait_for_timeout(600)
         await page.screenshot(path=OUT + 'round2_page.png')
@@ -140,6 +176,26 @@ async def main():
         ptxt = await page.evaluate("document.getElementById('pBody').innerText")
         check('Rakeback' in ptxt, 'Profile shows the rakeback under the player card')
         await page.screenshot(path=OUT + 'profile.png')
+        check(not errs, 'no page errors ' + json.dumps(errs))
+        await ctx.close()
+
+        # SOL released on an earlier day and never claimed is still the player's: a ticket at the top of Missions claims it
+        ctx = await b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
+        page = await ctx.new_page(); errs = []
+        page.on('pageerror', lambda e: errs.append(str(e)))
+        await page.add_init_script("""(() => { if (localStorage.getItem('soldunk.profile')) return; const d = new Date().toISOString().slice(0, 10);
+          localStorage.setItem('soldunk.profile', JSON.stringify({ xp: 0, xpv: 2, ms: { day: d, dp: 0, d: [0, 1, 2].map(() => ({ p: 0, done: false, paid: false })), ready: 0.006 } })); })()""")
+        await page.goto(URL); await page.wait_for_timeout(1500)
+        v = await page.evaluate('__solDunk.missions()')
+        check(abs(v['readyAll'] - 0.006) < 1e-9 and abs(v['earlier'] - 0.006) < 1e-9 and await page.evaluate("document.getElementById('badgeM').classList.contains('on')"), 'SOL from an earlier day waits to be claimed, with a dot on Missions')
+        await page.click('#tabMissions'); await page.wait_for_timeout(700)
+        t = await page.evaluate("document.getElementById('msEarlier') ? document.getElementById('msEarlier').innerText : ''")
+        check('Unclaimed mission SOL' in t and 'Claim 0.006 SOL' in t, 'a ticket at the top of Missions offers it: ' + t.replace('\n', ' | '))
+        await page.screenshot(path=OUT + 'earlier.png')
+        b0 = await page.evaluate('__solDunk.bal()')
+        await page.click('#msEarlier'); await page.wait_for_timeout(1500)
+        check(abs(await page.evaluate('__solDunk.bal()') - (b0 + 0.006)) < 1e-9 and (await page.evaluate('__solDunk.missions()'))['readyAll'] == 0 and not await page.evaluate("!!document.getElementById('msEarlier')"), 'claiming it pays it and the ticket goes')
+        check(not await page.evaluate("document.getElementById('badgeM').classList.contains('on')"), 'and so does the dot')
         check(not errs, 'no page errors ' + json.dumps(errs))
         await b.close()
     print('FAILS', fails if fails else 'none')

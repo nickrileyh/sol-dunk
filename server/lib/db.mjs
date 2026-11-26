@@ -315,17 +315,20 @@ export class Tx {
     return this.q(`update transfers set ${sets.join(', ')}, updated_at = now() where id = $1`, [id, ...keys.map((k) => f[k])]);
   }
 
-  // ---- the house's obligations: every balance, every open run at its biggest possible payout, open pots, and
-  // withdrawals not yet sent (already taken off balances, but the SOL is still in the house wallet)
+  // ---- the house's obligations: every balance, every open run at its biggest possible payout, open pots, withdrawals
+  // not yet sent (already taken off balances, but the SOL is still in the house wallet), rakeback set aside and mission
+  // SOL waiting to be claimed
   async owed() {
     const r = await this.q(`select
       (select coalesce(sum(balance), 0) from users)::bigint as balances,
       (select coalesce(sum(exposure), 0) from runs where status in ('playing', 'checkpoint', 'waiting', 'matched'))::bigint as runs,
       (select coalesce(sum(coalesce((doc->>'carryIn')::bigint, 0) + coalesce((doc->>'paidIn')::bigint, 0)), 0) from pots where not settled)::bigint as pots,
       (select coalesce(sum(lamports), 0) from withdrawals where status in ('review', 'queued', 'sending'))::bigint as withdrawals,
-      (select coalesce(ceil(sum(coalesce((doc->'rb'->>'acc')::numeric, 0) + coalesce((doc->'rb'->>'ready')::numeric, 0))), 0) from users)::bigint as rakeback`);
+      (select coalesce(ceil(sum(coalesce((doc->'rb'->>'acc')::numeric, 0) + coalesce((doc->'rb'->>'ready')::numeric, 0))), 0) from users)::bigint as rakeback,
+      (select coalesce(ceil(sum(coalesce((doc->'ms'->>'ready')::numeric, 0))), 0) from users)::bigint as missions`);
     const o = r.rows[0];
-    return { ...o, total: o.balances + o.runs + o.pots + o.withdrawals + o.rakeback }; // rakeback: set aside for players, claimed or not
+    // rakeback: set aside for players, released or not; missions: mission SOL released and not yet claimed
+    return { ...o, total: o.balances + o.runs + o.pots + o.withdrawals + o.rakeback + o.missions };
   }
   // one transaction at a time past this point (run starts: the cover check must see every other start)
   bankrollLock() { return this.q(`select pg_advisory_xact_lock(7311001)`); }

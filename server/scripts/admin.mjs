@@ -39,8 +39,8 @@ const cmds = {
     console.log(`network ${o.network}  access ${o.access}  pause ${JSON.stringify(o.pause)}`);
     console.log(`hot ${o.house}  ${sol(b.reserves.hot)}`);
     for (const c of b.reserves.cold) console.log(`cold ${c.address}  ${sol(c.lamports)}`);
-    console.log(`reserves ${sol(b.reserves.total)}  owed ${sol(b.owed.total)} (balances ${sol(b.owed.balances)}, open runs at max win ${sol(b.owed.runs)}, pots ${sol(b.owed.pots)}, unsent withdrawals ${sol(b.owed.withdrawals)})`);
-    console.log(`free ${sol(b.free)}  house rake ${sol(o.houseRake)}  mission SOL paid ${sol(o.missionPaid)}  rakeback claimed ${sol(o.rakebackPaid || 0)}`);
+    console.log(`reserves ${sol(b.reserves.total)}  owed ${sol(b.owed.total)} (balances ${sol(b.owed.balances)}, open runs at max win ${sol(b.owed.runs)}, pots ${sol(b.owed.pots)}, unsent withdrawals ${sol(b.owed.withdrawals)}, rakeback set aside ${sol(b.owed.rakeback || 0)}, mission SOL to claim ${sol(b.owed.missions || 0)})`);
+    console.log(`free ${sol(b.free)}  house rake ${sol(o.houseRake)}  mission SOL claimed ${sol(o.missionPaid)}  rakeback claimed ${sol(o.rakebackPaid || 0)}`);
     console.log('counts', JSON.stringify(o.counts));
   },
   async reviews() {

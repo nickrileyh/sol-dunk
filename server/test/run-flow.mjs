@@ -168,7 +168,8 @@ function playTaps(seed, di, L, skill, salt) {
   check((await poor.api('/api/pot/enter', {})).status === 400, 'entry without balance refused');
   srv3.kill();
 
-  // missions: every run counts; a window's SOL pays once its need has been played; the server agrees with a local replay
+  // missions: every run counts; a window's SOL is released once its need has been played and waits for a claim; the
+  // server agrees with a local replay
   const MS = require(path.join(root, 'src/missions.cjs'));
   const SP = require(path.join(root, 'src/special.cjs'));
   const TR = require(path.join(root, 'src/trophies.cjs'));
@@ -186,12 +187,12 @@ function playTaps(seed, di, L, skill, salt) {
   let myXp = 0, rbAcc = 0, rbReady = 0; // a local copy of the server's XP and rakeback
   const xpUp = (xp) => { const b = LV.stepsOf(myXp); myXp += xp; if (LV.stepsOf(myXp) > b) { const x = Math.floor(rbAcc); rbAcc -= x; rbReady += x; } };
   check(m0.daily[0].k === MS.daily(m0.day)[0].k && m0.daily.every((d, k) => d.rewardLamports === Math.floor(MS.reward('day', k, NEED.day))), 'missions: the day\'s set and its rewards');
-  let mine = MS.roll(null, Date.now()), mbal = (await M.api('/api/me')).balance, paidTotal = 0, sawLocked = false, sawRound = false;
-  const addPaid = (x) => { for (const p of (x && x.paid) || []) { paidTotal += p.lamports; mbal += p.lamports; } };
+  let mine = MS.roll(null, Date.now()), mbal = (await M.api('/api/me')).balance, readyTotal = 0, sawLocked = false, sawRound = false;
+  const addReady = (x) => { for (const p of (x && x.ready) || []) readyTotal += p.lamports; }; // released, not credited: it waits for a claim
   for (let i = 0; i < 8; i++) {
     const bet = 10_000_000, di = 0;
     const s = await M.api('/api/run/start', { difficulty: di, lamports: bet, clientSeed: 'mis' + i + 'x' });
-    mbal -= bet; mine = MS.play(mine, bet, Date.now(), NEED).s; addPaid(s.missions); rbAcc += bet * LV.BACK.run;
+    mbal -= bet; mine = MS.play(mine, bet, Date.now(), NEED).s; addReady(s.missions); rbAcc += bet * LV.BACK.run;
     check(s.balance === mbal, `missions run ${i}: start balance ${s.balance} vs ${mbal}`);
     check(s.rakeback.accLamports === Math.floor(rbAcc) && s.rakeback.readyLamports === rbReady, `rakeback run ${i}: 0.2% of the bet is set aside ` + JSON.stringify([s.rakeback, rbAcc, rbReady]));
     let L = 1, seed = s.levelSeed, total = 1, streak = 0, levels = [], end = null;
@@ -207,16 +208,17 @@ function playTaps(seed, di, L, skill, salt) {
       else { end = r; mbal += r.payoutLamports; }
     }
     const local = MS.run(mine, levels, Date.now(), NEED); mine = local.s;
-    addPaid(end.missions);
+    addReady(end.missions);
     const v = end.missions && end.missions.view;
-    check(v && v.all.day.length === mine.d.length && v.all.day.every((d, k) => d.p === mine.d[k].p && d.done === mine.d[k].done && d.paid === mine.d[k].paid), `missions run ${i}: server progress matches a local replay ` + JSON.stringify([v && v.all.day.map((d) => d.p), mine.d.map((d) => d.p)]));
+    check(v && v.all.day.length === mine.d.length && v.all.day.every((d, k) => d.p === mine.d[k].p && d.done === mine.d[k].done && d.paid === mine.d[k].paid && d.ready === MS.isReady(mine.d[k])), `missions run ${i}: server progress matches a local replay ` + JSON.stringify([v && v.all.day.map((d) => d.p), mine.d.map((d) => d.p)]));
     check(v && v.all.week.length === mine.w.length && v.all.week.every((d, k) => d.p === mine.w[k].p && d.done === mine.w[k].done), `missions run ${i}: weekly progress matches`);
     check(v && v.round.day === mine.d.length / 3 - 1 && v.daily.every((d, k) => d.k === MS.daily(v.day, v.round.day)[k].k) && JSON.stringify(end.missions.opened) === JSON.stringify(local.opened), `missions run ${i}: the open round is the one a local replay opens`);
     if (local.opened.some((o) => o.win === 'day')) sawRound = true;
     if (v && v.all.day.some((d) => d.done && !d.paid && v.playedLamports.day < d.needLamports)) sawLocked = true;
-    check(v && v.all.day.every((d) => !d.done || d.paid || v.playedLamports.day < d.needLamports), `missions run ${i}: every done mission whose round's need is played is paid`);
+    check(v && v.all.day.every((d) => !d.done || d.paid || v.playedLamports.day < d.needLamports), `missions run ${i}: every done mission whose round's need is played is released`);
+    check(v && v.all.day.every((d) => d.paid === d.ready && !d.claimed) && v.readyLamports === readyTotal && readyTotal === Math.floor(mine.ready + 1e-6), `missions run ${i}: released SOL waits to be claimed ` + JSON.stringify([v && v.readyLamports, readyTotal, mine.ready]));
     check(v && v.all.day.reduce((a, d) => a + (d.paid ? d.rewardLamports : 0), 0) <= v.playedLamports.day * MS.SHARES.day + 1e-6, `missions run ${i}: the day has paid no more than its share of the play`);
-    check(end.balance === mbal, `missions run ${i}: balance ${end.balance} vs ${mbal} (rewards ${paidTotal})`);
+    check(end.balance === mbal, `missions run ${i}: balance ${end.balance} vs ${mbal} (nothing credited until a claim; ${readyTotal} ready)`);
     xpUp(LV.runXp(local.facts) + local.done.reduce((a, d) => a + d.xp, 0));
     check(end.rakeback.readyLamports === rbReady && end.rakeback.accLamports === Math.floor(rbAcc) && end.rakeback.level === LV.lvlOf(myXp).l, `rakeback run ${i}: a level up (the server's own XP) releases it ` + JSON.stringify([end.rakeback, rbReady, rbAcc, LV.lvlOf(myXp).l]));
     // trophies: the server earns them from the same verified levels as a local replay does, and pays nothing for earning
@@ -236,7 +238,22 @@ function playTaps(seed, di, L, skill, salt) {
   }
   check(sawLocked, 'a mission done before the need was played waited for it');
   check(sawRound, 'finishing a round of daily missions opened the next');
-  check(paidTotal > 0, 'mission rewards were paid: ' + paidTotal);
+  check(readyTotal > 0, 'mission rewards were released: ' + readyTotal);
+  // mission SOL: claim one mission, then refusals; the rest stays ready (and carries into the next day, below)
+  {
+    const v0 = await M.api('/api/missions'), one = v0.all.day.find((d) => d.ready), notDone = v0.all.day.find((d) => !d.done);
+    const c1 = await M.api('/api/missions/claim', { win: 'day', i: one.i });
+    mbal += one.rewardLamports;
+    const after = c1.missions && c1.missions.all.day[one.i];
+    check(c1.status === 200 && c1.claimedLamports === one.rewardLamports && c1.balance === mbal && after.claimed && !after.ready && c1.missions.readyLamports === readyTotal - one.rewardLamports,
+      'missions: claiming one credits its SOL and marks it claimed ' + JSON.stringify([c1.status, c1.error, c1.claimedLamports, one.rewardLamports]));
+    readyTotal -= one.rewardLamports;
+    const twice = await M.api('/api/missions/claim', { win: 'day', i: one.i }), bogus = await M.api('/api/missions/claim', { win: 'year', i: 0 }), far = await M.api('/api/missions/claim', { win: 'day', i: 40 });
+    const early = notDone ? await M.api('/api/missions/claim', { win: 'day', i: notDone.i }) : { status: 400, error: 'Finish' };
+    check(twice.status === 400 && /Already/.test(twice.error) && bogus.status === 400 && far.status === 404 && early.status === 400 && /Finish/.test(early.error) && (await M.api('/api/me')).balance === mbal,
+      'missions: a second claim, an unknown window, a mission that doesn\'t exist and one not done are refused and pay nothing');
+    check((await M.api('/api/missions')).readyLamports === readyTotal, 'missions: the rest is still ready to claim');
+  }
   // rakeback: what the level ups released can be claimed once
   check(rbReady > 0 && LV.lvlOf(myXp).l > 1, `rakeback: eight runs levelled up and released ${rbReady} lamports`);
   const rk1 = await M.api('/api/rakeback/claim', {});
@@ -277,8 +294,8 @@ function playTaps(seed, di, L, skill, salt) {
     const b0 = (await M.api('/api/me')).balance, pre = (await M.api('/api/special')).specials[slot];
     const s = await M.api('/api/special/start', { clientSeed: 'spec' + k + 'x', slot });
     tries++; perSlot[slot][0]++;
-    const got = s.missions && s.missions.paid ? s.missions.paid.reduce((a, p) => a + p.lamports, 0) : 0;
-    check(s.status === 200 && s.balance === b0 - sfee + got && s.prizeLamports === pre.prizeLamports && s.grade === pre.course.grade && s.rings === pre.course.rings, `special ${k}: start debits the entry and plays the course offered ` + JSON.stringify([s.status, s.error, s.grade, s.rings]));
+    addReady(s.missions); // an entry is play too: it may release mission SOL, which waits for a claim
+    check(s.status === 200 && s.balance === b0 - sfee && s.prizeLamports === pre.prizeLamports && s.grade === pre.course.grade && s.rings === pre.course.rings, `special ${k}: start debits the entry and plays the course offered ` + JSON.stringify([s.status, s.error, s.grade, s.rings]));
     if (k === 0) {
       check((await M.api('/api/run/level', { runId: s.runId, level: 1, taps: [0] })).status === 404, 'a special can\'t be played as a run');
       check((await M.api('/api/run/start', { difficulty: 0, lamports: 10_000_000, clientSeed: 'during' })).status === 400, 'no run while a special is open');
@@ -337,9 +354,18 @@ function playTaps(seed, di, L, skill, salt) {
     if (waiting) check((await M.api('/api/trophies/claim', { id: waiting.id })).status === 400, 'the next trophy waits for more bets: ' + waiting.id);
   }
   // a new day: new missions, nothing played, a new special tally
+  readyTotal = (await M.api('/api/missions')).readyLamports; // the unlock run and the special entries since may have released more
   await M.api('/api/dev/pot/advance', {});
   const m2 = await M.api('/api/missions'), sp2 = await M.api('/api/special');
   check(m2.day !== mv.day && m2.playedLamports.day === 0 && m2.daily.every((d) => d.p === 0 && !d.done), 'missions reset on a new day');
+  {
+    // SOL released yesterday and not claimed is still the player's: claim it all
+    check(readyTotal > 0 && m2.readyLamports === readyTotal, 'missions: unclaimed SOL carries into the new day ' + JSON.stringify([m2.readyLamports, readyTotal]));
+    const b0 = (await M.api('/api/me')).balance, ca = await M.api('/api/missions/claim', {});
+    check(ca.status === 200 && ca.claimedLamports === readyTotal && ca.balance === b0 + readyTotal && ca.missions.readyLamports === 0, 'missions: claim all pays everything ready, earlier days too ' + JSON.stringify([ca.status, ca.error, ca.claimedLamports]));
+    const none = await M.api('/api/missions/claim', {});
+    check(none.status === 200 && none.claimedLamports === 0 && none.balance === b0 + readyTotal, 'missions: claim all with nothing ready pays nothing');
+  }
   check(sp2.day !== sp1.day && sp2.specials.every((x) => x.me.tries === 0) && sp2.me.skill.tries === tries, 'the special tallies reset on a new day; the rating stays');
   const poorS = client_(8802); await poorS.signIn();
   check((await poorS.api('/api/special/start', { clientSeed: 'poor1', slot: 0 })).status === 400, 'special entry without balance refused');
@@ -392,6 +418,14 @@ function playTaps(seed, di, L, skill, salt) {
       if (d === 2) check(v.all.week[1].k === 'days' && v.all.week[1].done, 'missions: three days with a daily round finish the week\'s first days mission');
     }
     check(ok && opened >= 14 && days === 7 && Math.abs(maxDay - MS.NEED.day * MS.SHARES.day * MS.STEPS[2]) < 1e-9, 'missions: rounds open one at a time and no window pays more than its share of the play ' + why);
+    // nothing was claimed in that week: everything released is still ready, the days' SOL that rolled over included
+    // (a whole week of a strong player: 0.03 SOL a day and 0.1 SOL for the week)
+    const full = 7 * MS.NEED.day * MS.SHARES.day * MS.STEPS[2] + MS.NEED.week * MS.SHARES.week * MS.STEPS[2];
+    const vw = MS.view(s, t0 + 6 * MS.DAY_MS + 7200000);
+    check(Math.abs(s.ready - full) < 1e-9 && Math.abs(vw.readyAll - full) < 1e-9 && Math.abs(vw.earlier - (full - vw.ready.day - vw.ready.week)) < 1e-9 && vw.ready.week > 0, 'missions: released SOL waits to be claimed, earlier days\' too ' + JSON.stringify([s.ready, full]));
+    const w0 = s.w.findIndex((m) => MS.isReady(m)), c1 = MS.claim(s, 'week', w0), c2 = MS.claim(s, 'week', w0), cAll = MS.claim(s);
+    check(c1.amount > 0 && c2.error === 'claimed' && Math.abs(c1.amount + cAll.amount - full) < 1e-9 && s.ready === 0 && MS.claim(s).amount === 0 && MS.view(s, t0 + 6 * MS.DAY_MS + 7200000).readyAll === 0,
+      'missions: a claim pays one mission once, claim all pays the rest, and nothing is paid twice');
     // levels and rakeback
     check(LV.lvlOf(0).l === 1 && LV.xpNeed(1) === 70 && LV.xpNeed(2) === 105 && LV.lvlOf(69).l === 1 && LV.lvlOf(70).l === 2 && LV.lvlOf(175).l === 3, 'levels: 70 XP for the first, 35 more for each after');
     check([0, 49, 50, 124, 125, 1000, 5000].every((x) => { let l = 1, n = 50, y = x; while (y >= n && l < 99) { y -= n; l++; n = 50 + 25 * (l - 1); } return LV.lvlOf(LV.fromOld(x)).l === l; }), 'levels: saved XP keeps its level on the new curve');

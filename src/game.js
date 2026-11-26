@@ -438,6 +438,13 @@
       levelUp() { if (!on()) return; const t = ac.currentTime; [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => { tone(f, t + i * 0.075, 0.32, 'triangle', 0.06); tone(f * 2, t + i * 0.075, 0.18, 'sine', 0.02); }); },
       unlockItem() { if (!on()) return; const t = ac.currentTime; tone(1318.5, t, 0.55, 'sine', 0.07); tone(1975.5, t + 0.09, 0.7, 'sine', 0.05); tone(2637, t + 0.18, 0.5, 'sine', 0.025); },
       goal() { if (!on()) return; const t = ac.currentTime; tone(1567.98, t, 0.2, 'sine', 0.045); tone(2093, t + 0.09, 0.34, 'sine', 0.04); },
+      // claiming SOL: a bright run up with a shimmer on top; then each coin that lands in the balance pings a step higher
+      claim() {
+        if (!on()) return; const t = ac.currentTime;
+        [1046.5, 1318.5, 1568, 2093].forEach((f, i) => { tone(f, t + i * 0.055, 0.34, 'sine', 0.06); tone(f * 2, t + i * 0.055, 0.14, 'sine', 0.014); });
+        hiss(t + 0.04, 0.4, 5200, 9500, 0.7, 0.025, 'highpass');
+      },
+      coin(k) { if (!on()) return; const t = ac.currentTime, f = 1975.5 * Math.pow(2, Math.min(12, k * 2) / 12); tone(f, t, 0.13, 'sine', 0.045); tone(f * 1.5, t + 0.014, 0.1, 'sine', 0.016); },
       // the arena: k from 0 (a murmur) to 1 (a roar)
       cheer(k) {
         if (!on()) return; const t = ac.currentTime, d = 0.6 + 0.8 * k;
@@ -538,8 +545,8 @@
   };
 
   // ---------------------------------------------------------------- missions, demo (rules in src/missions.cjs)
-  // The same rules as the server, on demo SOL: progress from the levels the demo bank verifies, SOL once the window's
-  // play reaches its need. The state lives in the profile.
+  // The same rules as the server, on demo SOL: progress from the levels the demo bank verifies, SOL released once the
+  // window's play reaches its need and paid when it's claimed. The state lives in the profile.
   const DemoMissions = {
     need: MS.NEED,
     view() {
@@ -551,14 +558,19 @@
       }
       profile.ms = MS.roll(profile.ms, Date.now()); return MS.view(profile.ms, Date.now(), this.need);
     },
-    pay(paid) {
-      let sum = 0;
-      for (const p of paid) sum += p.amount;
-      if (sum) { wallet.balance = round9(wallet.balance + sum); stats.missionSol = round9((stats.missionSol || 0) + sum); }
-      return paid;
-    },
-    play(amount) { const r = MS.play(profile.ms, amount, Date.now(), this.need); profile.ms = r.s; return this.pay(r.paid); },
-    run(levels) { const r = MS.run(profile.ms, levels, Date.now(), this.need); profile.ms = r.s; return { done: r.done, opened: r.opened, paid: this.pay(r.paid) }; }
+    play(amount) { const r = MS.play(profile.ms, amount, Date.now(), this.need); profile.ms = r.s; profile.ms.ready = round9(profile.ms.ready); return r.ready; },
+    run(levels) { const r = MS.run(profile.ms, levels, Date.now(), this.need); profile.ms = r.s; profile.ms.ready = round9(profile.ms.ready); return { done: r.done, opened: r.opened, ready: r.ready }; },
+    // claim released SOL: one mission (its window and place in that window's list) or, with no window, all of it
+    claim(win, i) {
+      this.view();
+      const r = MS.claim(profile.ms, win, i);
+      if (r.error) throw new Error(r.error === 'claimed' ? 'Already claimed.' : r.error === 'locked' ? 'Finish this mission and bet its round’s need first.' : 'Mission not found.');
+      const x = round9(r.amount);
+      profile.ms.ready = round9(profile.ms.ready);
+      if (x > 0) { wallet.balance = round9(wallet.balance + x); stats.missionSol = round9((stats.missionSol || 0) + x); }
+      saveAll();
+      return x;
+    }
   };
   // ---------------------------------------------------------------- rakeback, demo (rules in src/levels.cjs)
   // Every bet sets a little SOL aside (20% of the house's cut of it); each level up releases it to claim.
@@ -624,12 +636,12 @@
       if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
       wallet.balance = round9(wallet.balance - v.fee);
       DemoRake.add('special', v.fee);
-      const paid = DemoMissions.play(v.fee);
+      const ready = DemoMissions.play(v.fee);
       const t = this.tally(); t.tries[slot]++; store.set('special', t);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
       const c = this.cur = { serverSeed, clientSeed, nonce, slot, recipe: sp.recipe.id, g: sp.course.grade, n: sp.course.rings, fee: v.fee, prize: sp.prize, day: v.day, seed: deriveLevelSeed(serverSeed, clientSeed, nonce, 'special') };
       saveAll();
-      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, seed: c.seed, slot, recipe: c.recipe, grade: c.g, rings: c.n, chance: sp.course.chance, x: sp.x, fee: v.fee, prize: c.prize, missions: { paid }, special: this.view() };
+      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, seed: c.seed, slot, recipe: c.recipe, grade: c.g, rings: c.n, chance: sp.course.chance, x: sp.x, fee: v.fee, prize: c.prize, missions: { ready }, special: this.view() };
     },
     finish(taps) {
       const c = this.cur;
@@ -667,7 +679,7 @@
       if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
       wallet.balance = round9(wallet.balance - v.fee);
       DemoRake.add('pot', v.fee);
-      const paid = DemoMissions.play(v.fee);
+      const ready = DemoMissions.play(v.fee);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++, seed = deriveLevelSeed(serverSeed, clientSeed, nonce, 'duel');
       // the rival's flight: the autopilot on the same course
       const t = this.tally(), rng = E.makeRng('rival|' + seed), k = Math.max(0, Math.min(SP.ANCHORS.length - 1, Math.round(t.lv + rng() - 0.5)));
@@ -677,7 +689,7 @@
       const f = DU.flight(st);
       this.cur = { serverSeed, clientSeed, nonce, seed, fee: v.fee, rival: { name: 'Rival', taps, rings: f.rings, score: f.score, cleared: f.cleared } };
       saveAll();
-      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, seed, fee: v.fee, prize: v.prize, rival: this.cur.rival, missions: { paid }, duel: this.view() };
+      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, seed, fee: v.fee, prize: v.prize, rival: this.cur.rival, missions: { ready }, duel: this.view() };
     },
     finish(taps, stop) {
       const c = this.cur;
@@ -704,11 +716,11 @@
       if (bet > wallet.balance + 1e-12) throw new Error('Not enough demo SOL for that bet.');
       wallet.balance = round9(wallet.balance - bet);
       DemoRake.add('run', bet);
-      const paid = DemoMissions.play(bet);
+      const ready = DemoMissions.play(bet);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
       saveAll();
       this.cur = { di, bet, serverSeed, clientSeed, nonce, level: 1, total: 1, streak: 0, levels: [], potAt: Date.now() };
-      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, levelSeed: deriveLevelSeed(serverSeed, clientSeed, nonce, 1), missions: { paid } };
+      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, levelSeed: deriveLevelSeed(serverSeed, clientSeed, nonce, 1), missions: { ready } };
     },
     // Re-verifies the level by replaying the taps, exactly as the server does.
     async level(L, taps) {
@@ -734,7 +746,7 @@
       async enter() { return DemoPot.enter(); },
       async closeNow() { DemoPot.roll(true); return DemoPot.view(); } // demo only
     },
-    missions: { view: () => DemoMissions.view(), async state() { return DemoMissions.view(); } },
+    missions: { view: () => DemoMissions.view(), async state() { return DemoMissions.view(); }, async claim(win, i) { return DemoMissions.claim(win, i); } },
     rakeback: { view: () => DemoRake.view(), levelUp: () => DemoRake.levelUp(), claim: () => DemoRake.claim() },
     trophies: { view: () => DemoTrophies.view(), async state() { return DemoTrophies.view(); }, async claim(id) { return DemoTrophies.claim(id); } },
     special: {
@@ -799,12 +811,12 @@
     // the server's missions in SOL; keeps its latest view for the Missions page
     mconv(v) {
       const L = 1e9, one = (m) => Object.assign({}, m, { reward: m.rewardLamports / L, need: m.needLamports / L }), sol = (o) => ({ day: o.day / L, week: o.week / L });
-      return MS.shape({ day: v.day, week: v.week, dayEnds: v.dayEnds, weekEnds: v.weekEnds, base: sol(v.baseNeedLamports), played: sol(v.playedLamports), days: v.days | 0, all: { day: v.all.day.map(one), week: v.all.week.map(one) } });
+      return MS.shape({ day: v.day, week: v.week, dayEnds: v.dayEnds, weekEnds: v.weekEnds, base: sol(v.baseNeedLamports), played: sol(v.playedLamports), days: v.days | 0, readyAll: (v.readyLamports || 0) / L, all: { day: v.all.day.map(one), week: v.all.week.map(one) } });
     },
     mfrom(j) {
       if (!j) return null;
       if (j.view) this.mv = this.mconv(j.view);
-      return { done: j.done || [], opened: j.opened || [], paid: (j.paid || []).map((p) => Object.assign({}, p, { amount: p.lamports / 1e9 })) };
+      return { done: j.done || [], opened: j.opened || [], ready: (j.ready || []).map((p) => Object.assign({}, p, { amount: p.lamports / 1e9 })) };
     },
     // rakeback: the server sets it aside with every bet and releases it when its own count of your XP levels up
     rakeback: { view: () => ServerBank.rb, levelUp: () => 0, async claim() { return (await ServerBank.api('/api/rakeback/claim', {})).claimedLamports / 1e9; } },
@@ -820,7 +832,12 @@
     },
     missions: {
       view() { return ServerBank.mv || MS.view(null, Date.now()); },
-      async state() { ServerBank.mv = ServerBank.mconv(await ServerBank.api('/api/missions')); return ServerBank.mv; }
+      async state() { ServerBank.mv = ServerBank.mconv(await ServerBank.api('/api/missions')); return ServerBank.mv; },
+      async claim(win, i) {
+        const j = await ServerBank.api('/api/missions/claim', win == null ? {} : { win, i });
+        if (j.missions) ServerBank.mv = ServerBank.mconv(j.missions);
+        return (j.claimedLamports || 0) / 1e9;
+      }
     },
     special: {
       view(j) {
@@ -1938,17 +1955,17 @@
     enterRun(null);
   }
   function enterRun(missions) {
-    closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vP, false); show(vC, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
+    closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vP, false); show(vC, false); show(vM, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
     ball.lastVis = 0; // a new run lets the old flame die down quietly
     setHudMode(true); setBalance();
     clearCallouts(); clearNotices(); potShown = run.bet; setStreakHud();
     beginLevel(true);
-    paidNote(missions);
+    readyNote(missions);
   }
-  // mission SOL that a bet has just unlocked
-  function paidNote(m) {
-    const sum = m && m.paid ? m.paid.reduce((a, p) => a + p.amount, 0) : 0;
-    if (sum > 0) { notice('n-pot', ICON.gift, 'Mission rewards', '+' + fmtSol(sum) + ' SOL paid to your balance', true); setBalance(); }
+  // mission SOL that a bet has just released: it waits on the Missions tab (and the result card) for a claim
+  function readyNote(m) {
+    const sum = m && m.ready ? m.ready.reduce((a, p) => a + p.amount, 0) : 0;
+    if (sum > 0) { notice('n-pot', ICON.gift, 'Mission SOL ready', fmtBet(sum) + ' SOL to claim after this run', true); syncBadges(); }
   }
 
   function beginLevel(first) {
@@ -2324,7 +2341,7 @@
     profile.xp += xp;
     if (LV.stepsOf(profile.xp) > steps) bank.rakeback.levelUp(); // a level up releases the rakeback built up since the last one
     const unlocks = grantUnlocks();
-    return { xp, runXp, before, after: lvlOf(profile.xp), newBest, prevBest, achs, dailies, weeklies, careers, chapter, unlocks, paid: (mres && mres.paid) || [], opened: (mres && mres.opened) || [] };
+    return { xp, runXp, before, after: lvlOf(profile.xp), newBest, prevBest, achs, dailies, weeklies, careers, chapter, unlocks, ready: (mres && mres.ready) || [], opened: (mres && mres.opened) || [] };
   }
 
   function showCheckpoint() {
@@ -2423,13 +2440,38 @@
   async function claimRakeback(el) {
     if (rbBusy) return;
     rbBusy = true;
+    const before = bank.balance();
     let x = 0;
     try { x = await bank.rakeback.claim(); } catch (e) { rbBusy = false; toast(e.message || 'Couldn\'t claim that. Try again.'); return; }
     rbBusy = false;
     if (!(x > 0)) return;
-    Sound.unlockItem(); buzz([10, 40, 10]); setBalance(); syncBadges();
+    const fx = claimFx(el, x, before); syncBadges();
     if (el && el.id === 'rbChip') { el.classList.add('on'); el.disabled = true; el.querySelector('span').textContent = 'Rakeback claimed'; el.querySelector('em').textContent = '+' + fmtBet(x) + ' SOL'; }
-    else { toast('+' + fmtBet(x) + ' SOL rakeback claimed'); if (nav.tab === 'profile') renderProfileView(); }
+    else {
+      if (!fx) toast('+' + fmtBet(x) + ' SOL rakeback claimed');
+      if (el) { el.disabled = true; el.classList.add('got'); el.textContent = '+' + fmtBet(x); }
+      setTimeout(() => { if (nav.tab === 'profile' && !nav.page) renderProfileView(); }, fx ? 900 : 0);
+    }
+  }
+  // Mission SOL: released when a round's need is played, claimed with a tap (a mission's Claim key on the Missions tab,
+  // or the result card's ticket, which claims everything ready)
+  const missionChip = (x) => `<button class="gain claim" id="msChip" style="animation-delay:0.35s" aria-label="Claim ${fmtBet(x)} SOL of mission rewards">${ICON.gift}<span>Mission SOL ready</span><em>Claim ${fmtBet(x)} SOL</em></button>`;
+  let msBusy = false;
+  async function claimMission(win, i, el) {
+    if (msBusy) return;
+    msBusy = true;
+    const before = bank.balance();
+    let x = 0;
+    try { x = await bank.missions.claim(win, i); }
+    catch (e) { msBusy = false; toast(e.message || 'Couldn’t claim that. Try again.'); if (nav.tab === 'missions' && !nav.page) renderMissions(true); return; }
+    msBusy = false;
+    syncBadges();
+    if (!(x > 0)) { if (nav.tab === 'missions' && !nav.page) renderMissions(true); return; }
+    const fx = claimFx(el, x, before);
+    if (el && el.id === 'msChip') { el.classList.add('on'); el.disabled = true; el.querySelector('span').textContent = 'Mission SOL claimed'; el.querySelector('em').textContent = '+' + fmtBet(x) + ' SOL'; return; }
+    if (!fx) toast('+' + fmtBet(x) + ' SOL claimed');
+    if (el) { el.disabled = true; el.classList.add('got'); el.innerHTML = ICON.check + '<span>+' + fmtBet(x) + '</span>'; }
+    setTimeout(() => { if (nav.tab === 'missions' && !nav.page) renderMissions(true); }, fx ? 950 : 0);
   }
   let xpTimers = [];
   function showProgress(pr) {
@@ -2454,10 +2496,9 @@
       hudAnim(fill, 'fill', [{ width: '0%' }, { width: w }], { duration: REDUCED ? 1 : 600, easing: EASE_OUT });
       Sound.levelUp(); buzz([10, 40, 10]); celebrate(60, ui.res); // from the card's top corners, clear of its text
     }, 1100));
-    const g = [], rbReady = bank.rakeback.view().ready;
+    const g = [], rbReady = bank.rakeback.view().ready, msReady = mview().readyAll, tix = (rbReady > 0 ? 1 : 0) + (msReady > 0 ? 1 : 0);
     if (run.potJust && potState) g.push(['pot', ICON.trophy, 'Pot challenge done · in for a share']);
-    const paid = (pr.paid || []).reduce((a, p) => a + p.amount, 0);
-    if (paid > 0) g.push(['pot', ICON.gift, 'Mission rewards · +' + fmtSol(paid) + ' SOL']);
+    const released = (pr.ready || []).length;
     // mission SOL earned but waiting for the window's play: say how much more unlocks it
     if (run.mode !== 'special' && (pr.dailies.length || pr.weeklies.length)) {
       const mv = mview();
@@ -2481,15 +2522,17 @@
     if (sNow && !run.lost) g.unshift(['', ICON.trophy, sNow.done ? `All ${sNow.of} of today’s ${sNow.x}× specials cleared` : `Next up: ${sNow.recipe.name} · ${sNow.at + 1} of ${sNow.of} today`]);
     else if (!g.length && sNow) g.push(['', ICON.trophy, `${sNow.at} of ${sNow.of} cleared today at ${sNow.x}×`]);
     // the mission to go for next, with where it stands and what it pays: there's always a goal for the next run
-    const nm = run.mode === 'run' && !(vh < 720 && rbReady > 0) ? nearestMission(runFacts0()) : null, nx = $('resNext'); // a short screen shows the claim instead
+    const nm = run.mode === 'run' && !(vh < 720 && tix > 0) ? nearestMission(runFacts0()) : null, nx = $('resNext'); // a short screen shows the claim instead
     nx.innerHTML = nm ? `<div class="rn-h">${ICON.target}<span>${nm.text}</span><b>${nm.p}/${nm.n}${nm.sol ? ' · ' + fmtBet(nm.sol) + ' SOL' : ' · ' + nm.xp + ' XP'}</b></div><div class="rn-bar"><i style="width:${(nm.p / nm.n * 100).toFixed(1)}%"></i></div>` : '';
-    const room = Math.max(1, (vh < 720 ? 3 : 4) - (pr.unlocks.length ? 1 : 0) - (nm && vh < 720 ? 1 : 0) - (rbReady > 0 ? 1 : 0)), more = g.length > room ? g.length - (room - 1) : 0;
-    $('resGains').innerHTML = (rbReady > 0 ? rakeChip(rbReady) : '') + g.slice(0, more ? room - 1 : room).map((x, i) => (x[3] ? unlockChip(x[3], i) : gainChip(x[0], x[1], x[2], i))).join('') +
+    const room = Math.max(1, (vh < 720 ? 3 : 4) - (pr.unlocks.length ? 1 : 0) - (nm && vh < 720 ? 1 : 0) - tix), more = g.length > room ? g.length - (room - 1) : 0;
+    $('resGains').innerHTML = (rbReady > 0 ? rakeChip(rbReady) : '') + (msReady > 0 ? missionChip(msReady) : '') + g.slice(0, more ? room - 1 : room).map((x, i) => (x[3] ? unlockChip(x[3], i) : gainChip(x[0], x[1], x[2], i))).join('') +
       (more ? gainChip('', ICON.spark, '+' + more + ' more', room - 1) : '');
     wireUnlockChips();
     const rc = $('rbChip');
     if (rc) rc.addEventListener('click', () => { if (armed(ui.res)) claimRakeback(rc); });
-    if (pr.achs.length || pr.unlocks.length || pr.dailies.length || pr.weeklies.length || pr.careers.length || paid > 0) xpTimers.push(setTimeout(() => Sound.unlockItem(), up ? 1500 : 500));
+    const mc = $('msChip');
+    if (mc) mc.addEventListener('click', () => { if (armed(ui.res)) claimMission(null, null, mc); });
+    if (pr.achs.length || pr.unlocks.length || pr.dailies.length || pr.weeklies.length || pr.careers.length || released > 0) xpTimers.push(setTimeout(() => Sound.unlockItem(), up ? 1500 : 500));
   }
   function backToLobby() {
     show(ui.res, false); show(ui.cp, false); hidePrompt(); clearNotices();
@@ -2621,25 +2664,54 @@
   // celebrations: a burst of flat confetti over the cards (wins, level-ups, special clears, pot wins)
   const FX_COLS = ['#9945ff', '#14f195', '#ffffff', '#c39bff', '#8dffcf', '#9945ff', '#14f195']; // Solana purple and green, and white
   let fxParts = [], fxRaf = 0, fxLast = 0, fxW = 0, fxH = 0;
-  function celebrate(n, from) {
+  function fxPrep() {
     const el = $('fxLayer');
-    if (REDUCED || !el) return;
+    if (REDUCED || !el) return null;
     const W = (fxW = innerWidth), H = (fxH = innerHeight), k = Math.min(window.devicePixelRatio || 1, 2);
     if (el.width !== Math.round(W * k) || el.height !== Math.round(H * k)) { el.width = Math.round(W * k); el.height = Math.round(H * k); }
+    return el;
+  }
+  function fxStart() { if (!fxRaf) { fxLast = performance.now(); fxRaf = requestAnimationFrame(fxTick); } }
+  const fxPiece = (x, y, vx, vy, i, max) => ({ x, y, vx, vy, w: 5 + Math.random() * 5, h: 8 + Math.random() * 6, rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 14,
+    flip: Math.random() * 6.28, vf: 6 + Math.random() * 8, c: FX_COLS[i % FX_COLS.length], life: 0, max, dot: Math.random() < 0.22 });
+  // a small burst from a point (a Claim key), up and out
+  function burstFx(x, y, n) {
+    if (!fxPrep()) return;
+    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, sp = 260 + Math.random() * 380; fxParts.push(fxPiece(x, y, Math.cos(a) * sp, Math.sin(a) * sp, i, 0.8 + Math.random() * 0.6)); }
+    fxStart();
+  }
+  // a SOL coin: green, turning as it flies, on an arc from (x0, y0) to (x1, y1) after a delay; land() when it gets
+  // there. fade: it fades out on the way instead (nowhere to land)
+  function coinFx(x0, y0, x1, y1, delay, land, fade) {
+    if (!fxPrep()) return;
+    fxParts.push({ coin: true, x0, y0, x1, y1, cx: (x0 + x1) / 2 + (Math.random() - 0.5) * 90, cy: Math.min(y0, y1) - 60 - Math.random() * 70, life: -delay, dur: 0.5 + Math.random() * 0.16,
+      r: 6 + Math.random() * 2, spin: Math.random() * 6.28, land, fade, x: x0, y: y0 });
+    fxStart();
+  }
+  function celebrate(n, from) {
+    const el = fxPrep();
+    if (!el) return;
+    const W = fxW, H = fxH;
     const r = from && from.getBoundingClientRect ? from.getBoundingClientRect() : { left: W / 2 - 120, right: W / 2 + 120, top: H * 0.38 };
     for (let i = 0; i < (n || 90); i++) {
       const side = i % 2 ? 1 : -1, ang = -Math.PI / 2 - side * (0.12 + Math.random() * 0.6), sp = 520 + Math.random() * 520; // two cannons at the card's top corners, aimed up and in
-      fxParts.push({ x: side < 0 ? r.left + 28 : r.right - 28, y: r.top + 24, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, w: 5 + Math.random() * 5, h: 8 + Math.random() * 6,
-        rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 14, flip: Math.random() * 6.28, vf: 6 + Math.random() * 8, c: FX_COLS[i % FX_COLS.length], life: 0, max: 1.7 + Math.random() * 0.9, dot: Math.random() < 0.22 });
+      fxParts.push(fxPiece(side < 0 ? r.left + 28 : r.right - 28, r.top + 24, Math.cos(ang) * sp, Math.sin(ang) * sp, i, 1.7 + Math.random() * 0.9));
     }
-    if (!fxRaf) { fxLast = performance.now(); fxRaf = requestAnimationFrame(fxTick); }
+    fxStart();
   }
   function fxTick(t) {
     const el = $('fxLayer'), dt = Math.min(0.05, Math.max(0, (t - fxLast) / 1000)), k = el.width / Math.max(1, fxW), g = el.getContext('2d');
     fxLast = t;
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, el.width, el.height); g.setTransform(k, 0, 0, k, 0, 0);
-    fxParts = fxParts.filter((p) => (p.life += dt) < p.max && p.y < fxH + 40);
+    fxParts = fxParts.filter((p) => {
+      p.life += dt;
+      if (!p.coin) return p.life < p.max && p.y < fxH + 40;
+      if (p.life < p.dur) return true;
+      if (p.land) p.land();
+      return false;
+    });
     for (const p of fxParts) {
+      if (p.coin) { if (p.life >= 0) drawCoin(g, p); continue; }
       p.vy += 1300 * dt; p.vx *= Math.exp(-2.4 * dt); p.vy *= Math.exp((p.vy > 0 ? -3.4 : -2.2) * dt); // pieces flutter down slowly
       p.x += p.vx * dt + Math.sin(p.flip) * 14 * dt; p.y += p.vy * dt; p.rot += p.vr * dt; p.flip += p.vf * dt;
       g.globalAlpha = Math.min(1, (p.max - p.life) / 0.45); g.fillStyle = p.c;
@@ -2650,6 +2722,64 @@
     g.globalAlpha = 1;
     if (fxParts.length) fxRaf = requestAnimationFrame(fxTick);
     else { fxRaf = 0; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, el.width, el.height); }
+  }
+  function drawCoin(g, p) {
+    const k = p.life / p.dur, e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2, u = 1 - e;
+    const x = u * u * p.x0 + 2 * u * e * p.cx + e * e * p.x1, y = u * u * p.y0 + 2 * u * e * p.cy + e * e * p.y1;
+    const r = p.r * (1 + 0.3 * Math.sin(Math.PI * k)) * (1 - 0.3 * k), turn = Math.max(0.3, Math.abs(Math.cos(p.spin + p.life * 11)));
+    g.globalAlpha = Math.min(1, p.life / 0.08) * (p.fade ? Math.min(1, (1 - k) / 0.35) : 1);
+    g.save(); g.translate(x, y); g.scale(turn, 1);
+    g.shadowColor = 'rgba(20, 241, 149, 0.65)'; g.shadowBlur = 10;
+    g.fillStyle = '#0a9e62'; g.beginPath(); g.arc(0, 0, r, 0, 6.2832); g.fill(); // the coin's edge
+    g.shadowBlur = 0;
+    g.fillStyle = '#14f195'; g.beginPath(); g.arc(0, -0.7, r * 0.8, 0, 6.2832); g.fill(); // its face
+    g.fillStyle = 'rgba(255, 255, 255, 0.7)'; g.beginPath(); g.ellipse(-r * 0.25, -r * 0.38, r * 0.32, r * 0.15, -0.5, 0, 6.2832); g.fill(); // a glint
+    g.restore();
+  }
+  // The moment SOL is claimed (a mission, a trophy, rakeback): the key pops, a burst of confetti leaves it, and SOL
+  // coins arc from it into the balance one after another, each pinging a step higher, while the balance counts up and
+  // a green "+0.002 SOL" rises under it. Where the balance isn't on screen (a page, the result card's run) the coins
+  // fountain up from the key and fade. On a card the confetti comes from the card's corners, behind it, as for any
+  // win. before: the balance before the claim. Returns whether it played (not with reduced motion).
+  let gainEl = null;
+  function claimFx(el, amount, before) {
+    Sound.claim(); buzz([12, 40, 12, 40, 18]);
+    const after = bank.balance();
+    if (REDUCED || !el || !el.isConnected) { setBalance(); return false; }
+    hudAnim(el, 'claim', [{ transform: 'scale(1)' }, { transform: 'scale(1.16)', offset: 0.3 }, { transform: 'scale(0.95)', offset: 0.65 }, { transform: 'scale(1)' }], { duration: 560, easing: EASE_OUT });
+    const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, card = el.closest('.card');
+    const n = clamp(Math.round(5 + 1.4 * Math.log10(Math.max(1, amount * 1000))), 5, 9);
+    if (card) { // the coins would fly behind the card: confetti from its corners, and the coins' pings
+      celebrate(46, card); setBalance();
+      for (let i = 0; i < n; i++) setTimeout(() => Sound.coin(i), 520 + i * 65);
+      return true;
+    }
+    burstFx(cx, cy, 28);
+    const bal = $('balBtn'), b = bal && phase === 'lobby' && !nav.page && bal.offsetParent !== null ? bal.getBoundingClientRect() : null, to = b && b.width ? b : null;
+    // the balance counts up with enough decimals to see the claim land (10.000 to 10.001), then settles back
+    const dp = Math.max(after >= 1 ? 2 : 4, [2, 3, 4].find((d) => Math.abs(amount * 10 ** d - Math.round(amount * 10 ** d)) < 1e-6) || 4), fmtC = (v) => v.toFixed(dp);
+    let landed = 0;
+    for (let i = 0; i < n; i++) {
+      const tx = to ? to.left + to.width * 0.3 : cx + (Math.random() - 0.5) * 140, ty = to ? to.top + to.height / 2 : cy - 130 - Math.random() * 50;
+      coinFx(cx + (Math.random() - 0.5) * 16, cy + (Math.random() - 0.5) * 8, tx, ty, i * 0.065, () => {
+        Sound.coin(landed);
+        if (to) {
+          if (!landed) { ui.bal.textContent = fmtC(before); countUp(ui.bal, before, after, fmtC, 120 + n * 65); }
+          hudAnim(bal, 'bump', [{ transform: 'scale(1.07)' }, { transform: 'scale(1)' }], { duration: 260, easing: EASE_OUT });
+        }
+        if (++landed === n) { if (to) gainUnder(to, amount); setTimeout(() => { if (ui.bal.textContent === fmtC(after)) setBalance(); }, to ? 1900 : 0); }
+      }, !to);
+    }
+    if (!to) setBalance();
+    return true;
+  }
+  // a green "+0.002 SOL" that rises under the balance and fades
+  function gainUnder(r, amount) {
+    if (!gainEl) { gainEl = document.createElement('div'); gainEl.className = 'claim-gain'; gainEl.setAttribute('aria-hidden', 'true'); document.body.appendChild(gainEl); }
+    gainEl.textContent = '+' + fmtBet(amount) + ' SOL';
+    gainEl.style.left = (r.left + r.width / 2) + 'px'; gainEl.style.top = (r.bottom + 6) + 'px';
+    hudAnim(gainEl, 'up', [{ opacity: 0, transform: 'translate(-50%, -6px) scale(0.9)' }, { opacity: 1, transform: 'translate(-50%, 0) scale(1.05)', offset: 0.18 },
+      { opacity: 1, transform: 'translate(-50%, 2px) scale(1)', offset: 0.7 }, { opacity: 0, transform: 'translate(-50%, 10px) scale(1)' }], { duration: 1500, easing: 'ease-out' });
   }
   function winFx(k) {
     Sound.cash(); buzz([10, 30, 10, 30, 60]);
@@ -3962,7 +4092,7 @@
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the green ring ends the level. Cash out, or keep going for more.`) +
       row('practice', 'blue', 'Practice', `${KB ? 'Click' : 'Tap'} <b>Practice for free</b> under Play for a run with nothing at stake.`) +
       row('star', 'gold', 'Score and XP', `Rings score points, more for swishes and streaks. Points, missions and trophies earn XP, which unlocks balls, wings and trails. Neither changes what a run pays.`) +
-      row('mission', 'purple', 'Missions', `Three at a time, new every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week. Finish all three to open the next round, which pays more.`) +
+      row('mission', 'purple', 'Missions', `Three at a time, new every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week: tap Claim to collect it. Finish all three to open the next round, which pays more.`) +
       row('medal', 'gold', 'Trophies', `Fifteen one-time goals. Each adds XP and pays a little SOL: claim it on the Trophies page once your bets cover it.`) +
       row('back', 'green', 'Rakeback', `Every bet sets a little SOL aside for you: ${Math.round(LV.RATE * 100)}% of the house's cut. Level up to claim it.`) +
       row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. Clear one and a new one takes its place; some have walls to fly over. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Duel</b>: race a rival over the same rings; whoever gets further takes the pot. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
@@ -4102,17 +4232,19 @@
   }
   // claim one trophy's SOL (the bank checks it: earned, not claimed, and covered by what's been bet)
   let claimingTrophy = false;
-  async function claimTrophy(id) {
+  async function claimTrophy(id, el) {
     if (claimingTrophy) return;
     claimingTrophy = true;
+    const before = bank.balance();
+    let fx = false;
     try {
       const r = await bank.trophies.claim(id);
-      setBalance(); Sound.unlockItem(); buzz(12);
-      toast('Claimed ' + fmtBet(r.amount) + ' SOL · ' + ACH_BY[id].name);
+      fx = claimFx(el, r.amount, before);
+      if (fx && el) { el.disabled = true; el.classList.add('got'); el.textContent = '+' + fmtBet(r.amount); }
+      else toast('Claimed ' + fmtBet(r.amount) + ' SOL · ' + ACH_BY[id].name);
     } catch (e) { toast(e.message || 'That can’t be claimed yet.'); }
     claimingTrophy = false;
-    if (nav.page === 'trophies') renderPage(true);
-    if (nav.tab === 'profile') renderProfileView();
+    setTimeout(() => { if (nav.page === 'trophies') renderPage(true); if (nav.tab === 'profile') renderProfileView(); }, fx ? 900 : 0);
     syncBadges();
   }
   // recent runs: what each one ended as, on which tier, and what it paid
@@ -4169,7 +4301,7 @@
       on('potEnter', enterPot);
       on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
     }
-    if (kind === 'trophies') document.querySelectorAll('#pgBody [data-claim]').forEach((b) => b.addEventListener('click', () => claimTrophy(b.dataset.claim)));
+    if (kind === 'trophies') document.querySelectorAll('#pgBody [data-claim]').forEach((b) => b.addEventListener('click', () => claimTrophy(b.dataset.claim, b)));
     if (kind === 'how') on('howTour', () => { closePage(); setTimeout(() => showTour(0), 280); });
     if (kind === 'odds') document.querySelectorAll('#oddsSeg button').forEach((b) => b.addEventListener('click', () => { oddsTier = +b.dataset.t; Sound.click(); renderPage(true); }));
     on('fairVerify', () => {
@@ -4300,7 +4432,7 @@
   function syncBadges() {
     const newSpecial = !!specState && prefs.specSeen !== specState.day;
     $('badgeC').classList.toggle('on', newSpecial && nav.tab !== 'challenges');
-    $('badgeM').classList.toggle('on', profile.mNew > 0 && nav.tab !== 'missions');
+    $('badgeM').classList.toggle('on', (profile.mNew > 0 && nav.tab !== 'missions') || mview().readyAll > 0); // finished missions, or mission SOL to claim
     $('badgeP').classList.toggle('on', (profile.fresh.length > 0 && nav.tab !== 'locker') || (bank.rakeback.view().ready > 0 && nav.tab !== 'profile') || tview().open > 0); // new items, rakeback or trophy SOL to claim
   }
   $('lkBack').addEventListener('click', () => setTab('profile'));
@@ -4310,19 +4442,24 @@
 
   // ---------------------------------------------------------------- Missions tab
   const ring = (p) => `<span class="mring${p > 0 ? '' : ' zero'}"><svg viewBox="0 0 36 36"><circle class="trk" cx="18" cy="18" r="15"/><circle class="val" cx="18" cy="18" r="15" pathLength="100" stroke-dasharray="${(Math.max(0.0001, p) * 100).toFixed(1)} 100"/></svg><span class="ck">${ICON.check}</span></span>`;
-  function mRow(text, p, n, xp, done, sol, paid, i) {
-    const right = done ? '<b>Done</b>' + (sol ? `<small class="${paid ? 'paid' : ''}">${fmtBet(sol)} SOL ${paid ? 'paid' : 'waiting'}</small>` : '')
+  // A mission's row: its ring, what it asks and where it stands, then what it pays. Open: its XP and SOL. Done: a green
+  // Claim key once its SOL is ready, else what was claimed or the SOL waiting for the round's play. m: the mission from
+  // the view (ready, claimed, i), win: its window, for the claim; a career mission has neither.
+  function mRow(text, p, n, xp, done, sol, m, win) {
+    const ready = !!(m && m.ready), claimed = !!(m && m.claimed);
+    const right = ready ? `<button class="m-claim" data-mclaim="${win}:${m.i}" aria-label="Claim ${fmtBet(sol)} SOL for ${text}">Claim ${fmtBet(sol)}</button>`
+      : done ? '<b>Done</b>' + (sol ? `<small class="${claimed ? 'paid' : ''}">${fmtBet(sol)} SOL ${claimed ? 'claimed' : 'waiting'}</small>` : '')
       : `<b>+${xp} XP</b>` + (sol ? `<small>+${fmtBet(sol)} SOL</small>` : '');
-    return `<div class="mrow${done ? ' done' : ''}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? 'Done' : p + ' / ' + n}</span></span><span class="mxp">${right}</span></div>`;
+    return `<div class="mrow${done ? ' done' : ''}${ready ? ' ready' : ''}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? (ready ? '+' + xp + ' XP · SOL ready' : 'Done') : p + ' / ' + n}</span></span><span class="mxp">${right}</span></div>`;
   }
   // what one round of a window pays in all
   const roundSol = (mv, win, r) => mv.base[win] * MS.SHARES[win] * (MS.STEPS[r == null ? mv.round[win] : r] - ((r == null ? mv.round[win] : r) ? MS.STEPS[(r == null ? mv.round[win] : r) - 1] : 0));
-  // The rounds of a window, side by side: done (its SOL paid, or waiting for play), open, or still locked.
+  // The rounds of a window, side by side: done (its SOL claimed, ready to claim, or waiting for play), open, or locked.
   function roundsRow(mv, win) {
     const all = mv.all[win], cur = mv.round[win];
     return `<div class="rounds">${MS.STEPS.map((x, r) => {
-      const mine = all.slice(r * 3, r * 3 + 3), done = mine.length === 3 && mine.every((c) => c.done), paid = done && mine.every((c) => c.paid);
-      const st = done ? (paid ? 'paid' : 'wait') : r === cur ? 'now' : 'lock';
+      const mine = all.slice(r * 3, r * 3 + 3), done = mine.length === 3 && mine.every((c) => c.done);
+      const st = done ? (mine.some((c) => !c.paid) ? 'wait' : mine.some((c) => c.ready) ? 'ready' : 'paid') : r === cur ? 'now' : 'lock';
       return `<div class="rd ${st}"><span>${st === 'lock' ? ICON.lock : done ? ICON.check : ''}Round ${r + 1}</span><b>${fmtBet(roundSol(mv, win, r))} SOL</b></div>`;
     }).join('')}</div>`;
   }
@@ -4333,7 +4470,7 @@
     const owed = mv.due[win] != null && got < mv.due[win] - 1e-9;
     const need = owed ? mv.due[win] : mv.need[win], met = got >= need - 1e-9;
     const shown = Math.min(need, Math.floor(got * 100 + 1e-6) / 100);
-    const text = met ? 'SOL rewards unlocked ' + when : owed ? `Bet ${fmtBet(need)} SOL ${when} to collect ${fmtBet(mv.waiting[win])} SOL` : `Bet ${fmtBet(need)} SOL ${when} to unlock SOL rewards`;
+    const text = met ? (mv.ready[win] > 0 ? fmtBet(mv.ready[win]) + ' SOL ready to claim' : 'SOL rewards unlocked ' + when) : owed ? `Bet ${fmtBet(need)} SOL ${when} to collect ${fmtBet(mv.waiting[win])} SOL` : `Bet ${fmtBet(need)} SOL ${when} to unlock SOL rewards`;
     return `<div class="mneed${met ? ' met' : ''}"><div class="mn-h"><span>${text}</span><b>${fmtBet(shown)} / ${fmtBet(need)} SOL</b></div>
       <div class="bar"><i style="width:${(Math.min(1, got / need) * 100).toFixed(1)}%"></i></div></div>`;
   }
@@ -4352,12 +4489,12 @@
   function dayHtml() {
     const mv = mview(), d = mv.daily;
     return `<div class="cc ms-cc"><div class="cc-h"><span class="cc-k">${ICON.target}Daily missions</span><span class="cc-t">New in ${untilMidnight()}</span></div>
-      ${roundsRow(mv, 'day')}${needRow(mv, 'day')}${d.map((c, i) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i)).join('')}${roundFoot(mv, 'day')}</div>`;
+      ${roundsRow(mv, 'day')}${needRow(mv, 'day')}${d.map((c) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c, 'day')).join('')}${roundFoot(mv, 'day')}</div>`;
   }
   function weekHtml() {
     const mv = mview(), w = mv.weekly;
     return `<div class="cc ms-cc ms-wk"><div class="cc-h"><span class="cc-k">${ICON.spark}Weekly missions</span><span class="cc-t">New in ${untilMonday()}</span></div>
-      ${roundsRow(mv, 'week')}${needRow(mv, 'week')}${w.map((c, i) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i + 1)).join('')}${roundFoot(mv, 'week')}</div>`;
+      ${roundsRow(mv, 'week')}${needRow(mv, 'week')}${w.map((c) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c, 'week')).join('')}${roundFoot(mv, 'week')}</div>`;
   }
   // how far along each is, for its segment: missions done in the open round, chapters finished
   function segCount(k) {
@@ -4369,8 +4506,12 @@
   function renderMissions(keep) {
     const body = $('mBody'), y = body.scrollTop;
     if (!SEGS.some((x) => x[0] === nav.seg)) nav.seg = 'day';
+    body.classList.toggle('quiet', !!keep); // a redraw (after a claim, the clock) doesn't pop the Claim keys in again
+    const mv = mview(), has = { day: mv.ready.day > 0, week: mv.ready.week > 0, career: false };
+    // SOL left from a day or week that has ended isn't on any row: a ticket claims it, with whatever else is ready
+    const earlier = mv.earlier > 0 ? `<button class="gain claim ms-earlier" id="msEarlier" aria-label="Claim ${fmtBet(mv.readyAll)} SOL of mission rewards">${ICON.gift}<span>Unclaimed mission SOL</span><em>Claim ${fmtBet(mv.readyAll)} SOL</em></button>` : '';
     body.innerHTML = `<div class="vcol"><h2 class="vtitle">Missions</h2>
-      <div class="seg ms-seg" role="group" aria-label="Which missions">${SEGS.map(([k, name]) => `<button data-seg="${k}" aria-pressed="${k === nav.seg}">${name}<i>${segCount(k)}</i></button>`).join('')}</div>
+      <div class="seg ms-seg" role="group" aria-label="Which missions">${SEGS.map(([k, name]) => `<button data-seg="${k}" aria-pressed="${k === nav.seg}">${name}<i>${segCount(k)}</i>${has[k] ? '<s class="sd" aria-label="SOL to claim"></s>' : ''}</button>`).join('')}</div>${earlier}
       <div class="ms-panels" data-seg="${nav.seg}"><section class="msp" data-seg="day" aria-label="Today">${dayHtml()}</section><section class="msp" data-seg="week" aria-label="This week">${weekHtml()}</section><section class="msp" data-seg="career" aria-label="Career">${careerHtml()}</section></div></div>`;
     body.querySelectorAll('canvas[data-t]').forEach((c) => drawThumb(c, c.dataset.t, c.dataset.id));
     body.querySelectorAll('.ms-seg button').forEach((b) => b.addEventListener('click', () => {
@@ -4381,6 +4522,8 @@
       const on = pn.querySelector('.msp[data-seg="' + nav.seg + '"]');
       if (on && !REDUCED && !desk) hudAnim(on, 'seg', [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: EASE_OUT });
     }));
+    body.querySelectorAll('[data-mclaim]').forEach((b) => b.addEventListener('click', () => { const [w, i] = b.dataset.mclaim.split(':'); claimMission(w, +i, b); }));
+    if ($('msEarlier')) $('msEarlier').addEventListener('click', () => claimMission(null, null, $('msEarlier')));
     if (keep) { body.scrollTop = y; riseIn(vM, false); }
   }
   function careerHtml() {
@@ -4393,7 +4536,7 @@
           <div><div class="chap-k">${n} of 4 done</div><div class="chap-n">${C.name}</div>
           <div class="chap-r">Finish all four to unlock <b>${COS[r.t][r.id].name} ${TNAME[r.t].toLowerCase()}</b>${C.title ? ' and the <b>' + TITLE_BY[C.title].name + '</b> title' : ''}.</div></div></div>
         <div class="chap-bar"><i style="width:${(n / 4 * 100).toFixed(0)}%"></i></div>
-        ${C.m.map((m, i) => mRow(careerText(m), cs.p[i], m[1], m[2], cs.done[i], 0, false, i + 2)).join('')}
+        ${C.m.map((m, i) => mRow(careerText(m), cs.p[i], m[1], m[2], cs.done[i], 0)).join('')}
       </div>`;
     } else career = `<div class="empty">You've finished every chapter. All the career rewards are in your locker.</div>`;
     const chapters = CAREER.map((K, i) => {
@@ -4488,7 +4631,7 @@
       <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.shield, 'Odds &amp; fairness')}</div></div></div></div>`;
     $('pfCard').addEventListener('click', () => openPanel('card'));
     $('pfLocker').addEventListener('click', () => setTab('locker'));
-    if ($('rbBtn')) $('rbBtn').addEventListener('click', () => claimRakeback(null));
+    if ($('rbBtn')) $('rbBtn').addEventListener('click', () => claimRakeback($('rbBtn')));
   }
   // what has built up toward the next level, or what a level up has released to claim
   function rakeHtml(v) {

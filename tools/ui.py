@@ -253,8 +253,10 @@ async def main():
         await pg3.click('#pgBody [data-claim="swish1"]'); await pg3.wait_for_timeout(400)
         b1 = await pg3.evaluate('__solDunk.bal()'); v = await tv3()
         check(abs(b1 - b0 - 0.001) < 1e-9 and v['can'] == ['cp1'] and abs(v['claimed'] - 0.001) < 1e-9, f'Claim pays the trophy\'s SOL once ({b0} -> {b1})')
-        check(await pg3.evaluate("!document.querySelector('#pgBody [data-claim=\"swish1\"]')") and 'Claimed 0.001 SOL' in await pg3.evaluate("document.getElementById('toast').textContent"), 'its key turns into what was claimed')
-        await pg3.click('#pgBody [data-claim="cp1"]'); await pg3.wait_for_timeout(400)
+        check(await pg3.evaluate("(() => { const k = document.querySelector('#pgBody [data-claim=\"swish1\"]'); return !!k && k.classList.contains('got') && k.textContent === '+0.001'; })()"), 'its key turns into what it paid')
+        await pg3.wait_for_timeout(800)
+        check(await pg3.evaluate("!document.querySelector('#pgBody [data-claim=\"swish1\"]')"), 'then the trophy shows it as claimed')
+        await pg3.click('#pgBody [data-claim="cp1"]'); await pg3.wait_for_timeout(1200) # the key shows what it paid, then the page redraws
         v = await tv3()
         check(v['open'] == 0 and v['wait'] == ['nova5'] and abs(await pg3.evaluate('__solDunk.bal()') - b0 - 0.002) < 1e-9 and await pg3.evaluate("document.querySelectorAll('#pgBody [data-claim]').length") == 0, 'the next trophy waits until more has been bet')
         await pg3.reload(); await pg3.wait_for_timeout(1200)

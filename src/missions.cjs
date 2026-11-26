@@ -5,9 +5,11 @@
  * weeks start on Monday 00:00 UTC, so the server can judge them. Every run counts toward them, whatever the bet: they
  * are about how you play (swishes, streaks, clears, points). Each pays XP when done, and SOL too.
  *
- * SOL. A round's SOL rewards pay once the player has played that round's need in the window (bets on runs plus special
- * level entries): NEED for round 1, then NEED × STEPS for the later rounds. A reward pays at once if that's already
- * true when its mission is done, or the moment it becomes true. Rewards not collected when the window ends are gone.
+ * SOL. A round's SOL rewards are released once the player has played that round's need in the window (bets on runs
+ * plus special level entries): NEED for round 1, then NEED × STEPS for the later rounds. A reward is released at once if
+ * that's already true when its mission is done, or the moment it becomes true. A released reward is the player's to
+ * claim (claim): it waits in `ready` until they tap Claim, and stays there after its window ends. A reward still
+ * waiting for play when its window ends is gone.
  *
  * The house's edge. A round's rewards add up to the window's share (SHARE: 0.3% a day, 0.2% a week) of the play its
  * need adds on top of the round before, so however far a player gets, what a window has paid is never more than that
@@ -127,10 +129,15 @@
     return { swish, points: score, score, clears, best, level: levels.length, mov, perfect, fires, novas, greens, runs: levels.length ? 1 : 0 };
   }
 
-  // ---- a player's mission state: { day, week, dp, wp (played this day / week), d, w, wd, wdd }
+  // ---- a player's mission state: { day, week, dp, wp (played this day / week), d, w, wd, wdd, ready }
   // d and w hold { p, done, paid } for every mission of the rounds opened so far, three a round, in order; wd counts
-  // this week's days with a daily round finished and wdd is the last day counted.
+  // this week's days with a daily round finished and wdd is the last day counted. paid: the reward was released. A
+  // released reward has c: false and its amount in r until it's claimed (c: true); one released before claims existed
+  // has no c, and was credited then, so it counts as claimed. ready: everything released and not yet claimed, this
+  // window's or an earlier one's (it doesn't roll over with the windows, so the server can count it as owed).
   const blank = () => [0, 1, 2].map(() => ({ p: 0, done: false, paid: false }));
+  const isReady = (m) => !!(m && m.paid && m.c === false);
+  const isClaimed = (m) => !!(m && m.paid && m.c !== false);
   const okList = (a) => Array.isArray(a) && a.length >= 3 && a.length % 3 === 0 && a.length <= 3 * ROUNDS;
   function roll(s, ts) {
     s = s && typeof s === 'object' ? s : {};
@@ -138,10 +145,12 @@
     if (s.day !== day || !okList(s.d)) { s.day = day; s.dp = 0; s.d = blank(); }
     if (s.week !== wk || !okList(s.w)) { s.week = wk; s.wp = 0; s.w = blank(); s.wd = 0; s.wdd = ''; }
     s.wd = s.wd | 0;
+    s.ready = s.ready > 0 ? +s.ready : 0;
     return s;
   }
   const roundsOf = (s, win) => (win === 'day' ? dailyRounds(s.day) : weeklyRounds(s.week));
-  // pay what's due: every mission done and not paid whose round's need has been played in its window
+  // release what's due: every mission done and not released whose round's need has been played in its window. It
+  // becomes ready to claim.
   function collect(s, need) {
     const out = [];
     for (const [win, list, played] of [['day', s.d, s.dp], ['week', s.w, s.wp]]) {
@@ -149,8 +158,9 @@
       list.forEach((m, i) => {
         const round = Math.floor(i / 3), slot = i % 3;
         if (!m.done || m.paid || !(played >= needAt(win, round, need[win]) - 1e-9)) return;
-        m.paid = true;
-        out.push({ win, slot, round, k: defs[round][slot].k, n: defs[round][slot].n, amount: reward(win, slot, need[win], round) });
+        const amount = reward(win, slot, need[win], round);
+        m.paid = true; m.c = false; m.r = amount; s.ready = (s.ready || 0) + amount;
+        out.push({ win, i, slot, round, k: defs[round][slot].k, n: defs[round][slot].n, amount });
       });
     }
     return out;
@@ -160,7 +170,7 @@
   function play(s, amount, ts, need) {
     s = roll(s, ts);
     s.dp += amount; s.wp += amount;
-    return { s, paid: collect(s, needOf(need)) };
+    return { s, ready: collect(s, needOf(need)) };
   }
   // move a window's open round on with some facts; finishing all three opens the next round (it starts at the next run)
   function advance(s, win, f, done, opened) {
@@ -178,7 +188,8 @@
     if (all && round < ROUNDS - 1) { list.push(...blank()); opened.push({ win, round: round + 1 }); return true; }
     return false;
   }
-  // a run ended: its verified levels move the missions on. Returns what it finished, the rounds it opened and what it paid.
+  // a run ended: its verified levels move the missions on. Returns what it finished, the rounds it opened and what it
+  // released to claim.
   function run(s, levels, ts, need) {
     s = roll(s, ts);
     const f = facts(levels), done = [], opened = [];
@@ -187,33 +198,60 @@
     if (s.d.length > 3 || s.d.every((m) => m.done)) { if (s.wdd !== s.day) { s.wd++; s.wdd = s.day; } }
     // a weekly round opened by this run only takes the days so far, not this run's rings
     if (advance(s, 'week', Object.assign({}, f, { days: s.wd }), done, opened)) advance(s, 'week', { days: s.wd }, done, opened);
-    return { s, facts: f, done, opened, paid: collect(s, needOf(need)) };
+    return { s, facts: f, done, opened, ready: collect(s, needOf(need)) };
   }
-  // Everything the missions pages show, from every opened mission of each window ({ ...def, p, done, paid, reward,
-  // need }), what was played and the base needs. daily / weekly: the open round's three; round: its number from 0;
-  // need: what the open round's SOL waits for; paid / waiting: SOL collected, and earned but waiting for play; due:
-  // the play that releases the first waiting reward; next: the round after this one; max: all a window can pay.
+  // Claim released SOL: one mission (win 'day' or 'week' and its index in that window's list) or, with no win,
+  // everything ready, earlier windows' too. Returns { s, amount, items } or { s, error: 'unknown' | 'claimed' |
+  // 'locked' }. The caller credits the amount. s should be rolled to now first (view does).
+  function claim(s, win, i) {
+    s = s && typeof s === 'object' ? s : {};
+    const snap = () => { if (!(s.ready > 1e-6)) s.ready = 0; };
+    if (win == null) {
+      const amount = s.ready > 0 ? s.ready : 0, items = [];
+      for (const [w, list] of [['day', s.d], ['week', s.w]]) (list || []).forEach((m, j) => { if (isReady(m)) { m.c = true; items.push({ win: w, i: j, amount: m.r }); } });
+      s.ready = 0;
+      return { s, amount, items };
+    }
+    const list = win === 'day' ? s.d : win === 'week' ? s.w : null, m = list && list[i | 0];
+    if (!m || !(i >= 0)) return { s, error: 'unknown' };
+    if (isClaimed(m)) return { s, error: 'claimed' };
+    if (!isReady(m)) return { s, error: 'locked' };
+    const amount = Math.min(m.r, s.ready > 0 ? s.ready : 0);
+    m.c = true; s.ready -= amount; snap();
+    return { s, amount, items: [{ win, i: i | 0, amount }] };
+  }
+  // Everything the missions pages show, from every opened mission of each window ({ ...def, p, done, paid, ready,
+  // claimed, reward, need }), what was played and the base needs. daily / weekly: the open round's three; round: its
+  // number from 0; need: what the open round's SOL waits for; paid: SOL released (ready or claimed); ready / claimed:
+  // released and waiting for a tap, or claimed; waiting: earned but waiting for play; due: the play that releases the
+  // first waiting reward; next: the round after this one; max: all a window can pay. readyAll: everything ready to
+  // claim, earlier windows' too; earlier: the part of it from windows that have ended.
   function shape(v) {
-    const out = Object.assign({}, v, { rounds: ROUNDS, round: {}, need: {}, paid: {}, waiting: {}, due: {}, next: {}, max: {} });
+    const out = Object.assign({}, v, { rounds: ROUNDS, round: {}, need: {}, paid: {}, ready: {}, claimed: {}, waiting: {}, due: {}, next: {}, max: {} });
     for (const win of ['day', 'week']) {
       const all = v.all[win], r = all.length / 3 - 1, base = v.base[win];
       const wait = all.filter((m) => m.done && !m.paid);
       out.round[win] = r;
       out.need[win] = needAt(win, r, base);
       out.paid[win] = all.reduce((a, m) => a + (m.paid ? m.reward : 0), 0);
+      out.ready[win] = all.reduce((a, m) => a + (m.ready ? m.reward : 0), 0);
+      out.claimed[win] = all.reduce((a, m) => a + (m.claimed ? m.reward : 0), 0);
       out.waiting[win] = wait.reduce((a, m) => a + m.reward, 0);
       out.due[win] = wait.length ? Math.min(...wait.map((m) => m.need)) : null;
       out.next[win] = r < ROUNDS - 1 ? { round: r + 1, need: needAt(win, r + 1, base), reward: base * SHARES[win] * (STEPS[r + 1] - STEPS[r]) } : null;
       out.max[win] = base * SHARES[win] * STEPS[ROUNDS - 1];
     }
     out.daily = v.all.day.slice(-3); out.weekly = v.all.week.slice(-3);
+    const here = out.ready.day + out.ready.week;
+    out.readyAll = v.readyAll != null ? Math.max(v.readyAll, here) : here;
+    out.earlier = out.readyAll - here > here * 1e-9 + 1e-9 ? out.readyAll - here : 0;
     return out;
   }
   function view(s, ts, need) {
     s = roll(s, ts); need = needOf(need);
-    const one = (win, list) => { const defs = roundsOf(s, win); return list.map((m, i) => { const round = Math.floor(i / 3), slot = i % 3; return Object.assign({}, defs[round][slot], m, { reward: reward(win, slot, need[win], round), need: needAt(win, round, need[win]) }); }); };
-    return shape({ day: s.day, week: s.week, dayEnds: dayEnd(ts), weekEnds: weekEnd(ts), base: need, played: { day: s.dp, week: s.wp }, days: s.wd, all: { day: one('day', s.d), week: one('week', s.w) } });
+    const one = (win, list) => { const defs = roundsOf(s, win); return list.map((m, i) => { const round = Math.floor(i / 3), slot = i % 3; return Object.assign({}, defs[round][slot], { p: m.p, done: m.done, paid: !!m.paid, ready: isReady(m), claimed: isClaimed(m), i, reward: isReady(m) ? m.r : reward(win, slot, need[win], round), need: needAt(win, round, need[win]) }); }); };
+    return shape({ day: s.day, week: s.week, dayEnds: dayEnd(ts), weekEnds: weekEnd(ts), base: need, played: { day: s.dp, week: s.wp }, days: s.wd, readyAll: s.ready, all: { day: one('day', s.d), week: one('week', s.w) } });
   }
 
-  return { DAY_MS, WEEK_MS, NEED, ROUNDS, STEPS, GROW, SHARE, SHARES, RATE, DAILY, WEEKLY, WEEK_DAYS, DAILY_BY, WEEKLY_BY, dayKey, dayEnd, weekKey, weekEnd, daily, weekly, dailyRounds, weeklyRounds, needAt, reward, facts, roll, collect, play, run, shape, view };
+  return { DAY_MS, WEEK_MS, NEED, ROUNDS, STEPS, GROW, SHARE, SHARES, RATE, DAILY, WEEKLY, WEEK_DAYS, DAILY_BY, WEEKLY_BY, dayKey, dayEnd, weekKey, weekEnd, daily, weekly, dailyRounds, weeklyRounds, needAt, reward, facts, roll, collect, play, run, claim, isReady, isClaimed, shape, view };
 });

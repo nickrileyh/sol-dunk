@@ -1336,3 +1336,31 @@ body.desk.kb.hud-play #keys { left: 14px; bottom: 12px; padding: 12px 14px 12px 
 .tro span, .tro .tx, .tro .tx.two b, .tro .tx.wait b { font-size: 12px; }
 .tro span { color: var(--label-2); }
 .bests span, .bests em, .lk-grid .item .nm, .rd span { font-size: 12px; }
+/* ---------- claiming SOL (the owner asked for a Claim key on mission rewards, for a bigger rush) ----------
+   A finished mission whose SOL is ready shows a green Claim key, like a trophy's; its row glows faintly green. Claiming
+   anything (a mission, a trophy, rakeback) pops the key, bursts confetti from it and sends coins into the balance,
+   which counts up with a "+0.002 SOL" rising under it (claimFx in src/game.js). */
+.m-claim { height: 32px; padding: 0 13px; border-radius: 16px; font-family: var(--font-round); font-size: 13px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #4df8b1, #14f195); color: var(--green-ink); box-shadow: 0 3px 0 var(--green-edge), 0 8px 18px rgba(20, 241, 149, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transition: transform 0.3s var(--spring), box-shadow 0.3s var(--spring); animation: claimIn 0.5s var(--spring) both, claimGlow 2.4s ease-in-out 0.6s infinite; }
+.m-claim:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--green-edge); transition-duration: 0.06s; }
+.m-claim.got, .tro-claim.got, .pc-claim.got, #rbBtn.got { display: inline-flex; align-items: center; gap: 4px; background: var(--green-soft); color: var(--green); box-shadow: inset 0 0 0 1px rgba(20, 241, 149, 0.35); animation: none; cursor: default; }
+.m-claim.got svg { width: 13px; height: 13px; }
+@keyframes claimIn { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes claimGlow { 0%, 100% { box-shadow: 0 3px 0 var(--green-edge), 0 8px 18px rgba(20, 241, 149, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4); }
+  50% { box-shadow: 0 3px 0 var(--green-edge), 0 8px 26px rgba(20, 241, 149, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.4); } }
+.mrow.ready { background: linear-gradient(90deg, rgba(20, 241, 149, 0.07), rgba(20, 241, 149, 0) 70%); }
+.mrow.ready .mt b { color: var(--label); }
+.mrow.ready .mt > span { color: var(--green); }
+.rd.ready { background: var(--green-soft); box-shadow: inset 0 0 0 1.5px rgba(20, 241, 149, 0.6); }
+.rd.ready span, .rd.ready b { color: var(--green); }
+.ms-seg button s { width: 7px; height: 7px; margin-left: -2px; border-radius: 4px; background: var(--green); box-shadow: 0 0 8px rgba(20, 241, 149, 0.7); text-decoration: none; }
+.ms-earlier { display: flex; width: 100%; margin-top: 12px; padding: 10px 14px; font-size: 13.5px; }
+.ms-earlier span { flex: 1; text-align: left; }
+.ms-earlier em { font-size: 13px; padding: 4px 10px; }
+.claim-gain { position: fixed; z-index: 13; left: 0; top: 0; transform: translate(-50%, 0); opacity: 0; pointer-events: none; white-space: nowrap;
+  font-family: var(--font-round); font-size: 14px; font-weight: 700; color: var(--green); text-shadow: 0 0 12px rgba(20, 241, 149, 0.55); font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .m-claim { animation: none; } }
+@media (hover: hover) and (pointer: fine) { .m-claim:hover { filter: brightness(1.08); } }
+.quiet .m-claim { animation: claimGlow 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .quiet .m-claim { animation: none; } }
