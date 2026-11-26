@@ -962,6 +962,88 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   border: 1px solid var(--hair);
 }
 .card .group, .card .tiles { border-color: rgba(255, 255, 255, 0.05); }
+
+/* ---------- desktop ----------
+   body.desk is set by game.js for a window at least 1024 x 600 (body.kb when there's a keyboard and mouse).
+   The same three places as the tab bar, in a sidebar; the arena's window beside the bet; Challenges and Profile
+   in two columns; pages in one reading column. A run keeps the phone's window onto the court, centred. */
+.side-brand, #keys, .kc { display: none; }
+.dk-col > .menu-list, .dk-col > .group + .menu-list, .dk-col > .pcard + .menu-list { margin-top: 22px; }
+.dk-col:first-child > .cc:first-child { margin-top: 16px; }
+body.desk {
+  --side: 232px; --tab-h: 0px;
+  --mpad: max(32px, calc((100vw - var(--side) - 1240px) / 2));   /* the main area's side padding: content is 1240 px at most */
+  --pgpad: max(32px, calc((100vw - var(--side) - 680px) / 2));    /* a page's reading column: 680 px */
+}
+body.desk * { scrollbar-width: thin; scrollbar-color: #2a2438 transparent; }
+/* the sidebar: the wordmark, then Play, Challenges and Profile; the picked one lights a segment at its edge */
+body.desk #tabbar {
+  left: 0; right: auto; top: 0; bottom: 0; width: var(--side); height: auto; padding: 22px 14px;
+  display: flex; flex-direction: column; justify-content: flex-start; gap: 4px;
+  background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.08);
+}
+body.desk .side-brand { display: block; margin: 0 10px 26px; height: 40px; font-family: var(--font-title); font-size: 25px; font-weight: 800; line-height: 40px; white-space: nowrap; color: var(--label); text-shadow: 0 2px 0 var(--accent); }
+body.desk #tabbar button { flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; height: 46px; padding: 0 14px; border-radius: 13px; font-size: 15px; font-weight: 600; letter-spacing: 0; color: var(--label-2); transition: color 0.15s, background 0.15s; }
+body.desk #tabbar button::before { top: 50%; left: 0; width: 3px; height: 20px; margin: -10px 0 0; border-radius: 0 2px 2px 0; transform: scaleY(0); }
+body.desk #tabbar button[aria-selected="true"]::before { transform: scaleY(1); }
+body.desk #tabbar button[aria-selected="true"] { background: var(--surface); color: var(--label); }
+body.desk #tabbar button[aria-selected="true"] svg { color: var(--accent-hi); }
+body.desk #tabbar svg { width: 22px; height: 22px; }
+body.desk #tabbar .badge { position: static; margin-left: auto; box-shadow: none; }
+body.desk.hud-play #tabbar { transform: translateX(-100%); }
+/* between runs the balance sits at the top right of the main area */
+body.desk.hud-lobby #hud { left: var(--side); right: 0; width: auto; transform: none; padding: 22px var(--mpad) 0; }
+/* Play and the Locker: the window on the left, what you set on the right */
+body.desk .home {
+  left: var(--side); right: 0; bottom: 0; width: auto; transform: none;
+  display: grid; grid-template-columns: minmax(0, 1fr) clamp(360px, 27vw, 440px); column-gap: 28px; row-gap: 14px;
+  padding: 22px var(--mpad) 28px;
+}
+body.desk .home.hide { transform: none; }
+body.desk .home .hero { grid-column: 1; grid-row: 1 / -1; margin: 0; min-height: 0; }
+body.desk #lobby { grid-template-rows: 40px minmax(0, 1fr); }
+body.desk #lobby .ltitle { display: none; }
+body.desk #lobby .controls { grid-column: 2; grid-row: 2; align-self: start; }
+body.desk #vLocker { grid-template-rows: 40px auto auto minmax(0, 1fr); padding-bottom: 28px; }
+body.desk #vLocker > :not(.hero) { grid-column: 2; }
+body.desk .navrow { justify-content: flex-start; gap: 6px; }
+body.desk .navrow .back { position: static; }
+body.desk .lk-grid { height: auto; }
+body.desk .lk-info { min-height: 62px; }
+/* Challenges and Profile: two columns under the title */
+body.desk .view { left: var(--side); }
+body.desk .view::before { height: 72px; }
+body.desk .vscroll { padding: 22px var(--mpad) 44px; }
+body.desk .vcol { max-width: none; }
+body.desk .dk-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 28px; align-items: start; }
+body.desk .dk-col > :first-child { margin-top: 16px; }
+/* pages: one reading column in the middle of the main area */
+body.desk .view.page .vscroll { padding: 66px var(--pgpad) 44px; }
+body.desk .pg-head { padding: 22px calc(var(--pgpad) - 8px) 0; }
+/* the one sheet (the player card) is a dialog */
+body.desk .panel { top: 50%; bottom: auto; max-height: min(760px, calc(100% - 64px)); padding-bottom: 0; border-radius: 22px; transform: translate(-50%, -50%); box-shadow: inset 0 0 0 1px var(--line), 0 24px 60px rgba(0, 0, 0, 0.6); }
+body.desk .panel.hide { transform: translate(-50%, -47%) scale(0.97); }
+body.desk .panel::before { display: none; }
+/* with a keyboard: what the keys do, at the foot of the sidebar (and of the screen in a run), and on the buttons */
+kbd { font-family: var(--font); }
+#keys kbd, .kc { min-width: 24px; height: 21px; padding: 0 6px; border-radius: 6px; place-items: center; font-size: 11px; font-weight: 650; line-height: 1; }
+body.desk.kb #keys { position: fixed; left: 26px; bottom: 24px; z-index: 12; display: grid; gap: 8px; pointer-events: none; font-size: 12.5px; color: var(--label-3); transition: opacity 0.3s; }
+#keys > div { display: flex; align-items: center; gap: 10px; }
+#keys kbd { display: inline-grid; min-width: 46px; background: var(--surface-2); color: var(--label-2); box-shadow: 0 2px 0 var(--key-edge); }
+body.hud-lobby #keys .k-run, body.hud-play #keys .k-lobby { display: none; }
+body.page-open #keys { opacity: 0; }
+body.desk.kb .btn { position: relative; }
+body.desk.kb .btn .kc { display: inline-grid; position: absolute; right: 12px; top: 50%; margin-top: -11px; background: rgba(0, 0, 0, 0.22); color: inherit; opacity: 0.85; }
+body.desk.kb .btn-plain .kc { background: rgba(255, 255, 255, 0.08); }
+body.desk.kb .actions .btn .kc { top: 8px; right: 8px; margin-top: 0; }   /* the checkpoint's two keys: in the corner, clear of the words */
+body.desk.hud-lobby #toast { left: calc(50% + var(--side) / 2); }
+@media (hover: hover) and (pointer: fine) { /* a mouse: what you can press answers the pointer */
+  .btn:hover, .pill.go:hover, .lk-info .li-a:hover, .round:hover { filter: brightness(1.1); }
+  .menu-list > button:hover, .ct:hover, .lk-grid .item:hover, .spr:hover, .pcard:hover { filter: brightness(1.25); }
+  body.desk #tabbar button:hover { color: var(--label); }
+  .tiers button:hover .tn, .lk-cats button:hover { color: var(--label); }
+  .foot-link:hover, .practice-link:hover, .back:hover, .tour-skip:hover, .panel .close:hover { opacity: 0.75; }
+}
 </style>
 </head>
 <body class="hud-lobby">
@@ -1015,7 +1097,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
       <button class="round" id="betUp" aria-label="Raise bet"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button>
     </div>
     <p class="win" id="winLine"></p>
-    <button class="btn btn-primary" id="playBtn">Play <span class="num" id="playAmt">0.1 SOL</span></button>
+    <button class="btn btn-primary" id="playBtn">Play <span class="num" id="playAmt">0.1 SOL</span><kbd class="kc">Space</kbd></button>
     <button class="practice-link" id="practiceBtn">Practice for free</button>
     <div class="err" id="lobbyErr" role="alert"></div>
   </div>
@@ -1037,6 +1119,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
 </section>
 
 <nav id="tabbar" role="tablist" aria-label="Sections">
+  <div class="side-brand" aria-hidden="true">SOL DUNK</div>
   <button role="tab" data-tab="play" id="tabPlay" aria-selected="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M3.6 12h16.8M12 3.4v17.2M6.1 5.9c2.4 1.6 3.4 3.8 3.4 6.1s-1 4.5-3.4 6.1M17.9 5.9c-2.4 1.6-3.4 3.8-3.4 6.1s1 4.5 3.4 6.1"/></svg><span>Play</span></button>
   <button role="tab" data-tab="challenges" id="tabChallenges" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.6 3.8h8.8v5.4a4.4 4.4 0 0 1-8.8 0z"/><path d="M7.6 5.6H4.8v1.2a3.3 3.3 0 0 0 3.1 3.3M16.4 5.6h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 13.6v3.6M8.4 20.2h7.2M9.8 20.2l.6-3h3.2l.6 3"/></svg><span>Challenges</span><i class="badge" id="badgeC"></i></button>
   <button role="tab" data-tab="profile" id="tabProfile" aria-selected="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20.4c.8-3.9 3.7-6.1 7.4-6.1s6.6 2.2 7.4 6.1"/></svg><span>Profile</span><i class="badge" id="badgeP"></i></button>
@@ -1049,7 +1132,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     <div class="row"><span class="k">Sound</span><button class="switch" role="switch" id="pSound" data-set="sound" aria-label="Sound"></button></div>
     <div class="row"><span class="k">Vibration</span><button class="switch" role="switch" id="pHaptics" data-set="haptics" aria-label="Vibration"></button></div>
   </div>
-  <button class="btn btn-primary" id="resumeBtn">Resume</button>
+  <button class="btn btn-primary" id="resumeBtn">Resume<kbd class="kc">Esc</kbd></button>
   <button class="btn btn-plain" data-page="how">How to play</button>
 </section>
 
@@ -1063,8 +1146,8 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     <div class="nx-s" id="cpStreak"></div>
   </div>
   <div class="actions">
-    <button class="btn btn-green" id="cashBtn">Cash out<small id="cashAmt">0 SOL</small></button>
-    <button class="btn btn-plain" id="goBtn">Keep going<small id="goSub">Level 2</small></button>
+    <button class="btn btn-green" id="cashBtn">Cash out<small id="cashAmt">0 SOL</small><kbd class="kc">C</kbd></button>
+    <button class="btn btn-plain" id="goBtn">Keep going<small id="goSub">Level 2</small><kbd class="kc">&#8629;</kbd></button>
   </div>
 </section>
 
@@ -1079,7 +1162,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   </div>
   <div class="gains" id="resGains"></div>
   <div class="stack">
-    <button class="btn btn-primary" id="againBtn"><span id="againT">Play again</span> <span class="num" id="againAmt"></span></button>
+    <button class="btn btn-primary" id="againBtn"><span id="againT">Play again</span> <span class="num" id="againAmt"></span><kbd class="kc">Space</kbd></button>
     <div class="pair">
       <button class="btn btn-plain" id="lobbyBtn">Change bet</button>
       <button class="btn btn-plain" id="shareBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3.5M7.5 8 12 3.5 16.5 8"/><path d="M5 12.5v6A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5v-6"/></svg>Share</button>
@@ -1102,6 +1185,14 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   <header><h2 id="panelTitle">How to play</h2><button class="close" id="panelClose">Done</button></header>
   <div class="body" id="panelBody"></div>
 </section>
+<!-- desktop, with a keyboard: what the keys do -->
+<div id="keys" aria-hidden="true">
+  <div><kbd>Space</kbd><span class="k-lobby">Play</span><span class="k-run">Flap</span></div>
+  <div class="k-run"><kbd>C</kbd><span>Cash out</span></div>
+  <div class="k-run"><kbd>Enter</kbd><span>Keep going</span></div>
+  <div><kbd>Esc</kbd><span class="k-lobby">Back</span><span class="k-run">Pause</span></div>
+  <div><kbd>M</kbd><span>Sound</span></div>
+</div>
 <div id="toast" class="glass" role="status"></div>
 <canvas id="fxLayer" aria-hidden="true"></canvas>
 
@@ -3090,13 +3181,20 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   let dprCap = 2;
   const perf = { avg: 1 / 60, slow: 0 };
   let bgEl = null;      // cached backdrop, rebuilt on resize
-  let sheetTopC = -1, heroT = 0, heroB = 0;   // the page's window onto the arena, in screen px (layout read only when it changes)
+  let sheetTopC = -1, heroT = 0, heroB = 0, heroL = 0, heroR = 0;   // the page's window onto the arena, in screen px (layout read only when it changes)
+  // Desktop: a window at least 1024 x 600 gets the desktop layout (a sidebar, the arena beside the controls, pages
+  // in two columns). The run itself keeps the same window onto the court as a phone, so nobody sees further ahead.
+  let desk = false;
+  // a keyboard and mouse: prompts say "Press Space" and buttons show their keys
+  const KB = !!(window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches);
+  document.body.classList.toggle('kb', KB);
   const HUD_DIRTY = { on: true }; // the in-play HUD changed shape: measure it again at the start of the next frame
   function resize() {
     HUD_DIRTY.on = true;
     dpr = Math.min(window.devicePixelRatio || 1, dprCap);
     bgEl = null; sheetTopC = -1;
     vw = window.innerWidth; vh = window.innerHeight;
+    desk = vw >= 1024 && vh >= 600; document.body.classList.toggle('desk', desk);
     cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
     cv.style.width = vw + 'px'; cv.style.height = vh + 'px';
     scale = Math.min(vw / VIEW_W, vh / VIEW_H);
@@ -3902,12 +4000,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (fresh) riseAt = { el: view, t0: now };
     else if (riseAt.el !== view || now - riseAt.t0 > 760) return;
     const off = now - riseAt.t0;
-    view.querySelectorAll('.vcol > :not(.vtitle)').forEach((c, i) => c.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }],
+    view.querySelectorAll('.vcol > :not(.vtitle):not(.dk-cols), .dk-col > *').forEach((c, i) => c.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }],
       { duration: 550, delay: Math.min(i, 4) * 40 - off, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
   }
   function renderChallenges(keep) {
     const body = $('cBody'), y = body.scrollTop;
-    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2>${specialCard()}${potCard()}${missionsHtml()}</div>`;
+    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2><div class="dk-cols"><div class="dk-col">${specialCard()}${potCard()}</div><div class="dk-col">${missionsHtml()}</div></div></div>`;
     if (keep) body.scrollTop = y;
     wireChallenges(); potCount(!keep); if (keep) riseIn($('vChallenges'), false);
     if (specState && prefs.specSeen !== specState.day) { prefs.specSeen = specState.day; saveAll(); syncBadges(); }
@@ -4006,7 +4104,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (run.mode === 'run') profile.lv[run.di][run.level - 1][0]++;
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
     if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
-    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL'
+    showPrompt(KB ? (run.level === 1 ? 'Press Space to fly' : 'Press Space to go') : run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL'
       : run.level === 1 ? (practicing() ? 'Free practice: nothing is at stake' : newPlayer() ? 'Drop down through each ring' : potLine()) : '');
   }
 
@@ -4602,6 +4700,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     if (sheet.classList.contains('hide')) return;
     const h = lk ? $('lkHero') : $('hero');
     heroT = sheet.offsetTop + h.offsetTop; heroB = heroT + h.offsetHeight; sheetTopC = heroT;
+    heroL = sheet.offsetLeft + h.offsetLeft; heroR = heroL + h.offsetWidth;
   }
   function readLayout() {
     if (phase === 'lobby') { view.hudBot = 0; STK.rect = null; if (sheetTopC < 0) measureHero(); return; }
@@ -4781,7 +4880,10 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     // level-1 spot on screen whatever the zoom, so all of the extra view lies ahead of it, on every
     // screen size alike (wide screens fade their sides to the same window).
     const ballSX = offX + BALL_SX * scale, ox0 = (vw - VIEW_W * S) / 2;
-    const target = phase === 'lobby' ? dxw - BALL_SX / view.zoom : dxw - (ballSX - ox0) / S;
+    // between runs on a desktop the window sits beside the controls: the demo ball flies 30% into it
+    const deskLobby = desk && phase === 'lobby' && centreY != null;
+    view.bgX = lerp(view.bgX || 0, deskLobby ? (heroL + heroR - vw) / 2 : 0, 1 - Math.exp(-dt * 7)); // the spotlight stands over the window
+    const target = deskLobby ? dxw - (heroL + (heroR - heroL) * 0.3 - ox0) / S : phase === 'lobby' ? dxw - BALL_SX / view.zoom : dxw - (ballSX - ox0) / S;
     if (view.camT != null && dt > 0 && Math.abs(target - view.camT) < 60) {
       view.camV = lerp(view.camV, (target - view.camT) / dt, 1 - Math.exp(-dt * 4));
     } else if (view.camT == null) view.camX = target;
@@ -4802,7 +4904,9 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.globalCompositeOperation = 'source-over';
     // backdrop (cached): the night arena, the same on every level
-    c.drawImage(backdrop(), 0, 0, vw, vh);
+    const bgX = Math.abs(view.bgX || 0) < 0.5 ? 0 : view.bgX;
+    if (bgX) { c.fillStyle = EDGE; c.fillRect(0, 0, vw, vh); }
+    c.drawImage(backdrop(), bgX, 0, vw, vh);
 
     // the score, huge and quiet, behind everything (Flappy Dunk style); the pot sits in the HUD
     const bannerOn = performance.now() < bannerUntil;
@@ -4831,6 +4935,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     view.bsr = P.R * S;
     const worldLeft = view.camX - ox / S, worldW = vw / S;
     view.wl = view.camX + (offX - ox) / S; view.wr = view.camX + (offX + VIEW_W * scale - ox) / S; // the window everyone sees
+    if (desk && phase === 'lobby') { view.wl = view.camX + (heroL - ox) / S; view.wr = view.camX + (heroR - ox) / S; } // between runs, the page's window
     view.wt = view.hudBot ? view.camY + (view.hudBot - oy) / S : null;
     const st = view.st;
     const tNow = st ? (view.interp ? (st.tick - 1 + alpha) * DT : st.tick * DT) : 0; // moving rings, between ticks too
@@ -4868,7 +4973,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     }
 
     // wide screens: fade the sides so everyone sees the same distance ahead
-    if (offX > 2 && (phase !== 'lobby' || view.zoom > 0.98)) {
+    if (offX > 2 && (phase !== 'lobby' || (view.zoom > 0.98 && !desk))) {
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       const l = c.createLinearGradient(offX - 40, 0, offX + 6, 0);
       l.addColorStop(0, EDGE); l.addColorStop(1, EDGE0);
@@ -5621,7 +5726,8 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   window.addEventListener('keydown', (e) => {
     const tag = document.activeElement && document.activeElement.tagName;
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
-      if (tag === 'INPUT' || (tag === 'BUTTON' && phase !== 'play' && phase !== 'ready' && phase !== 'paused')) return;
+      const onPlayTab = document.activeElement && document.activeElement.id === 'tabPlay' && nav.tab === 'play'; // Space on the open Play tab plays, like the button says
+      if (tag === 'INPUT' || (tag === 'BUTTON' && !onPlayTab && phase !== 'play' && phase !== 'ready' && phase !== 'paused')) return;
       if (nav.page) return; // a page is open: Space scrolls it, and nothing starts or resumes behind it
       if (tourOpen()) { e.preventDefault(); return; } // the tour is up: nothing starts behind it
       const panelOpen = !ui.panel.classList.contains('hide');
@@ -5634,6 +5740,10 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     } else if (phase === 'checkpoint' && tag !== 'BUTTON' && armed(ui.cp) && (e.code === 'KeyC' || e.code === 'Enter')) {
       e.preventDefault();
       if (e.code === 'KeyC') cashOut(); else keepGoing();
+    } else if (e.code === 'KeyM' && tag !== 'INPUT' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      toggleSetting('sound');
+    } else if (e.code === 'KeyP' && tag !== 'INPUT' && !e.metaKey && !e.ctrlKey && !e.altKey && (phase === 'play' || phase === 'paused') && !nav.page) {
+      if (phase === 'play') pause(); else resume();
     } else if (e.code === 'Escape') {
       if (tourOpen()) closeTour();
       else if (!ui.panel.classList.contains('hide')) closePanel();
@@ -5727,12 +5837,12 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const row = (icon, tone, title, text) => `<div class="hrow"><span class="hic ${tone}"><svg viewBox="0 0 24 24" aria-hidden="true">${HOW_ICON[icon]}</svg></span><div><h3>${title}</h3><p>${text}</p></div></div>`;
     // one short idea a row; the details live on the pages they belong to
     return (phase === 'lobby' ? `<button class="btn btn-plain how-tour" id="howTour">Take the quick tour</button>` : '') + `<div class="how">` +
-      row('tap', 'blue', 'Tap to flap', `Each tap flaps the ball up. Let it drop down through every ring. Miss a ring or hit the floor and the run is over.`) +
+      row('tap', 'blue', KB ? 'Press Space to flap' : 'Tap to flap', `Each ${KB ? 'press (or click)' : 'tap'} flaps the ball up. Let it drop down through every ring. Miss a ring or hit the floor and the run is over.`) +
       row('rim', 'red', 'Rims', `Touching the rim is fine: if the ball comes down over the opening, it drops in.`) +
       row('swish', 'green', 'Swish', `Go through without touching the rim. A swish pays more than a rim hit, and each swish in a row pays more, up to 5 in a row.`) +
       row('fire', 'heat', 'Fire', `Swish 3 in a row and the ball catches fire. At 5 it burns green. A rim hit puts it out.`) +
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the green ring ends the level. Cash out, or keep going for more.`) +
-      row('practice', 'blue', 'Practice', `Tap <b>Practice for free</b> under Play for a run with nothing at stake.`) +
+      row('practice', 'blue', 'Practice', `${KB ? 'Click' : 'Tap'} <b>Practice for free</b> under Play for a run with nothing at stake.`) +
       row('star', 'gold', 'Score and XP', `Rings score points, more for swishes and streaks. Points, missions and trophies earn XP, which unlocks balls, wings and trails. Neither changes what a run pays.`) +
       row('mission', 'purple', 'Missions', `New ones every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week.`) +
       row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
@@ -5742,7 +5852,8 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   // Three steps for a first-time player (and from How to play): how to fly, why swishes matter, and the checkpoint
   // where you cash out. It ends with a free practice run.
   const TOUR = [
-    { ic: 'tap', t: 'Tap to fly', x: 'Each tap flaps the ball up. Let it fall down through every ring.' },
+    KB ? { ic: 'tap', t: 'Press Space to fly', x: 'Each press flaps the ball up. A click works too. Let it fall down through every ring.' }
+      : { ic: 'tap', t: 'Tap to fly', x: 'Each tap flaps the ball up. Let it fall down through every ring.' },
     { ic: 'swish', t: 'Swish to win more', x: 'Go through clean, without touching the rim. Swishes in a row win more each time.' },
     { ic: 'flag', t: 'Cash out at the green ring', x: 'Every ' + NH + ' rings, take your winnings or keep going for more. Miss a ring and you lose the bet.' }
   ];
@@ -6146,14 +6257,14 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
     const v = lvlOf(profile.xp), T = TITLE_BY[profile.card.title] || TITLES[0];
     const got = ACH.filter((a) => profile.ach[a.id]).length, fresh = profile.fresh.length > 0;
     const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi mi-${page}">${ic}</span><span class="mn">${name}</span><span class="mv num">${val || ''}</span><span class="chev">${ICON.chev}</span></button>`;
-    $('pBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Profile</h2>
+    $('pBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Profile</h2><div class="dk-cols"><div class="dk-col">
       <button class="pcard" id="pfCard" aria-label="Edit your player card" style="${avStyle(profile.card.color)}"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
         <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span>
           <span class="plv"><span>Level ${v.l}</span><span class="num">${v.into} / ${v.need} XP</span></span><span class="pxp"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></span></span>
         <span class="chev">${ICON.chev}</span></button>
       <div class="menu-list"><button id="pfLocker"><span class="mi mi-locker">${ICON.shirt}</span><span class="mn">Locker</span><span class="mv">${fresh ? '<i class="dot" aria-label="New items"></i>' : ''}</span><span class="chev">${ICON.chev}</span></button>${row('trophies', ICON.medal, 'Trophies', got + ' of ' + ACH.length)}${row('stats', ICON.chart, 'Stats', stats.runs === 1 ? '1 run' : stats.runs + ' runs')}</div>
-      <div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${row('settings', ICON.gear, 'Settings')}</div>
-      <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.shield, 'Odds &amp; fairness')}</div></div>`;
+      </div><div class="dk-col"><div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${row('settings', ICON.gear, 'Settings')}</div>
+      <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.shield, 'Odds &amp; fairness')}</div></div></div></div>`;
     $('pfCard').addEventListener('click', () => openPanel('card'));
     $('pfLocker').addEventListener('click', () => setTab('locker'));
   }

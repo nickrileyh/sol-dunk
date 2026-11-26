@@ -814,13 +814,20 @@
   let dprCap = 2;
   const perf = { avg: 1 / 60, slow: 0 };
   let bgEl = null;      // cached backdrop, rebuilt on resize
-  let sheetTopC = -1, heroT = 0, heroB = 0;   // the page's window onto the arena, in screen px (layout read only when it changes)
+  let sheetTopC = -1, heroT = 0, heroB = 0, heroL = 0, heroR = 0;   // the page's window onto the arena, in screen px (layout read only when it changes)
+  // Desktop: a window at least 1024 x 600 gets the desktop layout (a sidebar, the arena beside the controls, pages
+  // in two columns). The run itself keeps the same window onto the court as a phone, so nobody sees further ahead.
+  let desk = false;
+  // a keyboard and mouse: prompts say "Press Space" and buttons show their keys
+  const KB = !!(window.matchMedia && matchMedia('(hover: hover) and (pointer: fine)').matches);
+  document.body.classList.toggle('kb', KB);
   const HUD_DIRTY = { on: true }; // the in-play HUD changed shape: measure it again at the start of the next frame
   function resize() {
     HUD_DIRTY.on = true;
     dpr = Math.min(window.devicePixelRatio || 1, dprCap);
     bgEl = null; sheetTopC = -1;
     vw = window.innerWidth; vh = window.innerHeight;
+    desk = vw >= 1024 && vh >= 600; document.body.classList.toggle('desk', desk);
     cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
     cv.style.width = vw + 'px'; cv.style.height = vh + 'px';
     scale = Math.min(vw / VIEW_W, vh / VIEW_H);
@@ -1626,12 +1633,12 @@
     if (fresh) riseAt = { el: view, t0: now };
     else if (riseAt.el !== view || now - riseAt.t0 > 760) return;
     const off = now - riseAt.t0;
-    view.querySelectorAll('.vcol > :not(.vtitle)').forEach((c, i) => c.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }],
+    view.querySelectorAll('.vcol > :not(.vtitle):not(.dk-cols), .dk-col > *').forEach((c, i) => c.animate([{ opacity: 0, transform: 'translateY(16px)' }, { opacity: 1, transform: 'none' }],
       { duration: 550, delay: Math.min(i, 4) * 40 - off, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' }));
   }
   function renderChallenges(keep) {
     const body = $('cBody'), y = body.scrollTop;
-    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2>${specialCard()}${potCard()}${missionsHtml()}</div>`;
+    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2><div class="dk-cols"><div class="dk-col">${specialCard()}${potCard()}</div><div class="dk-col">${missionsHtml()}</div></div></div>`;
     if (keep) body.scrollTop = y;
     wireChallenges(); potCount(!keep); if (keep) riseIn($('vChallenges'), false);
     if (specState && prefs.specSeen !== specState.day) { prefs.specSeen = specState.day; saveAll(); syncBadges(); }
@@ -1730,7 +1737,7 @@
     if (run.mode === 'run') profile.lv[run.di][run.level - 1][0]++;
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
     if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
-    showPrompt(run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL'
+    showPrompt(KB ? (run.level === 1 ? 'Press Space to fly' : 'Press Space to go') : run.level === 1 ? 'Tap to fly' : 'Tap to go', sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL'
       : run.level === 1 ? (practicing() ? 'Free practice: nothing is at stake' : newPlayer() ? 'Drop down through each ring' : potLine()) : '');
   }
 
@@ -2326,6 +2333,7 @@
     if (sheet.classList.contains('hide')) return;
     const h = lk ? $('lkHero') : $('hero');
     heroT = sheet.offsetTop + h.offsetTop; heroB = heroT + h.offsetHeight; sheetTopC = heroT;
+    heroL = sheet.offsetLeft + h.offsetLeft; heroR = heroL + h.offsetWidth;
   }
   function readLayout() {
     if (phase === 'lobby') { view.hudBot = 0; STK.rect = null; if (sheetTopC < 0) measureHero(); return; }
@@ -2505,7 +2513,10 @@
     // level-1 spot on screen whatever the zoom, so all of the extra view lies ahead of it, on every
     // screen size alike (wide screens fade their sides to the same window).
     const ballSX = offX + BALL_SX * scale, ox0 = (vw - VIEW_W * S) / 2;
-    const target = phase === 'lobby' ? dxw - BALL_SX / view.zoom : dxw - (ballSX - ox0) / S;
+    // between runs on a desktop the window sits beside the controls: the demo ball flies 30% into it
+    const deskLobby = desk && phase === 'lobby' && centreY != null;
+    view.bgX = lerp(view.bgX || 0, deskLobby ? (heroL + heroR - vw) / 2 : 0, 1 - Math.exp(-dt * 7)); // the spotlight stands over the window
+    const target = deskLobby ? dxw - (heroL + (heroR - heroL) * 0.3 - ox0) / S : phase === 'lobby' ? dxw - BALL_SX / view.zoom : dxw - (ballSX - ox0) / S;
     if (view.camT != null && dt > 0 && Math.abs(target - view.camT) < 60) {
       view.camV = lerp(view.camV, (target - view.camT) / dt, 1 - Math.exp(-dt * 4));
     } else if (view.camT == null) view.camX = target;
@@ -2526,7 +2537,9 @@
     c.setTransform(dpr, 0, 0, dpr, 0, 0);
     c.globalCompositeOperation = 'source-over';
     // backdrop (cached): the night arena, the same on every level
-    c.drawImage(backdrop(), 0, 0, vw, vh);
+    const bgX = Math.abs(view.bgX || 0) < 0.5 ? 0 : view.bgX;
+    if (bgX) { c.fillStyle = EDGE; c.fillRect(0, 0, vw, vh); }
+    c.drawImage(backdrop(), bgX, 0, vw, vh);
 
     // the score, huge and quiet, behind everything (Flappy Dunk style); the pot sits in the HUD
     const bannerOn = performance.now() < bannerUntil;
@@ -2555,6 +2568,7 @@
     view.bsr = P.R * S;
     const worldLeft = view.camX - ox / S, worldW = vw / S;
     view.wl = view.camX + (offX - ox) / S; view.wr = view.camX + (offX + VIEW_W * scale - ox) / S; // the window everyone sees
+    if (desk && phase === 'lobby') { view.wl = view.camX + (heroL - ox) / S; view.wr = view.camX + (heroR - ox) / S; } // between runs, the page's window
     view.wt = view.hudBot ? view.camY + (view.hudBot - oy) / S : null;
     const st = view.st;
     const tNow = st ? (view.interp ? (st.tick - 1 + alpha) * DT : st.tick * DT) : 0; // moving rings, between ticks too
@@ -2592,7 +2606,7 @@
     }
 
     // wide screens: fade the sides so everyone sees the same distance ahead
-    if (offX > 2 && (phase !== 'lobby' || view.zoom > 0.98)) {
+    if (offX > 2 && (phase !== 'lobby' || (view.zoom > 0.98 && !desk))) {
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       const l = c.createLinearGradient(offX - 40, 0, offX + 6, 0);
       l.addColorStop(0, EDGE); l.addColorStop(1, EDGE0);
@@ -3345,7 +3359,8 @@
   window.addEventListener('keydown', (e) => {
     const tag = document.activeElement && document.activeElement.tagName;
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
-      if (tag === 'INPUT' || (tag === 'BUTTON' && phase !== 'play' && phase !== 'ready' && phase !== 'paused')) return;
+      const onPlayTab = document.activeElement && document.activeElement.id === 'tabPlay' && nav.tab === 'play'; // Space on the open Play tab plays, like the button says
+      if (tag === 'INPUT' || (tag === 'BUTTON' && !onPlayTab && phase !== 'play' && phase !== 'ready' && phase !== 'paused')) return;
       if (nav.page) return; // a page is open: Space scrolls it, and nothing starts or resumes behind it
       if (tourOpen()) { e.preventDefault(); return; } // the tour is up: nothing starts behind it
       const panelOpen = !ui.panel.classList.contains('hide');
@@ -3358,6 +3373,10 @@
     } else if (phase === 'checkpoint' && tag !== 'BUTTON' && armed(ui.cp) && (e.code === 'KeyC' || e.code === 'Enter')) {
       e.preventDefault();
       if (e.code === 'KeyC') cashOut(); else keepGoing();
+    } else if (e.code === 'KeyM' && tag !== 'INPUT' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      toggleSetting('sound');
+    } else if (e.code === 'KeyP' && tag !== 'INPUT' && !e.metaKey && !e.ctrlKey && !e.altKey && (phase === 'play' || phase === 'paused') && !nav.page) {
+      if (phase === 'play') pause(); else resume();
     } else if (e.code === 'Escape') {
       if (tourOpen()) closeTour();
       else if (!ui.panel.classList.contains('hide')) closePanel();
@@ -3451,12 +3470,12 @@
     const row = (icon, tone, title, text) => `<div class="hrow"><span class="hic ${tone}"><svg viewBox="0 0 24 24" aria-hidden="true">${HOW_ICON[icon]}</svg></span><div><h3>${title}</h3><p>${text}</p></div></div>`;
     // one short idea a row; the details live on the pages they belong to
     return (phase === 'lobby' ? `<button class="btn btn-plain how-tour" id="howTour">Take the quick tour</button>` : '') + `<div class="how">` +
-      row('tap', 'blue', 'Tap to flap', `Each tap flaps the ball up. Let it drop down through every ring. Miss a ring or hit the floor and the run is over.`) +
+      row('tap', 'blue', KB ? 'Press Space to flap' : 'Tap to flap', `Each ${KB ? 'press (or click)' : 'tap'} flaps the ball up. Let it drop down through every ring. Miss a ring or hit the floor and the run is over.`) +
       row('rim', 'red', 'Rims', `Touching the rim is fine: if the ball comes down over the opening, it drops in.`) +
       row('swish', 'green', 'Swish', `Go through without touching the rim. A swish pays more than a rim hit, and each swish in a row pays more, up to 5 in a row.`) +
       row('fire', 'heat', 'Fire', `Swish 3 in a row and the ball catches fire. At 5 it burns green. A rim hit puts it out.`) +
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the green ring ends the level. Cash out, or keep going for more.`) +
-      row('practice', 'blue', 'Practice', `Tap <b>Practice for free</b> under Play for a run with nothing at stake.`) +
+      row('practice', 'blue', 'Practice', `${KB ? 'Click' : 'Tap'} <b>Practice for free</b> under Play for a run with nothing at stake.`) +
       row('star', 'gold', 'Score and XP', `Rings score points, more for swishes and streaks. Points, missions and trophies earn XP, which unlocks balls, wings and trails. Neither changes what a run pays.`) +
       row('mission', 'purple', 'Missions', `New ones every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().need.day)} SOL that day or ${fmtBet(mview().need.week)} SOL that week.`) +
       row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
@@ -3466,7 +3485,8 @@
   // Three steps for a first-time player (and from How to play): how to fly, why swishes matter, and the checkpoint
   // where you cash out. It ends with a free practice run.
   const TOUR = [
-    { ic: 'tap', t: 'Tap to fly', x: 'Each tap flaps the ball up. Let it fall down through every ring.' },
+    KB ? { ic: 'tap', t: 'Press Space to fly', x: 'Each press flaps the ball up. A click works too. Let it fall down through every ring.' }
+      : { ic: 'tap', t: 'Tap to fly', x: 'Each tap flaps the ball up. Let it fall down through every ring.' },
     { ic: 'swish', t: 'Swish to win more', x: 'Go through clean, without touching the rim. Swishes in a row win more each time.' },
     { ic: 'flag', t: 'Cash out at the green ring', x: 'Every ' + NH + ' rings, take your winnings or keep going for more. Miss a ring and you lose the bet.' }
   ];
@@ -3870,14 +3890,14 @@
     const v = lvlOf(profile.xp), T = TITLE_BY[profile.card.title] || TITLES[0];
     const got = ACH.filter((a) => profile.ach[a.id]).length, fresh = profile.fresh.length > 0;
     const row = (page, ic, name, val) => `<button data-page="${page}"><span class="mi mi-${page}">${ic}</span><span class="mn">${name}</span><span class="mv num">${val || ''}</span><span class="chev">${ICON.chev}</span></button>`;
-    $('pBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Profile</h2>
+    $('pBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Profile</h2><div class="dk-cols"><div class="dk-col">
       <button class="pcard" id="pfCard" aria-label="Edit your player card" style="${avStyle(profile.card.color)}"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
         <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span>
           <span class="plv"><span>Level ${v.l}</span><span class="num">${v.into} / ${v.need} XP</span></span><span class="pxp"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></span></span>
         <span class="chev">${ICON.chev}</span></button>
       <div class="menu-list"><button id="pfLocker"><span class="mi mi-locker">${ICON.shirt}</span><span class="mn">Locker</span><span class="mv">${fresh ? '<i class="dot" aria-label="New items"></i>' : ''}</span><span class="chev">${ICON.chev}</span></button>${row('trophies', ICON.medal, 'Trophies', got + ' of ' + ACH.length)}${row('stats', ICON.chart, 'Stats', stats.runs === 1 ? '1 run' : stats.runs + ' runs')}</div>
-      <div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${row('settings', ICON.gear, 'Settings')}</div>
-      <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.shield, 'Odds &amp; fairness')}</div></div>`;
+      </div><div class="dk-col"><div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${row('settings', ICON.gear, 'Settings')}</div>
+      <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.shield, 'Odds &amp; fairness')}</div></div></div></div>`;
     $('pfCard').addEventListener('click', () => openPanel('card'));
     $('pfLocker').addEventListener('click', () => setTab('locker'));
   }

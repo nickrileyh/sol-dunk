@@ -953,3 +953,85 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   border: 1px solid var(--hair);
 }
 .card .group, .card .tiles { border-color: rgba(255, 255, 255, 0.05); }
+
+/* ---------- desktop ----------
+   body.desk is set by game.js for a window at least 1024 x 600 (body.kb when there's a keyboard and mouse).
+   The same three places as the tab bar, in a sidebar; the arena's window beside the bet; Challenges and Profile
+   in two columns; pages in one reading column. A run keeps the phone's window onto the court, centred. */
+.side-brand, #keys, .kc { display: none; }
+.dk-col > .menu-list, .dk-col > .group + .menu-list, .dk-col > .pcard + .menu-list { margin-top: 22px; }
+.dk-col:first-child > .cc:first-child { margin-top: 16px; }
+body.desk {
+  --side: 232px; --tab-h: 0px;
+  --mpad: max(32px, calc((100vw - var(--side) - 1240px) / 2));   /* the main area's side padding: content is 1240 px at most */
+  --pgpad: max(32px, calc((100vw - var(--side) - 680px) / 2));    /* a page's reading column: 680 px */
+}
+body.desk * { scrollbar-width: thin; scrollbar-color: #2a2438 transparent; }
+/* the sidebar: the wordmark, then Play, Challenges and Profile; the picked one lights a segment at its edge */
+body.desk #tabbar {
+  left: 0; right: auto; top: 0; bottom: 0; width: var(--side); height: auto; padding: 22px 14px;
+  display: flex; flex-direction: column; justify-content: flex-start; gap: 4px;
+  background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.08);
+}
+body.desk .side-brand { display: block; margin: 0 10px 26px; height: 40px; font-family: var(--font-title); font-size: 25px; font-weight: 800; line-height: 40px; white-space: nowrap; color: var(--label); text-shadow: 0 2px 0 var(--accent); }
+body.desk #tabbar button { flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: 12px; height: 46px; padding: 0 14px; border-radius: 13px; font-size: 15px; font-weight: 600; letter-spacing: 0; color: var(--label-2); transition: color 0.15s, background 0.15s; }
+body.desk #tabbar button::before { top: 50%; left: 0; width: 3px; height: 20px; margin: -10px 0 0; border-radius: 0 2px 2px 0; transform: scaleY(0); }
+body.desk #tabbar button[aria-selected="true"]::before { transform: scaleY(1); }
+body.desk #tabbar button[aria-selected="true"] { background: var(--surface); color: var(--label); }
+body.desk #tabbar button[aria-selected="true"] svg { color: var(--accent-hi); }
+body.desk #tabbar svg { width: 22px; height: 22px; }
+body.desk #tabbar .badge { position: static; margin-left: auto; box-shadow: none; }
+body.desk.hud-play #tabbar { transform: translateX(-100%); }
+/* between runs the balance sits at the top right of the main area */
+body.desk.hud-lobby #hud { left: var(--side); right: 0; width: auto; transform: none; padding: 22px var(--mpad) 0; }
+/* Play and the Locker: the window on the left, what you set on the right */
+body.desk .home {
+  left: var(--side); right: 0; bottom: 0; width: auto; transform: none;
+  display: grid; grid-template-columns: minmax(0, 1fr) clamp(360px, 27vw, 440px); column-gap: 28px; row-gap: 14px;
+  padding: 22px var(--mpad) 28px;
+}
+body.desk .home.hide { transform: none; }
+body.desk .home .hero { grid-column: 1; grid-row: 1 / -1; margin: 0; min-height: 0; }
+body.desk #lobby { grid-template-rows: 40px minmax(0, 1fr); }
+body.desk #lobby .ltitle { display: none; }
+body.desk #lobby .controls { grid-column: 2; grid-row: 2; align-self: start; }
+body.desk #vLocker { grid-template-rows: 40px auto auto minmax(0, 1fr); padding-bottom: 28px; }
+body.desk #vLocker > :not(.hero) { grid-column: 2; }
+body.desk .navrow { justify-content: flex-start; gap: 6px; }
+body.desk .navrow .back { position: static; }
+body.desk .lk-grid { height: auto; }
+body.desk .lk-info { min-height: 62px; }
+/* Challenges and Profile: two columns under the title */
+body.desk .view { left: var(--side); }
+body.desk .view::before { height: 72px; }
+body.desk .vscroll { padding: 22px var(--mpad) 44px; }
+body.desk .vcol { max-width: none; }
+body.desk .dk-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 28px; align-items: start; }
+body.desk .dk-col > :first-child { margin-top: 16px; }
+/* pages: one reading column in the middle of the main area */
+body.desk .view.page .vscroll { padding: 66px var(--pgpad) 44px; }
+body.desk .pg-head { padding: 22px calc(var(--pgpad) - 8px) 0; }
+/* the one sheet (the player card) is a dialog */
+body.desk .panel { top: 50%; bottom: auto; max-height: min(760px, calc(100% - 64px)); padding-bottom: 0; border-radius: 22px; transform: translate(-50%, -50%); box-shadow: inset 0 0 0 1px var(--line), 0 24px 60px rgba(0, 0, 0, 0.6); }
+body.desk .panel.hide { transform: translate(-50%, -47%) scale(0.97); }
+body.desk .panel::before { display: none; }
+/* with a keyboard: what the keys do, at the foot of the sidebar (and of the screen in a run), and on the buttons */
+kbd { font-family: var(--font); }
+#keys kbd, .kc { min-width: 24px; height: 21px; padding: 0 6px; border-radius: 6px; place-items: center; font-size: 11px; font-weight: 650; line-height: 1; }
+body.desk.kb #keys { position: fixed; left: 26px; bottom: 24px; z-index: 12; display: grid; gap: 8px; pointer-events: none; font-size: 12.5px; color: var(--label-3); transition: opacity 0.3s; }
+#keys > div { display: flex; align-items: center; gap: 10px; }
+#keys kbd { display: inline-grid; min-width: 46px; background: var(--surface-2); color: var(--label-2); box-shadow: 0 2px 0 var(--key-edge); }
+body.hud-lobby #keys .k-run, body.hud-play #keys .k-lobby { display: none; }
+body.page-open #keys { opacity: 0; }
+body.desk.kb .btn { position: relative; }
+body.desk.kb .btn .kc { display: inline-grid; position: absolute; right: 12px; top: 50%; margin-top: -11px; background: rgba(0, 0, 0, 0.22); color: inherit; opacity: 0.85; }
+body.desk.kb .btn-plain .kc { background: rgba(255, 255, 255, 0.08); }
+body.desk.kb .actions .btn .kc { top: 8px; right: 8px; margin-top: 0; }   /* the checkpoint's two keys: in the corner, clear of the words */
+body.desk.hud-lobby #toast { left: calc(50% + var(--side) / 2); }
+@media (hover: hover) and (pointer: fine) { /* a mouse: what you can press answers the pointer */
+  .btn:hover, .pill.go:hover, .lk-info .li-a:hover, .round:hover { filter: brightness(1.1); }
+  .menu-list > button:hover, .ct:hover, .lk-grid .item:hover, .spr:hover, .pcard:hover { filter: brightness(1.25); }
+  body.desk #tabbar button:hover { color: var(--label); }
+  .tiers button:hover .tn, .lk-cats button:hover { color: var(--label); }
+  .foot-link:hover, .practice-link:hover, .back:hover, .tour-skip:hover, .panel .close:hover { opacity: 0.75; }
+}
