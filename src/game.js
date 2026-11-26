@@ -1144,7 +1144,7 @@
   const attract = { st: null, bot: null, wait: 0, level: 1, streak: 0, acc: 0, tap: false };
   // navigation: which tab is open, the page pushed over it (if any), which page Challenges shows (ch), and what the
   // locker's live preview should show (fx: force a flame streak)
-  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null, sp: 0 }; // sp: the special whose page is open
+  const nav = { tab: 'play', page: null, cat: 'ball', fx: null, cover: false, try: null, sp: 0, seg: 'day' }; // sp: the special whose page is open
   // rings from the level just played that are already behind the ball (never the unplayed ones ahead)
   function keepBehind(st) {
     if (!st) return [];
@@ -1613,7 +1613,7 @@
       ${p.simulated ? `<div class="pot-demo"><p>Demo: the other entrants are simulated, from how often players at different skill levels make the challenge.</p><button class="btn btn-plain" id="potClose">Close this pot now</button></div>` : ''}`;
   }
 
-  // ---------------------------------------------------------------- Challenges tab: today's special, the daily pot and the missions
+  // ---------------------------------------------------------------- Challenges tab: today's specials and the daily pot (the missions have their own tab)
   // One short page: a card for each challenge with its name, prize and button (the details are on its page, a tap
   // away), then today's missions, with this week's and the career a tap away.
   let specState = null, specBusy = false;
@@ -1698,8 +1698,8 @@
     const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked, locked = !blocked && s.me && s.me.locked;
     const act = (c) => (blocked ? '<span class="pill off">Not available</span>' : locked ? '<span class="pill off">Locked</span>' : c.done ? '<span class="pill ok">Cleared</span>'
       : `<button class="pill go" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`);
-    const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><span class="spr-x">${c.x}×</span><span class="spr-t"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></span></button>
-      <div class="spr-act"><span class="spr-win">${c.done ? `All ${c.of} cleared today` : `Win <b class="num">${fmtAmt(c.prize)}</b> SOL${c.at ? ` · ${c.at + 1} of ${c.of}` : ''}`}</span>${act(c)}</div></div>`).join('');
+    const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL, ${c.done ? c.of : c.at} of ${c.of} cleared today. Details"><span class="spr-k"><span class="spr-x">${c.x}×</span><span class="spr-dots" aria-hidden="true">${Array.from({ length: c.of || 0 }, (x, i) => `<i${i < (c.done ? c.of : c.at) ? ' class="on"' : ''}></i>`).join('')}</span></span><span class="spr-t"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></span></button>
+      <div class="spr-act"><span class="spr-win">${c.done ? `All ${c.of} cleared today` : `Win <b class="num">${fmtAmt(c.prize)}</b> SOL`}</span>${act(c)}</div></div>`).join('');
     return `<div class="cc sp sp-cc"><div class="cc-h"><span class="cc-k">${ICON.star}Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftOf(left) : 'New soon'}</span></div>${locked ? unlockRow(s) : ''}${rows}</div>`;
   }
   // the specials open once the player has bet SP.UNLOCK entries in regular runs: how far along they are
@@ -1739,7 +1739,7 @@
   }
   function renderChallenges(keep) {
     const body = $('cBody'), y = body.scrollTop;
-    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2><div class="dk-cols"><div class="dk-col">${specialCard()}${potCard()}</div><div class="dk-col">${missionsHtml()}</div></div></div>`;
+    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Challenges</h2><div class="dk-cols"><div class="dk-col">${specialCard()}</div><div class="dk-col">${potCard()}</div></div></div>`;
     if (keep) body.scrollTop = y;
     wireChallenges(); potCount(!keep); if (keep) riseIn($('vChallenges'), false);
     if (specState && prefs.specSeen !== specState.day) { prefs.specSeen = specState.day; saveAll(); syncBadges(); }
@@ -3919,8 +3919,6 @@
   const PAGES = {
     special: [() => { const c = specState && specState.specials && specState.specials[nav.sp]; return c ? c.recipe.name : 'Special level'; }, specialHtml],
     pot: ['Daily pot', potHtml],
-    week: ['This week', weekHtml],
-    career: ['Career', careerHtml],
     trophies: ['Trophies', trophiesHtml],
     stats: ['Stats', statsHtml],
     wallet: ['Wallet', walletHtml],
@@ -3928,7 +3926,7 @@
     how: ['How to play', howHtml],
     odds: ['Odds & fairness', oddsHtml]
   };
-  const TAB_NAME = { play: 'Play', challenges: 'Challenges', profile: 'Profile', locker: 'Locker' };
+  const TAB_NAME = { play: 'Play', challenges: 'Challenges', missions: 'Missions', profile: 'Profile', locker: 'Locker' };
   const vPg = $('vPage');
   function openPage(kind, slot) {
     if (!PAGES[kind]) return;
@@ -3963,10 +3961,11 @@
     if (!nav.page) return;
     nav.page = null;
     show(vPg, false); document.body.classList.remove('page-open');
-    nav.cover = nav.tab === 'profile' || nav.tab === 'challenges';
+    nav.cover = nav.tab === 'profile' || nav.tab === 'challenges' || nav.tab === 'missions';
     if (phase === 'lobby') { // what the page changed (the wallet, an entry) shows on the tab underneath
       if (nav.tab === 'profile') renderProfileView();
       if (nav.tab === 'challenges') renderChallenges(true);
+      if (nav.tab === 'missions') renderMissions(true);
     }
     sheetTopC = -1;
     if (!quiet) Sound.click();
@@ -3974,12 +3973,14 @@
   }
   $('pgBack').addEventListener('click', () => closePage());
 
-  // ---------------------------------------------------------------- navigation: Play, Challenges, Profile
-  // Three tabs along the bottom, in the lobby only. Play is the bet under the live arena; Challenges and Profile are
-  // full pages, and the arena stops drawing behind them. The Locker opens from Profile (it stays under the Profile
-  // tab, with a back button) and keeps the arena on show above the collection, so whatever you pick flies there.
-  const TABS = ['play', 'challenges', 'profile', 'locker'];
-  const vP = $('vProfile'), vL = $('vLocker'), vC = $('vChallenges');
+  // ---------------------------------------------------------------- navigation: Play, Challenges, Missions, Profile
+  // Four tabs along the bottom, in the lobby only (the owner asked for a tab just for the missions and the career,
+  // leaving Challenges to the specials and the pot). Play is the bet under the live arena; Challenges, Missions and
+  // Profile are full pages, and the arena stops drawing behind them. The Locker opens from Profile (it stays under
+  // the Profile tab, with a back button) and keeps the arena on show above the collection, so whatever you pick
+  // flies there.
+  const TABS = ['play', 'challenges', 'missions', 'profile', 'locker'];
+  const vP = $('vProfile'), vL = $('vLocker'), vC = $('vChallenges'), vM = $('vMissions');
   const tabOf = (t) => (t === 'locker' ? 'profile' : t);
   function setTab(t, quiet) {
     if (!TABS.includes(t)) t = 'play';
@@ -3999,20 +4000,23 @@
     const inLobby = phase === 'lobby';
     show(ui.lobby, inLobby && t === 'play');
     show(vL, inLobby && t === 'locker');
-    show(vP, t === 'profile'); show(vC, t === 'challenges');
-    nav.cover = t === 'profile' || t === 'challenges';
+    show(vP, t === 'profile'); show(vC, t === 'challenges'); show(vM, t === 'missions');
+    nav.cover = t === 'profile' || t === 'challenges' || t === 'missions';
     sheetTopC = -1;
-    if (t === 'challenges') { if (profile.mNew) { profile.mNew = 0; saveAll(); } renderChallenges(); $('cBody').scrollTop = 0; if (was !== t) riseIn(vC, true); refreshSpecial(); refreshPot(); }
+    if (t === 'challenges') { renderChallenges(); $('cBody').scrollTop = 0; if (was !== t) riseIn(vC, true); refreshSpecial(); refreshPot(); }
+    if (t === 'missions') { if (profile.mNew) { profile.mNew = 0; saveAll(); } renderMissions(); $('mBody').scrollTop = 0; if (was !== t) riseIn(vM, true); }
     if (t === 'locker') renderLocker();
     if (t === 'profile') { renderProfileView(); if (was !== 'locker') $('pBody').scrollTop = 0; if (was !== t && was !== 'locker') riseIn(vP, true); }
     lockerFx();
     syncBadges();
     if (!quiet && was !== t) { Sound.click(); buzz(6); }
   }
-  // dots: Challenges for a special you haven't seen or missions finished since you last looked, Profile for new items
+  // dots: Challenges for a special you haven't seen, Missions for missions finished since you last looked, Profile
+  // for new items and SOL to claim
   function syncBadges() {
     const newSpecial = !!specState && prefs.specSeen !== specState.day;
-    $('badgeC').classList.toggle('on', (newSpecial || profile.mNew > 0) && nav.tab !== 'challenges');
+    $('badgeC').classList.toggle('on', newSpecial && nav.tab !== 'challenges');
+    $('badgeM').classList.toggle('on', profile.mNew > 0 && nav.tab !== 'missions');
     $('badgeP').classList.toggle('on', (profile.fresh.length > 0 && nav.tab !== 'locker') || (bank.rakeback.view().ready > 0 && nav.tab !== 'profile') || tview().open > 0); // new items, rakeback or trophy SOL to claim
   }
   $('lkBack').addEventListener('click', () => setTab('profile'));
@@ -4058,19 +4062,42 @@
     return `<div class="mfoot">${ICON.lock}<span>Finish all three to open round ${nx.round + 1}</span><b>+${fmtBet(nx.reward)} SOL</b></div>`;
   }
   const rewardOf = (C) => { const [t, id] = C.reward.split(':'); return { t, id, u: UNLOCK_BY[C.reward] }; };
-  function missionsHtml() {
-    const mv = mview(), d = mv.daily, w = mv.weekly, cs = careerState();
-    const wDone = w.filter((c) => c.done).length;
-    const C = CAREER[cs.ch], cDone = C ? cs.done.filter(Boolean).length : 4;
-    const tile = (page, ic, name, val, f) => `<button class="ct ct-${page}" data-page="${page}"><span class="ct-ic">${ic}</span><span class="chev">${ICON.chev}</span><b>${name}</b><span class="ct-v">${val}</span><span class="ct-bar"><i style="width:${(f * 100).toFixed(1)}%"></i></span></button>`;
+  // The Missions tab: today's missions, this week's and the career, each a card under a band. On a phone a segmented
+  // control picks one (nav.seg); on a desktop all three stand side by side and the control is hidden.
+  const SEGS = [['day', 'Today'], ['week', 'This week'], ['career', 'Career']];
+  function dayHtml() {
+    const mv = mview(), d = mv.daily;
     return `<div class="cc ms-cc"><div class="cc-h"><span class="cc-k">${ICON.target}Daily missions</span><span class="cc-t">New in ${untilMidnight()}</span></div>
-      ${roundsRow(mv, 'day')}${needRow(mv, 'day')}${d.map((c, i) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i)).join('')}${roundFoot(mv, 'day')}</div>
-      <div class="ctiles">${tile('week', ICON.target, 'This week', 'Round ' + (mv.round.week + 1) + ' · ' + wDone + ' of ' + w.length + ' done', (mv.round.week + wDone / 3) / mv.rounds)}${tile('career', ICON.flag, 'Career', C ? 'Chapter ' + (cs.ch + 1) + ' of ' + CAREER.length : 'All done', cDone / 4)}</div>`;
+      ${roundsRow(mv, 'day')}${needRow(mv, 'day')}${d.map((c, i) => mRow(dailyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i)).join('')}${roundFoot(mv, 'day')}</div>`;
   }
   function weekHtml() {
     const mv = mview(), w = mv.weekly;
-    return `<p class="vsub">New missions in ${untilMonday()}. Finish all three to open the next round.</p>
-      <div class="group ms-wk">${roundsRow(mv, 'week')}${needRow(mv, 'week')}${w.map((c, i) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i + 1)).join('')}${roundFoot(mv, 'week')}</div>`;
+    return `<div class="cc ms-cc ms-wk"><div class="cc-h"><span class="cc-k">${ICON.spark}Weekly missions</span><span class="cc-t">New in ${untilMonday()}</span></div>
+      ${roundsRow(mv, 'week')}${needRow(mv, 'week')}${w.map((c, i) => mRow(weeklyText(c), c.p, c.n, c.xp, c.done, c.reward, c.paid, i + 1)).join('')}${roundFoot(mv, 'week')}</div>`;
+  }
+  // how far along each is, for its segment: missions done in the open round, chapters finished
+  function segCount(k) {
+    const mv = mview();
+    if (k === 'career') { const cs = careerState(); return Math.min(cs.ch, CAREER.length) + '/' + CAREER.length; }
+    const list = k === 'day' ? mv.daily : mv.weekly;
+    return list.filter((c) => c.done).length + '/' + list.length;
+  }
+  function renderMissions(keep) {
+    const body = $('mBody'), y = body.scrollTop;
+    if (!SEGS.some((x) => x[0] === nav.seg)) nav.seg = 'day';
+    body.innerHTML = `<div class="vcol"><h2 class="vtitle">Missions</h2>
+      <div class="seg ms-seg" role="group" aria-label="Which missions">${SEGS.map(([k, name]) => `<button data-seg="${k}" aria-pressed="${k === nav.seg}">${name}<i>${segCount(k)}</i></button>`).join('')}</div>
+      <div class="ms-panels" data-seg="${nav.seg}"><section class="msp" data-seg="day" aria-label="Today">${dayHtml()}</section><section class="msp" data-seg="week" aria-label="This week">${weekHtml()}</section><section class="msp" data-seg="career" aria-label="Career">${careerHtml()}</section></div></div>`;
+    body.querySelectorAll('canvas[data-t]').forEach((c) => drawThumb(c, c.dataset.t, c.dataset.id));
+    body.querySelectorAll('.ms-seg button').forEach((b) => b.addEventListener('click', () => {
+      if (nav.seg === b.dataset.seg) return;
+      nav.seg = b.dataset.seg; Sound.click(); buzz(6);
+      body.querySelectorAll('.ms-seg button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      const pn = body.querySelector('.ms-panels'); pn.dataset.seg = nav.seg; body.scrollTop = 0;
+      const on = pn.querySelector('.msp[data-seg="' + nav.seg + '"]');
+      if (on && !REDUCED && !desk) hudAnim(on, 'seg', [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: EASE_OUT });
+    }));
+    if (keep) { body.scrollTop = y; riseIn(vM, false); }
   }
   function careerHtml() {
     const cs = careerState(), C = CAREER[cs.ch];
@@ -4079,7 +4106,7 @@
       const r = rewardOf(C), n = cs.done.filter(Boolean).length;
       career = `<div class="chap">
         <div class="chap-top"><span class="rew"><canvas width="132" height="132" data-t="${r.t}" data-id="${r.id}"></canvas></span>
-          <div><div class="chap-k">Chapter ${cs.ch + 1} of ${CAREER.length} · ${n} of 4 done</div><div class="chap-n">${C.name}</div>
+          <div><div class="chap-k">${n} of 4 done</div><div class="chap-n">${C.name}</div>
           <div class="chap-r">Finish all four to unlock <b>${COS[r.t][r.id].name} ${TNAME[r.t].toLowerCase()}</b>${C.title ? ' and the <b>' + TITLE_BY[C.title].name + '</b> title' : ''}.</div></div></div>
         <div class="chap-bar"><i style="width:${(n / 4 * 100).toFixed(0)}%"></i></div>
         ${C.m.map((m, i) => mRow(careerText(m), cs.p[i], m[1], m[2], cs.done[i], 0, false, i + 2)).join('')}
@@ -4089,7 +4116,8 @@
       const r = rewardOf(K), st = i < cs.ch ? 'done' : i === cs.ch ? 'now' : 'locked';
       return `<div class="chli ${st}"><span class="cs">${st === 'done' ? ICON.check : st === 'now' ? ICON.target : ICON.lock}</span><b>${i + 1}. ${K.name}</b><span class="cr">${COS[r.t][r.id].name}<canvas width="52" height="52" data-t="${r.t}" data-id="${r.id}"></canvas></span></div>`;
     }).join('');
-    return `<p class="vsub">Chapters at your own pace, for XP and items you can only get here.</p>${career}<div class="chlist">${chapters}</div>`;
+    return `<div class="cc ms-cc ms-car"><div class="cc-h"><span class="cc-k">${ICON.flag}Career</span><span class="cc-t">${C ? 'Chapter ' + (cs.ch + 1) + ' of ' + CAREER.length : 'All done'}</span></div>${career}</div>
+      <p class="ms-note">Chapters at your own pace, for XP and items you can only get here.</p><div class="chlist">${chapters}</div>`;
   }
 
   // ---------------------------------------------------------------- Locker tab
@@ -4224,7 +4252,7 @@
     }
     if (!(wallet.balance >= 0)) wallet.balance = CFG.demoStart;
     grantUnlocks(); syncSettings(); applyFlameTheme(); buildLobby(); setTab('play', true); refreshLobby(); setHudMode(false); refreshPot(); refreshSpecial();
-    setInterval(() => { if (phase === 'lobby' && !document.hidden) { refreshPot(); if (nav.tab === 'challenges') refreshSpecial(); } }, 30000); // entrants, pot and time left move on
+    setInterval(() => { if (phase === 'lobby' && !document.hidden) { refreshPot(); if (nav.tab === 'challenges') refreshSpecial(); if (nav.tab === 'missions' && !nav.page) renderMissions(true); } }, 30000); // entrants, pot and time left move on
     attract.wait = 0;
     if (!prefs.tourSeen && stats.runs === 0 && !/notour/.test(location.search)) setTimeout(() => { if (phase === 'lobby' && !nav.page) showTour(0); }, 700);
     requestAnimationFrame((t) => { last = t; frame(t); });
