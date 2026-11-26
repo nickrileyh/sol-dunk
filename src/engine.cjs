@@ -18,7 +18,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 16; // v16: walls (special courses only: a level may carry slabs that end the attempt on touch; levels without any play exactly as on v15); v15: a ball that lands with its centre on the outer half of the near rim falls off instead of being carried in; v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
+  const VERSION = 17; // v17: sideways and breathing rings (only on courses that carry them: a ring may stand upright, to be flown straight through, or breathe wider and tighter; levels without any play exactly as on v16); v16: walls (special courses only: a level may carry slabs that end the attempt on touch; levels without any play exactly as on v15); v15: a ball that lands with its centre on the outer half of the near rim falls off instead of being carried in; v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -155,6 +155,8 @@
 
   function hoopY(h, t) { return h.amp === 0 ? h.y0 : h.y0 + h.amp * wave(t / h.period + h.phase); }
   function hoopVY(h, t) { return h.amp === 0 ? 0 : h.amp * waveD(t / h.period + h.phase) / h.period; }
+  // v17: a breathing ring's width now (pw: how far it breathes either side of w, pp: its period, pph: its phase)
+  function hoopW(h, t) { return h.pw ? h.w + h.pw * wave(t / h.pp + h.pph) : h.w; }
 
   // ---------- levels ----------
   function levelConfig(di, L) {
@@ -225,7 +227,8 @@
     const hs = new Array(level.hoops.length);
     for (let i = 0; i < hs.length; i++) {
       const h = level.hoops[i];
-      hs[i] = { i: h.i, x: h.x, y0: h.y0, w: h.w, amp: h.amp, period: h.period, phase: h.phase, tilt: h.tilt, c: h.c, s: h.s, cp: h.cp, st: 0, touched: false, off: false };
+      hs[i] = { i: h.i, x: h.x, y0: h.y0, w: h.w, amp: h.amp, period: h.period, phase: h.phase, tilt: h.tilt, c: h.c, s: h.s, cp: h.cp, st: 0, touched: false, off: false,
+        v: !!h.v, pw: h.pw || 0, pp: h.pp || 1, pph: h.pph || 0 }; // v17: v = stands upright (c 0, s -1); pw/pp/pph = breathes
     }
     // Walls (v16; only special courses have any): solid slabs, each a rectangle from x0 to x1 and from its top y0
     // down to y1 (past the floor). Touching one ends the attempt, like the floor. They're kept in order of x, and
@@ -247,7 +250,7 @@
 
   function hoopInteract(st, h, t) {
     const b = st.ball, P = PHYS;
-    const half = h.w * 0.5;
+    const half = (h.pw ? hoopW(h, t) : h.w) * 0.5;
     if (b.x - h.x < -(half + P.R + 40)) { st.prevLy = NaN; return 0; }
     let ev = 0;
     const hy = hoopY(h, t), hvy = hoopVY(h, t);
@@ -274,7 +277,7 @@
           b.vx = vn2 * nx + vt2 * tx;
           b.vy = vn2 * ny + vt2 * ty + hvy;
           // the near rim, from above, with the ball's centre outside the middle of the tube: it falls off the front
-          if (side < 0 && dx * c + dy * s < 0 && -dx * s + dy * c < 0) { h.off = true; if (b.vx > 0) b.vx = 0; }
+          if (!h.v && side < 0 && dx * c + dy * s < 0 && -dx * s + dy * c < 0) { h.off = true; if (b.vx > 0) b.vx = 0; }
           if (firm || !h.touched) { st.impact = imp; st.rimHits++; ev |= EV.RIM; }
           if (firm) st.knockTick = st.tick;
           h.touched = true;
@@ -297,6 +300,14 @@
       return ev;
     }
 
+    // An upright ring (v17) is a gate: with c 0 and s -1, ly is how far the ball is past it and lx how far above its
+    // middle, so the same test scores a pass straight through the opening. It's missed once the ball is past it
+    // without scoring (it went over or under).
+    if (h.v) {
+      if (ly > P.RP + P.R + 2) { miss(st, h, lx > 0 ? 'over' : 'under'); ev |= EV.MISS; }
+      st.prevLy = ly;
+      return ev;
+    }
     // no net: the ball may rise up through the ring; only a downward pass scores.
     // the ring is missed once the ball is fully past its far side without scoring.
     if (lx > half + P.RP + P.R + 2) { miss(st, h, ly < 0 ? 'over' : 'under'); ev |= EV.MISS; }
@@ -321,9 +332,9 @@
     // Fair rims: after a touch, while the ball is over the opening its forward speed fades and the push waits,
     // so it drops in instead of rolling on over the back rim. A ball past the end of the rim still bounces out.
     const hn = st.hoops[st.next];
-    if (hn && hn.touched) {
+    if (hn && hn.touched && !hn.v) { // (an upright ring is flown straight through: nothing to settle into)
       const dx = b.x - hn.x, dy = b.y - hoopY(hn, st.tick * DT);
-      const lx = dx * hn.c + dy * hn.s, ly = -dx * hn.s + dy * hn.c, half = hn.w * 0.5;
+      const lx = dx * hn.c + dy * hn.s, ly = -dx * hn.s + dy * hn.c, half = (hn.pw ? hoopW(hn, st.tick * DT) : hn.w) * 0.5;
       if (ly < 0 && ly > -P.SETTLE_H && lx > -half && lx < half) { kx = 0; b.vx -= b.vx * (P.SETTLE_D * DT); }
       // Outer half falls off: after a landing outside the middle of the near rim, the push waits while the ball is
       // still above the rim line and outside that end, so it rolls off the front (until a tap, or it has dropped past)
@@ -412,7 +423,7 @@
   return {
     VERSION, TICK_HZ, DT, WORLD, PHYS, HOOPS_PER_LEVEL, LEVELS, MAX_TICKS, Y_MIN, Y_MAX, DIFFS, EV,
     makeRng, hashSeed, dsin, dcos, wave, waveD, hoopY, hoopVY,
-    levelConfig, levelFeatures, generateLevel, createState, step, replay, validTaps,
+    levelConfig, levelFeatures, generateLevel, createState, step, replay, validTaps, hoopW,
     hoopMultiplier, applyLevel
   };
 });

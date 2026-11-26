@@ -80,7 +80,7 @@
     bot.key = st.next; bot.h = h;
     // average vertical rim speed, used to scale error on moving rims
     const mv = h.amp ? (h.amp * 3.0 / h.period) : 0;
-    const tiltDeg = Math.abs(h.tilt) * 57.29577951308232;
+    const tiltDeg = h.v ? 0 : Math.abs(h.tilt) * 57.29577951308232; // an upright ring isn't a leaning one
     const speedK = st.speed / 165;
     let sd = p.aim * speedK * (1 + p.moveK * mv / 100) * (1 + p.tiltK * tiltDeg / 20);
     if (p.tail && rng() < p.tail) sd *= p.tailK;
@@ -144,6 +144,49 @@
     return { xc: b.x + vx * s, vc: b.vy + P.G * s };
   }
 
+  // Upright rings (engine v17) are gates: the ball has to be at the right height as it passes, and it's steadiest
+  // there at the top of a hop, so the plan is one tap that puts the top of a hop at the gate. Until a hop that far
+  // ahead can reach it, the ball is held around the gate's height (a tap each time it sinks a little below). Aim
+  // error is a height error here (the drop error of a flat ring, about two thirds of it), and the rest is as usual:
+  // tap jitter, misjudged timing on moving gates and the occasional lapse. Levels without upright rings never get here.
+  const GATE_AIM = 0.65, GATE_LOW = 12, GATE_VK = 0.035;
+  function fallTo(y, vy, s) {
+    const v = vy + P.G * s;
+    if (v <= P.VMAX) return [y + vy * s + 0.5 * P.G * s * s, v];
+    const tc = (P.VMAX - vy) / P.G;
+    return [y + vy * tc + 0.5 * P.G * tc * tc + P.VMAX * (s - tc), P.VMAX];
+  }
+  function decideGate(bot, st, h) {
+    const p = bot.p, b = st.ball, t0 = st.tick * DT;
+    const vx = b.vx < st.speed * 0.85 ? (b.vx + st.speed) * 0.5 : st.speed;
+    const T = (h.x - b.x) / vx;
+    if (T < 0) return false; // past it: nothing a tap can do
+    const yT = perceivedY(bot, t0 + T);
+    const cost = (yc, vc) => Math.abs(yc - yT) + Math.abs(vc) * GATE_VK;
+    const [ny, nv] = fallTo(b.y, b.vy, T);
+    let best = { k: -1, err: Math.abs(ny - yT), cost: ny > W.FLOOR - P.R - 4 ? 1e9 : cost(ny, nv) };
+    const stepK = bot.fine ? 1 : 2, kMax = Math.min(100, Math.floor(T / DT));
+    for (let k = 0; k <= kMax; k += stepK) {
+      const tk = k * DT, [yk] = fallTo(b.y, b.vy, tk);
+      if (yk > W.FLOOR - P.R - 6) break;
+      if (yk - (P.FLAP * P.FLAP) / (2 * P.G) < P.R + 2) continue; // would bonk the ceiling
+      const [yc, vc] = fallTo(yk, -P.FLAP, T - tk);
+      if (yc > W.FLOOR - P.R - 4) continue;
+      const c = cost(yc, vc);
+      if (c < best.cost) best = { k, err: Math.abs(yc - yT), cost: c };
+    }
+    const horizon = Math.round(p.commit / DT);
+    if (best.k < 0) {
+      if (best.err < 14) return false; // already on a line through it
+    } else if (best.err < 14) {
+      if (best.k <= horizon) return schedule(bot, st, best.k, true);
+      return false;
+    }
+    // too far for one hop: hold the ball around the gate's height
+    if (b.vy > 0 && b.y > Math.max(P.R + 90, perceivedY(bot, t0) + GATE_LOW)) return schedule(bot, st, 0, false);
+    return false;
+  }
+
   function schedule(bot, st, k, final) {
     const p = bot.p;
     let jit = p.timing ? gauss(bot.rng) * p.timing : 0;
@@ -169,7 +212,8 @@
     if (!bot.fine && (st.tick & 1)) return false; // humans decide ~60x/s, not 120x/s
     const h = st.hoops[st.next];
     if (!h) return false;
-    if (bot.key !== st.next) acquire(bot, st, h);
+    if (bot.key !== st.next) { acquire(bot, st, h); if (h.v) { bot.aimDY = bot.aimDX * GATE_AIM - AIM_BIAS * GATE_AIM; bot.aimDX = 0; } }
+    if (h.v) return decideGate(bot, st, h);
     const b = st.ball;
     const vx = b.vx < st.speed * 0.85 ? (b.vx + st.speed) * 0.5 : st.speed;
     const aimX = h.x + bot.aimDX * h.c;

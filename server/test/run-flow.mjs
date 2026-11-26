@@ -108,64 +108,57 @@ function playTaps(seed, di, L, skill, salt) {
   check(r3.status === 400 && /real time/.test(r3.error), 'instant submission is voided: ' + JSON.stringify(r3));
   srv2.kill();
 
-  // challenge pots: entry, completion only on the challenge's tier and after entering, an equal split less the rake, rollover
+  // the daily pot, a game of its own: one course for everyone, attempts into the pot, the best attempt counts, the best
+  // three split it (half, three tenths, a fifth) less the house's cut, ghosts of the leader, and a new pot each day
   const POTS = require(path.join(root, 'src/pots.cjs'));
-  const srv3 = await boot(8801, { POT_GOAL: 'streak5', POT_ENTRY_LAMPORTS: '50000000' });
+  const DU0 = require(path.join(root, 'src/duel.cjs'));
+  const srv3 = await boot(8801, { POT_THEME: 'doors', POT_ENTRY_LAMPORTS: '50000000' });
   const A = client_(8801), Bc = client_(8801), C = client_(8801);
   for (const x of [A, Bc, C]) { await x.signIn(); await x.api('/api/dev/faucet', { lamports: 1e9 }); }
   const fee = 50_000_000;
-  // play one run with a bot until it busts or clears `levels` levels, then cash out; returns the last pot note, with
-  // just set if any level of the run completed the challenge
-  async function potRun(x, di, skill, salt, levels) {
-    const s = await x.api('/api/run/start', { difficulty: di, lamports: 10_000_000, clientSeed: 'pot' + salt });
-    let L = 1, seed = s.levelSeed, note = null, just = false;
-    const out = () => (note ? Object.assign({}, note, { just }) : null);
-    for (;;) {
-      const pl = playTaps(seed, di, L, skill, 'p' + salt + ':' + L);
-      const r = await x.api('/api/run/level', { runId: s.runId, level: L, taps: pl.taps });
-      note = r.pot || note; if (r.pot && r.pot.just) just = true;
-      if (r.status !== 'checkpoint') return out();
-      if (L >= levels) { await x.api('/api/run/cashout', { runId: s.runId }); return out(); }
-      const n = await x.api('/api/run/continue', { runId: s.runId }); L = n.level; seed = n.levelSeed;
-    }
-  }
-  const before = await potRun(A, 1, 'perfect', 'pre', 2);
-  check(before === null, 'a run before entering does not count');
+  const flyPot = (seed, skill, salt) => { const st = E.createState(POTS.course(seed, 'doors')), bot = B.createBot(skill, E.makeRng(salt)), taps = [0]; let tap = true; while (!st.done) { E.step(st, tap); tap = B.decide(bot, st); if (tap && !st.done) taps.push(st.tick); } return { taps, rings: st.outcomes.length, score: DU0.score(st.outcomes) }; };
   const p0 = await A.api('/api/pot');
-  check(p0.goal.id === 'streak5' && p0.entrants === 0 && p0.me && p0.me.entered === false, 'pot shows the challenge: ' + JSON.stringify(p0.goal));
-  for (const x of [A, Bc, C]) {
-    const b0 = (await x.api('/api/me')).balance, e = await x.api('/api/pot/enter', {});
-    check(e.status === 200 && e.me.entered && e.balance === b0 - fee, 'enter the pot: the entry is debited');
-  }
-  check((await A.api('/api/pot/enter', {})).status === 400, 'second entry refused');
-  const easy = await potRun(A, 0, 'perfect', 'easy', 2);
-  check(easy && easy.counts === false && !easy.done, 'a run below the challenge tier does not count');
-  const hard = await potRun(A, 1, 'perfect', 'hard', 3);
-  check(hard && hard.done && hard.just, 'a perfect run on Hard completes "swish 5 in a row" ' + JSON.stringify(hard));
-  const again = await potRun(A, 1, 'perfect', 'hard2', 2);
-  check(again && again.done && !again.just, 'completing again does not count twice');
-  // a run that falls to the floor before the first ring (one tap, then nothing): it can't complete anything
-  const bs = await Bc.api('/api/run/start', { difficulty: 1, lamports: 10_000_000, clientSeed: 'potb' });
-  const bRun = (await Bc.api('/api/run/level', { runId: bs.runId, level: 1, taps: [0] })).pot;
-  check(!bRun || !bRun.done, 'a run that misses does not complete it');
-  const mid = await C.api('/api/pot');
-  check(mid.entrants === 3 && mid.completed === 1 && mid.poolLamports === Math.floor(3 * fee * (1 - POTS.RAKE)), 'pot totals: ' + JSON.stringify([mid.entrants, mid.completed, mid.poolLamports]));
-  const balA = (await A.api('/api/me')).balance, balB = (await Bc.api('/api/me')).balance;
+  const course0 = POTS.course(p0.seed, 'doors');
+  check(p0.theme && p0.theme.id === 'doors' && /^[0-9a-f]{32}$/.test(p0.seed) && p0.entrants === 0 && p0.board.length === 0 && p0.leader === null && p0.me && p0.me.attempts === 0 && p0.rings === POTS.RINGS, 'pot: the day\'s course and theme are shown, and nobody is in yet ' + JSON.stringify([p0.theme, p0.entrants]));
+  check(course0.hoops.length === POTS.RINGS && !course0.hoops[0].v && course0.hoops[2].v && course0.hoops[5].v && !course0.hoops[3].v && course0.hoops.every((h) => h.y0 - h.amp >= E.Y_MIN - 1e-6 && h.y0 + h.amp <= E.Y_MAX + 1e-6), 'pot: Side doors stands every third ring on its side, inside the ring band');
+  const a1 = await A.api('/api/pot/start', {});
+  check(a1.status === 200 && a1.seed === p0.seed && a1.ghost === null && a1.balance === 1e9 - fee, 'pot: an attempt takes the entry and gives the day\'s course ' + JSON.stringify([a1.status, a1.error]));
+  check((await A.api('/api/run/level', { runId: a1.runId, level: 1, taps: [0] })).status === 404 && (await A.api('/api/pot/start', {})).status === 400, 'pot: an attempt can\'t be played as a run, and one is open at a time');
+  const fa1 = flyPot(p0.seed, 'good', 'pa1'), ra1 = await A.api('/api/pot/finish', { runId: a1.runId, taps: fa1.taps });
+  check(ra1.status === 200 && ra1.you.rings === fa1.rings && ra1.you.score === fa1.score && ra1.improved && ra1.place === 1 && ra1.pot.entrants === 1 && ra1.pot.board[0].me && ra1.pot.board[0].rings === fa1.rings, 'pot: the flight is replayed on the day\'s course and becomes the best ' + JSON.stringify([ra1.you, fa1.rings]));
+  check((await A.api('/api/pot/finish', { runId: a1.runId, taps: fa1.taps })).status === 400, 'pot: a second finish is refused');
+  const a2 = await A.api('/api/pot/start', {});
+  check(a2.ghost && a2.ghost.name === 'Your best' && a2.ghost.rings === fa1.rings && JSON.stringify(a2.ghost.taps) === JSON.stringify(fa1.taps), 'pot: the leader races their own best as the ghost');
+  const ra2 = await A.api('/api/pot/finish', { runId: a2.runId, taps: [0] });
+  check(!ra2.improved && ra2.best.rings === fa1.rings && ra2.pot.attempts === 2 && ra2.pot.entrants === 1 && ra2.pot.poolLamports === Math.floor(2 * fee * (1 - POTS.RAKE)), 'pot: a worse attempt keeps the best, and every attempt adds to the pot ' + JSON.stringify([ra2.best, ra2.pot.poolLamports]));
+  const b1 = await Bc.api('/api/pot/start', {});
+  check(b1.ghost && b1.ghost.name === 'Leader' && b1.ghost.rings === fa1.rings && JSON.stringify(b1.ghost.taps) === JSON.stringify(fa1.taps), 'pot: another player races the leader\'s ghost');
+  const fb1 = flyPot(p0.seed, 'perfect', 'pb1'), rb1 = await Bc.api('/api/pot/finish', { runId: b1.runId, taps: fb1.taps });
+  const bAhead = POTS.better(fb1, fa1);
+  check(rb1.place === (bAhead ? 1 : 2) && rb1.pot.marks.length === 2 && POTS.cmp({ rings: rb1.pot.marks[0][0], score: rb1.pot.marks[0][1] }, { rings: rb1.pot.marks[1][0], score: rb1.pot.marks[1][1] }) <= 0, 'pot: standings by rings, then score ' + JSON.stringify([fb1.rings, fa1.rings, rb1.place]));
+  const c1 = await C.api('/api/pot/start', {}); const rc1 = await C.api('/api/pot/finish', { runId: c1.runId, taps: [0] });
+  check(rc1.place === 3 && rc1.you.rings === 0, 'pot: a flight with no rings still takes a place');
+  const balsBefore = await Promise.all([A, Bc, C].map(async (x) => (await x.api('/api/me')).balance)), keyBefore = rc1.pot.key;
   await A.api('/api/dev/pot/advance', {});
   const after = await A.api('/api/pot');
-  const share = 3 * fee - Math.ceil(3 * fee * POTS.RAKE);
-  check(after.last && after.last.winners === 1 && after.last.shareLamports === share && after.last.me.wonLamports === share, 'the winner takes the pot less the rake: ' + JSON.stringify(after.last));
-  check((await A.api('/api/me')).balance === balA + share, 'winnings credited');
-  check((await Bc.api('/api/me')).balance === balB, 'non-finishers get nothing');
-  check(after.entrants === 0 && after.carryInLamports === 0 && after.key !== mid.key, 'a new pot opens empty');
-  // nobody finishes: the pot rolls over into the next day's
-  await Bc.api('/api/pot/enter', {}); await C.api('/api/pot/enter', {});
-  await Bc.api('/api/dev/pot/advance', {});
-  const rolled = await Bc.api('/api/pot');
-  const pool2 = 2 * fee - Math.ceil(2 * fee * POTS.RAKE);
-  check(rolled.last.winners === 0 && rolled.last.rolledLamports === pool2 && rolled.carryInLamports === pool2 && rolled.poolLamports === pool2, 'no winners: the pot rolls over: ' + JSON.stringify([rolled.last, rolled.carryInLamports]));
+  const pool = 4 * fee - Math.ceil(4 * fee * POTS.RAKE), first = Math.floor(pool * 0.5), second = Math.floor(pool * 0.3), third = Math.floor(pool * 0.2);
+  const balsAfter = await Promise.all([A, Bc, C].map(async (x) => (await x.api('/api/me')).balance));
+  const [winA, winB] = bAhead ? [second, first] : [first, second];
+  check(balsAfter[0] - balsBefore[0] === winA && balsAfter[1] - balsBefore[1] === winB && balsAfter[2] - balsBefore[2] === third, 'pot: the best three take half, three tenths and a fifth of the pot less the house\'s cut ' + JSON.stringify(balsAfter.map((v, i) => v - balsBefore[i])));
+  check(after.last && after.last.key === keyBefore && after.last.results.length === 3 && after.last.results[0].wonLamports === first && after.last.me.place === (bAhead ? 2 : 1) && after.last.me.wonLamports === winA, 'pot: the last pot\'s results are shown ' + JSON.stringify(after.last && after.last.results));
+  check(after.entrants === 0 && after.seed !== p0.seed && after.key !== keyBefore && after.carryInLamports === 0, 'pot: a new pot opens empty, on a new course');
+  check(winA + winB + third + Math.ceil(4 * fee * POTS.RAKE) <= 4 * fee, 'pot: the house keeps its cut and the dust, nothing more');
+  // the split from the rules alone: ties share their places, fewer than three share it all, nobody rolls over
+  const e3 = (r, s, id) => ({ id, rings: r, score: s });
+  const t1 = POTS.settle(100, 0, POTS.standings([e3(9, 20, 'a'), e3(9, 20, 'b'), e3(5, 9, 'c'), e3(2, 2, 'd')]), true);
+  check(t1.pays.a === 36 && t1.pays.b === 36 && t1.pays.c === 18 && !t1.pays.d && t1.rake === 10, 'pot: two tied for first share the first two places ' + JSON.stringify(t1));
+  const t2 = POTS.settle(100, 0, POTS.standings([e3(9, 20, 'a'), e3(5, 9, 'b')]), true), t3 = POTS.settle(100, 0, POTS.standings([e3(1, 1, 'a')]), true);
+  check(t2.pays.a === 56 && t2.pays.b === 33 && t3.pays.a === 90 && t3.carry === 0, 'pot: with fewer than three, the places filled share it all ' + JSON.stringify([t2.pays, t3.pays]));
+  const t4 = POTS.settle(0, 40, [], true), t5 = POTS.standings([e3(3, 4, 'x'), e3(7, 1, 'y'), e3(7, 9, 'z'), e3(3, 4, 'w')]);
+  check(t4.carry === 40 && t5.map((e) => e.id + e.place).join() === 'z1,y2,x3,w3', 'pot: nobody in rolls it over; places tie on rings and score ' + JSON.stringify(t5.map((e) => e.id + e.place)));
+  check(POTS.THEMES.length === 5 && new Set(POTS.THEMES.map((T) => T.id)).size === 5 && POTS.themeFor('2026-12-01').id !== POTS.themeFor('2026-12-02').id, 'pot: five themes, a new one each day');
   const poor = client_(8801); await poor.signIn();
-  check((await poor.api('/api/pot/enter', {})).status === 400, 'entry without balance refused');
+  check((await poor.api('/api/pot/start', {})).status === 400, 'pot: an attempt without the balance is refused');
   srv3.kill();
 
   // missions: every run counts; a window's SOL is released once its need has been played and waits for a claim; the
@@ -447,28 +440,36 @@ function playTaps(seed, di, L, skill, salt) {
     check(r1.earned.join() === 'swish1,cp1,fire3,moving,nova5,perfect,tilted,score50,streak10' && r1.s.sw === 10, 'trophies: judged from ring outcomes ' + r1.earned.join());
     check(TRr.run(null, [{ outcomes: 'RRRRRR', clear: true }], { paid: true, total: 2.2, hard: true, nl: 8 }, 7).earned.join() === 'cp1,double,legend', 'trophies: a 2x cash-out and a Hard clear');
     check(TRr.LIST.reduce((n, t) => n + TRr.reward(t), 0) < 0.1 && TRr.RATE + require(path.join(root, 'src/missions.cjs')).RATE + require(path.join(root, 'src/levels.cjs')).BACK.run < 0.01, 'trophies: rewards are small, and with mission SOL and rakeback they stay under the 1% edge against a good player');
-    const f1 = POTS.facts([lv('SSRSSS'), lv('SSSSSS'), lv('RSSSSR'), lv('SSS', false)]);
-    check(f1.greens === 2 && f1.hot === 2 && f1.comeback === 9 && f1.early === 11 && f1.perfect === 1, 'pots: green rings, checkpoints on fire, a streak after a rim hit and the first twelve rings ' + JSON.stringify(f1));
-    const f2 = POTS.facts([lv('SSSSSS'), lv('SSSS', false)]);
-    check(f2.comeback === 0 && f2.best === 10 && f2.greens === 1 && f2.hot === 1 && f2.early === 10, 'pots: a streak counts as a comeback only after a rim hit ' + JSON.stringify(f2));
-    check(POTS.progress('early8', [lv('SSSSSS'), lv('SSRRRR')], 0).done === false && POTS.progress('early8', [lv('SSSSSS'), lv('SSRRRR')], 1).done === true, 'pots: a Hard challenge needs a Hard run');
-    check(POTS.GOALS.length === 12 && new Set(POTS.GOALS.map((g) => g.id)).size === 12 && POTS.GOALS.every((g) => g.kind in f1 && g.p.length === 3), 'pots: twelve challenges, each of a kind the rules can judge');
     // each prize's specials for a day: PER_SLOT of them in order, every twist somewhere, no twist under two prizes;
     // one prize a day opens with a course with walls, and no opener comes back the next day
-    let prev = [], bad = 0, walled = 0; const seen = {}, wallSlots = new Set();
+    let prev = [], bad = 0, walled = 0, fxed = 0; const seen = {}, wallSlots = new Set(), fxSlots = new Set();
     for (let d = 0; d < 120; d++) {
       const day = new Date(Date.UTC(2026, 10, 1) + d * 86400000).toISOString().slice(0, 10), q = SP.queuesFor(day), all = [].concat(...q).map((R) => R.id);
       const ids = SP.specialsFor(day).map((x) => x.recipe.id);
       if (new Set(ids).size !== 3 || ids.some((id) => prev.includes(id)) || ids.join() !== q.map((x) => x[0].id).join()) bad++;
-      if (q.some((x) => x.length !== SP.PER_SLOT) || new Set(all).size !== SP.RECIPES.length) bad++;
+      if (q.some((x) => x.length !== SP.PER_SLOT) || new Set(all).size !== SP.PER_SLOT * SP.SLOTS.length || all.length !== SP.PER_SLOT * SP.SLOTS.length) bad++;
       const w = q.map((x, k) => (x[0].ob ? k : -1)).filter((k) => k >= 0);
       if (w.length === 1) { walled++; wallSlots.add(w[0]); }
+      const fx = q.map((x, k) => (x[0].fx ? k : -1)).filter((k) => k >= 0);
+      if (fx.length === 1 && fx[0] !== w[0]) { fxed++; fxSlots.add(fx[0]); }
       ids.forEach((id) => { seen[id] = (seen[id] || 0) + 1; }); prev = ids;
     }
-    check(SP.RECIPES.length === 15 && SP.PLAIN.length === 12 && SP.OBST.length === 3 && bad === 0 && Object.keys(seen).length === 15, 'specials: fifteen twists, all of them in a day\'s three queues of five, and no opener two days running ' + JSON.stringify([bad, Object.keys(seen).length]));
+    check(SP.RECIPES.length === 18 && SP.PLAIN.length === 12 && SP.OBST.length === 3 && SP.FX.length === 3 && bad === 0 && Object.keys(seen).length === 18, 'specials: eighteen twists, fifteen different ones in a day\'s three queues of five, and no opener two days running ' + JSON.stringify([bad, Object.keys(seen).length]));
+    check(fxed === 120 && fxSlots.size === 3 && SP.FX.every((R) => seen[R.id] === 40), 'specials: another prize a day opens with a new-ring course (sideways or breathing rings), in turn');
     check(walled === 120 && wallSlots.size === 3 && SP.OBST.every((R) => seen[R.id] === 40), 'specials: one prize a day opens with a wall course, the prizes and the three courses taking turns');
     const dq = SP.queuesFor('2026-11-20'), w2 = SP.specialsFor('2026-11-20', [2, 0, SP.PER_SLOT + 3]);
     check(w2[0].recipe === dq[0][2] && w2[0].at === 2 && !w2[0].done && w2[0].next === dq[0][3] && w2[1].recipe === dq[1][0] && w2[2].done && w2[2].recipe === dq[2][SP.PER_SLOT - 1] && w2[2].next === null, 'specials: a prize is on the one after those cleared, and done after the last');
+    { // engine v17: upright rings are gates flown straight through; breathing rings change width; the new twists build them
+      const gate = (y0, extra) => ({ seed: 'g', di: 0, L: 0, speed: 200, startY: 300, endX: 700, maxTicks: 1200, hoops: [Object.assign({ i: 0, x: 320, y0, w: 112, amp: 0, period: 1, phase: 0, tilt: -Math.PI / 2, c: 0, s: -1, cp: true, v: true }, extra || {})] });
+      const hold = (lv, target) => { const st = E.createState(lv); let n = 0; while (!st.done && n++ < 2000) E.step(st, st.ball.vy > 0 && st.ball.y > target); return st; };
+      const mid = hold(gate(300), 322), over = hold(gate(300), 230), under = hold(gate(250), 520);
+      check(mid.result === 'clear' && mid.outcomes.length === 1 && over.result === 'miss' && over.missKind === 'over' && under.result !== 'clear', 'gates: through the middle scores, over or under misses ' + JSON.stringify([mid.result, over.missKind, under.result, under.missKind]));
+      const flat = SP.generate('g1', 'gauntlet', 3, 6), sd = SP.generate('g1', 'side', 3, 12), sw = SP.generate('g1', 'switch', 3, 12), pu = SP.generate('g1', 'pulse', 3, 12);
+      check(sd.hoops.every((h) => h.v && h.c === 0 && h.s === -1) && sw.hoops.every((h, i) => !!h.v === (i % 2 === 1)) && !flat.hoops.some((h) => h.v || h.pw), 'gates: Side doors stands every ring on its side, Switchback every other one, and the other twists none');
+      check(pu.hoops.every((h) => h.pw > 0 && h.w - h.pw >= SP.W_MIN && h.pp > 0) && E.hoopW(pu.hoops[0], 0) !== E.hoopW(pu.hoops[0], pu.hoops[0].pp / 4), 'breathing rings: each breathes, never tighter than the narrowest ring');
+      const sdl = SP.generate('g1', 'side', 3, 20).hoops;
+      check(sd.hoops.every((h, i) => h.x === sdl[i].x && h.y0 === sdl[i].y0 && h.w === sdl[i].w), 'gates: the same rings at any length');
+    }
     { // walls: in order, between the rings, the same at any length, and passable; a ball that flies into one is out
       const a = SP.generate('w1', 'walls', 3, 8), b = SP.generate('w1', 'walls', 3, 20), plain = SP.generate('w1', 'gauntlet', 3, 8);
       check(!plain.walls && a.walls.length === 7 && b.walls.length === 19 && a.walls.every((w, i) => w.x0 === b.walls[i].x0 && w.y0 === b.walls[i].y0), 'walls: one between every two rings, the same at any length');

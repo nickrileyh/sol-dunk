@@ -303,13 +303,22 @@ export async function createServer(CFG, log) {
     })));
   }
 
-  // ---------------------------------------------------------------- challenge pots (rules in src/pots.cjs)
-  // One pot per UTC day. Players pay a fixed entry, then play ordinary runs; everyone who meets the day's challenge in
-  // a run (started after entering, on the challenge's tier or harder) splits the pot when the day ends. The house
-  // keeps POTS.RAKE of every entry whoever wins; with no winners the pot rolls into the next day's.
+  // ---------------------------------------------------------------- the daily pot (rules in src/pots.cjs)
+  // A game of its own: one course a UTC day, the same for everyone, from a seed fixed when the pot opens (and shown
+  // to everyone). Each attempt costs the entry and goes into the pot; a player's best attempt counts. When the day
+  // ends the best three split the pot (POTS.PLACES), and the house keeps POTS.RAKE of every entry whoever wins.
+  // Attempts are judged only from the server's replay of the taps on the day's course. Nobody in it: the pot rolls
+  // into the next day's. A pot from before (one with a challenge, `goal`) refunds its entries when it closes.
   const potFor = (t, day, lock = false) => t.pot(day, {
-    lock, create: { day, goal: CFG.potGoal && POTS.GOAL_BY[CFG.potGoal] ? CFG.potGoal : POTS.goalFor(day).id, fee: CFG.potEntry, carryIn: 0, paidIn: 0, createdAt: Date.now() }
+    lock, create: { day, kind: 'course', theme: CFG.potTheme && POTS.THEME_BY[CFG.potTheme] ? CFG.potTheme : POTS.themeFor(day).id, seed: crypto.randomBytes(16).toString('hex'), fee: CFG.potEntry, carryIn: 0, paidIn: 0, attempts: 0, createdAt: Date.now() }
   });
+  const shortAddr = (a) => a.slice(0, 4) + '…' + a.slice(-4);
+  const potCourse = (p) => POTS.course(p.seed, p.theme);
+  // the day's standings: everyone with an attempt in, best first
+  async function potStandings(t, day) {
+    const es = (await t.potEntries(day)).filter((e) => e.best);
+    return POTS.standings(es.map((e) => ({ id: e.address, rings: e.best.rings, score: e.best.score, at: e.best.at, taps: e.best.taps, attempts: e.attempts || 0, won: e.won, place0: e.place })));
+  }
   // close every pot whose day is over, oldest first, so a rollover can roll on through quiet days
   async function settlePots() {
     for (let guard = 0; guard < 400; guard++) {
@@ -318,16 +327,30 @@ export async function createServer(CFG, log) {
         if (!due.length) return false;
         const p = await t.pot(due[0].day, { lock: true });
         if (!p || p.settled) return true;
-        const winners = (await t.potEntries(p.day)).filter((e) => e.done);
-        const r = POTS.split(p.paidIn, p.carryIn, winners.length, true);
-        for (const e of winners) {
-          const u = await t.user(e.address);
-          await t.credit(u, r.share, 'pot_win', p.day);
-          u.potWon = (u.potWon || 0) + r.share;
-          const { address, ...doc } = e;
-          await t.putPotEntry(p.day, address, { ...doc, won: r.share });
+        if (p.goal) { // a pot from before the pot was a game of its own: its entries come back in full
+          for (const e of await t.potEntries(p.day)) {
+            const u = await t.user(e.address);
+            await t.credit(u, p.fee, 'pot_refund', p.day);
+            const { address, ...doc } = e;
+            await t.putPotEntry(p.day, address, { ...doc, won: p.fee, refunded: true });
+          }
+          Object.assign(p, { settled: true, settledAt: Date.now(), refunded: true });
+          await t.putPot(p);
+          if (p.carryIn) { const next = POTS.dayKey(POTS.closesAt(p.day)); await potFor(t, next); await t.addToPot(next, 'carryIn', p.carryIn); }
+          return true;
         }
-        Object.assign(p, { settled: true, settledAt: Date.now(), winners: winners.length, share: r.share, rake: r.rake, carryOut: r.carry });
+        const list = await potStandings(t, p.day), r = POTS.settle(p.paidIn, p.carryIn, list, true);
+        for (const e of list) {
+          const won = r.pays[e.id] || 0, raw = await t.potEntry(p.day, e.id);
+          if (won) {
+            const u = await t.user(e.id);
+            await t.credit(u, won, 'pot_win', p.day);
+            u.returned += won; u.potWon = (u.potWon || 0) + won;
+          }
+          await t.putPotEntry(p.day, e.id, { ...raw, won, place: e.place });
+        }
+        p.results = list.slice(0, POTS.PLACES.length).map((e) => ({ who: shortAddr(e.id), rings: e.rings, score: e.score, place: e.place, wonLamports: r.pays[e.id] || 0 }));
+        Object.assign(p, { settled: true, settledAt: Date.now(), entrants: list.length, rake: r.rake, carryOut: r.carry });
         await t.putPot(p);
         await t.incSetting('houseRake', r.rake);
         if (r.carry) { const next = POTS.dayKey(POTS.closesAt(p.day)); await potFor(t, next); await t.addToPot(next, 'carryIn', r.carry); }
@@ -336,35 +359,33 @@ export async function createServer(CFG, log) {
       if (!did) break;
     }
   }
+  // The pot as a player sees it: the course (seed and theme), the pot and what each place would take now, the board
+  // (the best ten), every entrant's best as [rings, score] for the live rank in a run (up to 300), the leader's taps
+  // for the ghost, and the player's own best.
   async function potView(t, p, u) {
-    const g = POTS.GOAL_BY[p.goal], c = await t.potCounts(p.day);
+    const list = await potStandings(t, p.day), pool = Math.floor(POTS.poolOf(p.paidIn, p.carryIn)), T = POTS.THEME_BY[p.theme];
     const out = {
-      key: p.day, goal: { id: g.id, kind: g.kind, n: g.n, tier: g.tier, text: g.text, sub: POTS.tierText(g.tier) },
-      feeLamports: p.fee, rake: POTS.RAKE, entrants: c.entrants, completed: c.completed,
-      poolLamports: Math.floor(POTS.poolOf(p.paidIn, p.carryIn)), carryInLamports: p.carryIn,
-      closesAt: POTS.closesAt(p.day) - potClock, simulated: false
+      key: p.day, seed: p.seed, theme: T ? { id: T.id, name: T.name, blurb: T.blurb } : null, rings: POTS.RINGS, legacy: !!p.goal,
+      feeLamports: p.fee, rake: POTS.RAKE, places: POTS.PLACES, poolLamports: pool, carryInLamports: p.carryIn,
+      entrants: list.length, attempts: p.attempts || 0, closesAt: POTS.closesAt(p.day) - potClock, cutoffMs: POTS.CUTOFF_MS, simulated: false,
+      board: list.slice(0, 10).map((e) => ({ who: shortAddr(e.id), rings: e.rings, score: e.score, place: e.place, me: !!(u && e.id === u.address) })),
+      marks: list.slice(0, 300).map((e) => [e.rings, e.score]),
+      leader: list.length ? { rings: list[0].rings, score: list[0].score, taps: list[0].taps || [], me: !!(u && list[0].id === u.address) } : null
     };
-    if (u) { const e = await t.potEntry(p.day, u.address); out.me = e ? { entered: true, done: !!e.done, best: e.best || 0 } : { entered: false }; }
+    if (u) {
+      const e = await t.potEntry(p.day, u.address), mine = e && e.best ? list.find((x) => x.id === u.address) : null;
+      out.me = { attempts: (e && e.attempts) || 0, best: mine ? { rings: mine.rings, score: mine.score, taps: mine.taps || [] } : null, place: mine ? mine.place : null, blocked: !!u.flagged };
+    }
     return out;
   }
   async function lastPot(t, u) {
     const p = await t.lastSettledPot();
     if (!p) return null;
-    const e = u ? await t.potEntry(p.day, u.address) : null, c = await t.potCounts(p.day);
-    return { key: p.day, goal: POTS.GOAL_BY[p.goal].text, entrants: c.entrants, winners: p.winners, shareLamports: p.share, rolledLamports: p.winners ? 0 : p.carryOut, me: e ? { done: !!e.done, wonLamports: e.won || 0 } : null };
-  }
-  // a verified level may complete the player's challenge (only in a run started after they entered, on the tier or harder)
-  async function potCheck(t, u, run) {
-    const day = POTS.dayKey(potNow()), e = await t.potEntry(day, u.address);
-    if (!e || !(run.potAt >= e.at)) return null;
-    const p = await t.pot(day);
-    const pr = POTS.progress(p.goal, verifiedLevels(run), run.di);
-    if (!pr.counts) return { counts: false, done: !!e.done };
-    if (pr.value > (e.best || 0)) e.best = pr.value;
-    const just = !e.done && pr.done;
-    if (just) { e.done = true; e.doneAt = potNow(); e.runId = run.id; }
-    await t.putPotEntry(day, u.address, e);
-    return { counts: true, done: !!e.done, just, value: pr.value, target: pr.target };
+    const e = u ? await t.potEntry(p.day, u.address) : null, T = POTS.THEME_BY[p.theme];
+    return {
+      key: p.day, theme: p.goal ? 'Challenge pot' : T ? T.name : '', entrants: p.entrants || 0, refunded: !!p.refunded, results: p.results || [],
+      rolledLamports: p.carryOut || 0, me: e ? { place: e.place || null, rings: e.best ? e.best.rings : 0, wonLamports: e.won || 0 } : null
+    };
   }
   app.get('/api/pot', wrap(async (req) => {
     await settlePots();
@@ -373,21 +394,73 @@ export async function createServer(CFG, log) {
       return { ...(await potView(t, p, u)), last: await lastPot(t, u) };
     });
   }));
-  app.post('/api/pot/enter', geo, wrap(async (req) => {
+  // an attempt: the entry goes into the pot, and the player gets the day's course and the leader's flight (their own
+  // best, if they lead) to race as a ghost
+  app.post('/api/pot/start', geo, limit('runs', 120, 60_000, who), wrap(async (req) => {
     await pausedPlay();
     await settlePots();
     return tx(async (t) => {
       const u = await auth(t, req);
+      if (await t.openRun(u.address)) throw bad('Finish your current run first');
+      if (u.flagged) throw bad('The pot isn’t available on this account');
       const day = POTS.dayKey(potNow()), p = await potFor(t, day);
-      if (await t.potEntry(day, u.address)) throw bad('You’re already in today’s pot');
-      if (POTS.closesAt(p.day) - potNow() < 60_000) throw bad('This pot is about to close. The next one opens at midnight UTC.');
+      if (p.goal) throw bad('Today’s pot is a challenge pot from before the update. The new pot opens at midnight UTC.');
+      if (POTS.closesAt(day) - potNow() < POTS.CUTOFF_MS) throw bad('This pot is about to close. The next one opens at midnight UTC.');
       if (u.balance < p.fee) throw bad('Not enough balance for the entry');
+      const v0 = await potView(t, p, u);
       await t.credit(u, -p.fee, 'pot_entry', day);
+      u.wagered += p.fee;
       rakeAdd(u, 'pot', p.fee);
+      const ready = missionPlay(t, u, p.fee);
       await t.addToPot(day, 'paidIn', p.fee);
-      await t.putPotEntry(day, u.address, { at: potNow(), done: false, best: 0 });
-      const p2 = await t.pot(day);
-      return { ...(await potView(t, p2, u)), last: await lastPot(t, u), ...publicMe(u) };
+      await t.addToPot(day, 'attempts', 1);
+      const e = (await t.potEntry(day, u.address)) || { at: potNow(), attempts: 0, best: null };
+      e.attempts = (e.attempts || 0) + 1;
+      await t.putPotEntry(day, u.address, e);
+      const run = {
+        id: crypto.randomUUID(), address: u.address, kind: 'pot', day, di: 0, bet: p.fee, exposure: 0,
+        serverSeed: p.seed, clientSeed: 'pot', nonce: 0, level: 1, total: 1, status: 'playing', levels: [], createdAt: Date.now(), levelStartedAt: Date.now(), updatedAt: Date.now()
+      };
+      await t.insertRun(run);
+      await t.flush();
+      const L = v0.leader, ghost = L && !L.me ? { name: 'Leader', taps: L.taps, rings: L.rings, score: L.score } : v0.me.best ? { name: 'Your best', taps: v0.me.best.taps, rings: v0.me.best.rings, score: v0.me.best.score } : null;
+      return { runId: run.id, seed: p.seed, theme: p.theme, feeLamports: p.fee, ghost, missions: { ready, view: missionView(u) }, pot: await potView(t, await t.pot(day), u), ...publicMe(u) };
+    });
+  }));
+  // one attempt's flight, replayed: it becomes the player's best if it beats it (and the pot hasn't closed)
+  async function potFinish(t, u, run, f, taps) {
+    run.flight = { rings: f.rings, score: f.score, cleared: f.cleared }; run.status = 'done'; run.endedAt = Date.now();
+    run.levels.push({ level: 1, taps: taps.length, outcomes: f.outcomes.join(''), result: f.result, ticks: f.ticks });
+    u.runs++;
+    const p = await t.pot(run.day), e = (await t.potEntry(run.day, u.address)) || { at: potNow(), attempts: 1, best: null };
+    const late = !p || p.settled, improved = !late && POTS.better(f, e.best);
+    if (improved) { e.best = { rings: f.rings, score: f.score, at: potNow(), taps, runId: run.id }; await t.putPotEntry(run.day, u.address, e); }
+    return { late, improved, best: e.best ? { rings: e.best.rings, score: e.best.score } : null };
+  }
+  app.post('/api/pot/finish', limit('runs', 120, 60_000, who), wrap(async (req) => {
+    const { runId, taps } = req.body || {};
+    return tx(async (t) => {
+      const u = await auth(t, req);
+      const run = await t.run(String(runId || ''));
+      if (!run || run.address !== u.address || run.kind !== 'pot') throw new HttpError(404, 'Run not found');
+      if (run.status !== 'playing') throw bad('This attempt is already over');
+      const p = await t.pot(run.day), def = potCourse(p);
+      if (!E.validTaps(taps, def.maxTicks)) throw bad('Invalid tap data');
+      let f = DU.fly(def, taps);
+      const gameMs = f.ticks * E.DT * 1000, elapsed = Date.now() - run.levelStartedAt;
+      if (elapsed < gameMs * CFG.minRealtime - 250) { // faster than real time: the attempt counts for nothing
+        run.flag = 'too fast'; await t.addReview('void', u.address, run.id, { gameMs, elapsed });
+        f = { rings: 0, score: 0, cleared: false, outcomes: [], result: 'void', ticks: f.ticks };
+      } else {
+        u.hoops += f.rings; u.swishes += f.outcomes.filter((o) => o === 'S').length;
+        await botCheck(t, u, def, taps, run.id);
+        xpAdd(u, LV.specialXp(f.score, false));
+      }
+      const r = await potFinish(t, u, run, f, taps);
+      await review(t, u);
+      await t.flush();
+      const v = await potView(t, await t.pot(run.day), u);
+      return { you: run.flight, ...r, place: v.me.place, pot: v, serverSeed: p.seed, ...publicMe(u) };
     });
   }));
   if (CFG.devEndpoints) {
@@ -573,7 +646,7 @@ export async function createServer(CFG, log) {
         id: crypto.randomUUID(), address: u.address, kind: 'run', di, bet, exposure,
         serverSeed: crypto.randomBytes(32).toString('hex'), clientSeed, nonce: u.nonce++,
         level: 1, total: 1, streak: 0, status: 'playing', levels: [],
-        createdAt: Date.now(), potAt: potNow(), levelStartedAt: Date.now(), updatedAt: Date.now()
+        createdAt: Date.now(), levelStartedAt: Date.now(), updatedAt: Date.now()
       };
       await t.insertRun(run);
       return { runId: run.id, serverSeedHash: sha256Hex(run.serverSeed), nonce: run.nonce, level: 1, levelSeed: levelSeed(run, 1), missions: { ready, view: missionView(u) }, ...publicMe(u) };
@@ -617,12 +690,11 @@ export async function createServer(CFG, log) {
       else if (r.result !== 'clear') status = 'bust';
       else if (run.level >= E.LEVELS) status = 'final';
       else status = 'checkpoint';
-      const pot = await potCheck(t, u, run);
       let payout = 0;
       if (status === 'checkpoint') run.status = 'checkpoint';
       else payout = await settle(t, u, run, status);
       return {
-        status, total: run.total, outcomes: r.outcomes.slice(0, counted), streak: run.streak, pot,
+        status, total: run.total, outcomes: r.outcomes.slice(0, counted), streak: run.streak,
         potLamports: Math.floor(run.bet * run.total), payoutLamports: payout,
         missions: run.missions ? { ...run.missions, view: missionView(u) } : undefined,
         trophies: status === 'checkpoint' ? undefined : trophyView(u),
@@ -908,6 +980,7 @@ export async function createServer(CFG, log) {
       await tx(async (t) => {
         const u = await t.user(row.address), run = await t.run(row.id);
         if (!run) return;
+        if (run.kind === 'pot') { if (run.status === 'playing' && Date.now() - run.levelStartedAt > CFG.playingTimeoutMs) await potFinish(t, u, run, DU.fly(potCourse(await t.pot(run.day)), [], 0), []); return; } // never came back: no rings
         if (run.kind === 'duel') { if (run.status === 'playing' && Date.now() - run.levelStartedAt > CFG.playingTimeoutMs) await duelFinish(t, u, run, DU.fly(duelDef(run), [], 0), []); return; } // never came back: a flight of no rings
         if (run.status === 'checkpoint' && Date.now() - run.updatedAt > CFG.checkpointTimeoutMs) await settle(t, u, run, 'cashout');
         else if (run.status === 'playing' && Date.now() - run.levelStartedAt > CFG.playingTimeoutMs) await settle(t, u, run, 'abandoned');

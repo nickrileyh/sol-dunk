@@ -105,7 +105,7 @@ export function loadConfig(env = process.env) {
 
     // game
     potEntry: num('POT_ENTRY_LAMPORTS', sol(POTS.ENTRY)),
-    potGoal: mock ? env.POT_GOAL || '' : '',               // tests only: force a challenge
+    potTheme: mock ? env.POT_THEME || '' : '',             // tests only: force the pot's theme
     specialEntry,
     specialUnlock: num('SPECIAL_UNLOCK_LAMPORTS', Math.round(SP.UNLOCK * specialEntry)),
     specialRecipe: mock ? env.SPECIAL_RECIPE || '' : '',   // tests only: force every slot's twist

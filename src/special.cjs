@@ -74,12 +74,23 @@
     // layout from WALLS; see walls() below for where they stand.
     { id: 'walls', name: 'The wall', blurb: 'Fly over a wall between rings', t: { moveScale: 0.5 }, ob: 'wall' },
     { id: 'hurdles', name: 'Hurdles', blurb: 'A quicker ball and low walls', t: { fast: 1.2, moveScale: 0.5 }, ob: 'low' },
-    { id: 'fortress', name: 'The fortress', blurb: 'Walls, and every ring moves', t: { moveP: 1, moveAmpMin: 30 }, ob: 'wall' }
+    { id: 'fortress', name: 'The fortress', blurb: 'Walls, and every ring moves', t: { moveP: 1, moveAmpMin: 30 }, ob: 'wall' },
+    // Three with rings the regular game doesn't have (engine v17; the owner asked for more special features, like
+    // vertical rings, and much more interesting levels): rings that stand on their side, to be flown straight through
+    // like a gate, and rings that breathe wider and tighter. fx marks them: like the walls, they take turns opening one
+    // prize a day, so the day's rotation of the twelve ring twists is unchanged.
+    { id: 'side', name: 'Side doors', blurb: 'Every ring stands on its side: fly straight through', t: {}, upright: 'all', fx: true },
+    { id: 'switch', name: 'Switchback', blurb: 'A flat ring, then one on its side', t: { moveScale: 0.5 }, upright: 'alt', fx: true },
+    { id: 'pulse', name: 'Heartbeat', blurb: 'Every ring breathes wider and tighter', t: { moveScale: 0.5 }, pulse: true, fx: true }
   ];
+  // an upright ring is this much wider than a flat one of its grade (a gate has to be met at the right height while
+  // the ball rises and falls, where a flat ring is met as it comes down); a breathing ring breathes PULSE.w either
+  // side of its width, over PULSE.p seconds, never tighter than W_MIN
+  const GATE_W = 18, GATE_TAPER = 1.2, PULSE = { w: [9, 14], p: [1.6, 2.4] };
   const PER_DAY = 3;
   const PER_SLOT = 5;        // a prize has this many specials a day: clear one and the next takes its place
   const BY = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
-  const PLAIN = RECIPES.filter((r) => !r.ob), OBST = RECIPES.filter((r) => r.ob);
+  const PLAIN = RECIPES.filter((r) => !r.ob && !r.fx), OBST = RECIPES.filter((r) => r.ob), FX = RECIPES.filter((r) => r.fx);
   // Walls: how thick; and for each layout, where in the gap between two rings each wall stands (a range, as a share
   // of the gap) and how far above the line from one ring to the next its top is (a range; below the line if negative)
   const WALL_W = 18, WALL_PAD = 8, WALL_TOP = 120, WALL_REACT = 0.2, WALL_DIVE = 90;
@@ -284,9 +295,45 @@
         [[-0.03, -0.72197, -0.004865], [0.0371, -0.66971, 0.01075], [-0.0243, -0.46063, 0.000596], [-0.0319, -0.28034, 0.001102], [-0.0556, -0.15658, 0.000014]],
         [[0.0016, -0.94403, 0.008109], [-0.0471, -0.71323, -0.003463], [-0.0486, -0.5504, -0.007142], [-0.0353, -0.41656, 0.001549], [-0.0589, -0.24002, -0.001218]],
         [[-0.0324, -1.05132, -0.001951], [0.0974, -1.01266, 0.016769], [-0.0973, -0.6979, -0.006772], [-0.1028, -0.46205, -0.01016], [-0.0539, -0.38518, 0.00033]]
+      ],
+      side: [
+        [[-0.0652, -0.26825, -0.000346], [-0.0271, -0.1464, 0.00041], [-0.0311, -0.06826, 0.000095], [-0.0127, -0.01913, -0.000028], [-0.0001, -0.00277, -0.000025]],
+        [[-0.0909, -0.32383, 0.002207], [-0.0698, -0.15412, -0.000589], [-0.0351, -0.08331, -0.000097], [-0.0079, -0.02598, -0.000067], [0.0006, -0.00557, 0.000047]],
+        [[-0.0821, -0.3975, 0.002736], [-0.046, -0.21425, -0.000403], [-0.0393, -0.1092, -0.000029], [-0.0134, -0.03585, -0.00016], [-0.0042, -0.00875, 0.000049]],
+        [[0.1249, -0.48095, 0.004793], [0.055, -0.26348, -0.000352], [0.0479, -0.15005, 0.000288], [0.001, -0.05283, 0.000005], [-0.0074, -0.01559, 0.000103]],
+        [[0.095, -0.509, 0.001963], [0.0414, -0.28088, -0.001538], [0.0286, -0.17684, 0.000499], [0.0067, -0.06906, 0.00022], [-0.014, -0.02057, 0.000083]],
+        [[0.0555, -0.56409, -0.000499], [0.0485, -0.34851, -0.000149], [0.0265, -0.2031, -0.000124], [-0.0032, -0.09147, 0.000451], [-0.0177, -0.02279, -0.000171]],
+        [[0.0599, -0.65024, 0.002542], [0.0797, -0.40255, 0.001053], [0.0537, -0.27803, 0.002835], [-0.0071, -0.10605, -0.000208], [-0.0168, -0.03771, -0.000001]],
+        [[0.018, -0.76318, 0.000895], [0.1049, -0.57189, 0.00394], [0.0236, -0.3471, 0.001177], [0.0092, -0.17735, 0.00044], [-0.008, -0.0693, 0.000125]],
+        [[-0.0526, -0.88572, -0.018894], [0.1019, -0.74404, 0.009687], [0.0019, -0.46521, -0.003343], [-0.0154, -0.25313, -0.000049], [-0.0376, -0.11688, 0.000111]],
+        [[-0.0145, -1.15616, 0], [0.1065, -0.93357, 0.006259], [0.0329, -0.70843, 0.000946], [-0.0405, -0.40757, 0.001925], [-0.0781, -0.19173, -0.00066]]
+      ],
+      switch: [
+        [[0.0675, -0.17054, -0.000163], [0.0581, -0.09529, 0.000191], [0.0275, -0.04262, 0.000042], [0.0133, -0.01447, 0.000076], [0.0018, -0.0028, 0.000044]],
+        [[0.0642, -0.22316, 0.00087], [0.0495, -0.11022, -0.00004], [0.0231, -0.05934, 0.000197], [0.0046, -0.01824, -0.000024], [0.0023, -0.00337, -0.000008]],
+        [[0.0252, -0.26185, -0.000816], [0.0272, -0.1577, 0.000191], [0.0057, -0.0807, 0.000046], [0.0068, -0.0295, 0.000005], [-0.0004, -0.00585, -0.000024]],
+        [[0.0937, -0.36399, 0.0041], [0.0286, -0.19585, 0.000332], [-0.0017, -0.10425, -0.000081], [0.0003, -0.04211, 0.00016], [-0.0063, -0.00964, -0.000042]],
+        [[0.1033, -0.41685, 0.004114], [0.0198, -0.23434, 0.001026], [-0.0024, -0.12683, -0.000081], [-0.0086, -0.05299, -0.000017], [-0.0107, -0.01398, -0.000085]],
+        [[0.1033, -0.46522, 0.004362], [0.0351, -0.26315, 0.001019], [-0.0207, -0.15856, -0.000178], [-0.0094, -0.07194, 0.000031], [-0.0109, -0.02108, -0.000102]],
+        [[0.1332, -0.55308, 0.008601], [0.0394, -0.3181, -0.000541], [-0.0014, -0.20499, 0.00069], [-0.0203, -0.09078, -0.000058], [-0.0147, -0.03645, 0.000058]],
+        [[0.0883, -0.64719, 0.002304], [-0.0065, -0.41233, -0.001306], [-0.0327, -0.28325, -0.000107], [-0.0536, -0.15925, 0.000422], [-0.0465, -0.06944, -0.000044]],
+        [[0.1153, -0.83062, 0.016528], [-0.0325, -0.48501, -0.009981], [-0.013, -0.39867, 0.000273], [-0.0532, -0.23699, 0.001068], [-0.0716, -0.11276, -0.000146]],
+        [[0.0707, -0.9322, 0], [0.0388, -0.71389, 0.002819], [-0.0663, -0.48156, -0.00517], [-0.0463, -0.33175, -0.000962], [-0.074, -0.19191, 0.000099]]
+      ],
+      pulse: [
+        [[-0.0148, -0.08631, 0.000228], [0.0172, -0.0431, -0.000083], [0.0064, -0.02126, 0.000023], [0.0035, -0.00545, -0.000002], [0.0003, -0.0009, 0]],
+        [[-0.0263, -0.1142, -0.000227], [0.0098, -0.06777, -0.000053], [0.0039, -0.03349, -0.000067], [0.0077, -0.01422, 0.000093], [0.0034, -0.00439, 0.000024]],
+        [[-0.0207, -0.20191, 0.000495], [0.0055, -0.12125, -0.000127], [-0.0017, -0.0686, 0.000015], [0.0101, -0.02879, 0.00005], [0.0009, -0.00844, -0.000024]],
+        [[-0.0081, -0.23406, 0.000101], [-0.0067, -0.15502, 0.000237], [-0.008, -0.09693, 0.000384], [-0.0144, -0.03487, 0.000033], [-0.0055, -0.01192, 0.000014]],
+        [[-0.0056, -0.29129, 0.00178], [-0.017, -0.17369, -0.001153], [0.004, -0.12556, 0.000299], [-0.0149, -0.05291, 0.000111], [-0.0125, -0.01551, -0.000089]],
+        [[-0.0375, -0.30735, -0.00319], [0.0194, -0.24433, 0.000663], [-0.0153, -0.14881, -0.000327], [-0.0096, -0.07552, 0.000019], [-0.0105, -0.03271, 0.000109]],
+        [[-0.0688, -0.35912, -0.005071], [0.0094, -0.28908, 0.000718], [0.0105, -0.20798, 0.001025], [-0.0233, -0.10192, -0.000166], [-0.0237, -0.04464, -0.000101]],
+        [[-0.0203, -0.55175, 0.005513], [-0.021, -0.39812, -0.002143], [-0.0104, -0.31712, -0.000515], [-0.0242, -0.18364, 0.000185], [-0.0337, -0.10448, 0.000228]],
+        [[0.0298, -0.74787, 0.010994], [-0.0351, -0.51936, -0.002467], [-0.001, -0.4221, 0.000321], [-0.024, -0.27458, -0.000736], [-0.044, -0.15358, -0.000701]],
+        [[-0.0823, -0.73457, -0.019403], [-0.0535, -0.65228, 0], [0.0045, -0.58649, 0.005767], [-0.0089, -0.42144, 0.005565], [-0.0367, -0.24567, -0.000615]]
       ]
     }
-  }; // engine v16, 2000 attempts per cell, 2026-11-26
+  }; // engine v17, 2000 attempts per cell, 2026-11-26
   // @@END@@
 
   // ---------------------------------------------------------------- courses
@@ -318,6 +365,7 @@
     const hoops = [], mid = (E.Y_MIN + E.Y_MAX) / 2, half = (E.Y_MAX - E.Y_MIN) / 2;
     let x = C.firstX, prevY = START_Y;
     const wPhase = rng(), wLen = 5 + Math.floor(rng() * 3); // the wave's starting point and length (rings)
+    const pr = R.pulse ? E.makeRng('specialpulse|' + seed + '|' + R.id + '|' + g) : null;
     for (let i = 0; i < n; i++) {
       // a fixed number of draws per ring, as in the engine
       const r1 = rng(), r2 = rng(), r3 = rng(), r4 = rng(), r5 = rng(), r6 = rng(), r7 = rng(), r8 = rng(), r9 = rng();
@@ -342,13 +390,20 @@
       if (prevY - (y - amp) > maxUp) y = prevY - maxUp + amp;
       if (y - amp < E.Y_MIN) y = E.Y_MIN + amp;
       if (y + amp > E.Y_MAX) y = E.Y_MAX - amp;
+      const up = R.upright === 'all' || (R.upright === 'alt' && i % 2 === 1);
       let tilt = 0;
-      if (r6 < C.tiltP) tilt = (R.lean === 'alt' ? (i % 2 ? 1 : -1) : r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * DEG;
-      let w = C.hoopW;
+      if (r6 < C.tiltP && !up) tilt = (R.lean === 'alt' ? (i % 2 ? 1 : -1) : r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * DEG;
+      let w = C.hoopW + (up ? GATE_W - GATE_TAPER * g : 0); // gates come closer to a flat ring's width on the harder grades
       if (R.width === 'squeeze') w = Math.round((C.hoopW + Math.max(-14, 12 - 2.2 * i)) * 10) / 10; // wide at first, then tighter than Needle
       else if (R.width === 'alt') w = Math.round((C.hoopW + (i % 2 ? -13 : 16)) * 10) / 10;
       if (w < W_MIN) w = W_MIN;
-      hoops.push({ i, x, y0: y, w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 });
+      const hp = { i, x, y0: y, w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 };
+      if (up) { hp.v = true; hp.tilt = -90 * DEG; hp.c = 0; hp.s = -1; } // stands on its side: a gate (engine v17)
+      if (pr) { // breathes: its own stream of numbers (three a ring), so the rings are the ones it would have without
+        const a = pr(), b = pr(), c = pr();
+        hp.pw = Math.min(PULSE.w[0] + (PULSE.w[1] - PULSE.w[0]) * a, w - W_MIN); hp.pp = PULSE.p[0] + (PULSE.p[1] - PULSE.p[0]) * b; hp.pph = c;
+      }
+      hoops.push(hp);
       prevY = y;
     }
     const ws = R.ob ? walls(R, C, hoops, E.makeRng('specialwalls|' + seed + '|' + R.id + '|' + g)) : null;
@@ -423,6 +478,8 @@
     const a = order(Math.floor(k / CYCLE)), mod = (v, m) => ((v % m) + m) % m;
     const q = SLOTS.map((x, slot) => [a[pos * PER_DAY + slot]]);
     if (OBST.length) { const s = mod(k + Math.floor(k / OBST.length), SLOTS.length); q[s].unshift(OBST[mod(k, OBST.length)]); }
+    // and the next prize along opens with one of the new-ring courses (engine v17), also in turn
+    if (FX.length) { const s = mod(k + Math.floor(k / OBST.length) + 1, SLOTS.length); q[s].unshift(FX[mod(k, FX.length)]); }
     const used = new Set([].concat(...q)), rest = RECIPES.filter((r) => !used.has(r)), r = E.makeRng('specialnext|' + k);
     for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = rest[i]; rest[i] = rest[j]; rest[j] = t; }
     let s = 0;
@@ -541,7 +598,7 @@
   return {
     ENTRY, DAY_MS, START_Y, SLOTS, TARGET, N_MIN, N_MAX, N_IDEAL, GRADES, RECIPES, BY, ANCHORS, LEVEL_NAMES, GRID,
     D_MIN, D_MAX, PRIOR_MU, PRIOR_SD, START, DOWN, SLOT_MARGIN, UNLOCK, TABLES,
-    config, generate, gradeText, dayKey, dayStart, closesAt, specialsFor, queuesFor, CYCLE, PER_DAY, PER_SLOT, W_MIN, PLAIN, OBST, WALLS, WALL_W,
+    config, generate, gradeText, dayKey, dayStart, closesAt, specialsFor, queuesFor, CYCLE, PER_DAY, PER_SLOT, W_MIN, PLAIN, OBST, FX, WALLS, WALL_W, GATE_W, PULSE, walls,
     blank, addLevel, regular, startFor, levelOf, addSpecial, up, levelName, rating, courseFor, todayFor, missReg, clearP
   };
 });

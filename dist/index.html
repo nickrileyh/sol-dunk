@@ -1418,6 +1418,25 @@ input { caret-color: var(--accent-hi); }
   body:not(.desk) .home .hero { flex: 0 0 0; margin: 0; border-radius: 0; box-shadow: 0 0 0 100vmax var(--bg); }
   body:not(.desk) #lobby .controls { margin-block: auto; }
 }
+/* The daily pot as a game of its own: today's board, the places' shares, and the HUD's place in a run */
+#potCap.rank .unit, #potCap.rank .sol-ico { display: none; }
+.pboard { list-style: none; margin: 0; padding: 4px 0; border-radius: 18px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--hair); counter-reset: none; }
+.pboard li { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto 44px; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; box-shadow: inset 0 -1px 0 var(--line); font-size: 15px; color: var(--label); }
+.pboard li:last-child { box-shadow: none; }
+.pboard .pl { font-family: var(--font-round); font-size: 14px; font-weight: 700; color: var(--label-2); }
+.pboard .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; color: var(--label-2); }
+.pboard .sc { font-size: 12px; color: var(--label-3); }
+.pboard .sc::before { content: "score "; }
+.pboard b { justify-self: end; font-family: var(--font-round); font-size: 17px; font-weight: 700; }
+.pboard li.top .pl { color: var(--green); }
+.pboard li.me { background: rgba(153, 69, 255, 0.12); }
+.pboard li.me .who { font-family: var(--font); font-size: 15px; font-weight: 700; color: var(--accent-hi); }
+.pboard li.gap { display: block; min-height: 22px; padding: 0; text-align: center; font-size: 13px; line-height: 22px; color: var(--label-3); }
+.pboard.mini { margin: 0 16px 4px; padding: 0; background: none; box-shadow: none; }
+.pboard.mini li { min-height: 34px; padding: 0 2px; grid-template-columns: 38px minmax(0, 1fr) auto 36px; }
+.pboard.mini .sc { display: none; }
+.sec-h .sec-k { font-size: 12px; font-weight: 600; color: var(--label-3); }
+.tiles.places b { color: var(--green); }
 </style>
 </head>
 <body class="hud-lobby">
@@ -1601,7 +1620,7 @@ input { caret-color: var(--accent-hi); }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 16; // v16: walls (special courses only: a level may carry slabs that end the attempt on touch; levels without any play exactly as on v15); v15: a ball that lands with its centre on the outer half of the near rim falls off instead of being carried in; v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
+  const VERSION = 17; // v17: sideways and breathing rings (only on courses that carry them: a ring may stand upright, to be flown straight through, or breathe wider and tighter; levels without any play exactly as on v16); v16: walls (special courses only: a level may carry slabs that end the attempt on touch; levels without any play exactly as on v15); v15: a ball that lands with its centre on the outer half of the near rim falls off instead of being carried in; v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -1738,6 +1757,8 @@ input { caret-color: var(--accent-hi); }
 
   function hoopY(h, t) { return h.amp === 0 ? h.y0 : h.y0 + h.amp * wave(t / h.period + h.phase); }
   function hoopVY(h, t) { return h.amp === 0 ? 0 : h.amp * waveD(t / h.period + h.phase) / h.period; }
+  // v17: a breathing ring's width now (pw: how far it breathes either side of w, pp: its period, pph: its phase)
+  function hoopW(h, t) { return h.pw ? h.w + h.pw * wave(t / h.pp + h.pph) : h.w; }
 
   // ---------- levels ----------
   function levelConfig(di, L) {
@@ -1808,7 +1829,8 @@ input { caret-color: var(--accent-hi); }
     const hs = new Array(level.hoops.length);
     for (let i = 0; i < hs.length; i++) {
       const h = level.hoops[i];
-      hs[i] = { i: h.i, x: h.x, y0: h.y0, w: h.w, amp: h.amp, period: h.period, phase: h.phase, tilt: h.tilt, c: h.c, s: h.s, cp: h.cp, st: 0, touched: false, off: false };
+      hs[i] = { i: h.i, x: h.x, y0: h.y0, w: h.w, amp: h.amp, period: h.period, phase: h.phase, tilt: h.tilt, c: h.c, s: h.s, cp: h.cp, st: 0, touched: false, off: false,
+        v: !!h.v, pw: h.pw || 0, pp: h.pp || 1, pph: h.pph || 0 }; // v17: v = stands upright (c 0, s -1); pw/pp/pph = breathes
     }
     // Walls (v16; only special courses have any): solid slabs, each a rectangle from x0 to x1 and from its top y0
     // down to y1 (past the floor). Touching one ends the attempt, like the floor. They're kept in order of x, and
@@ -1830,7 +1852,7 @@ input { caret-color: var(--accent-hi); }
 
   function hoopInteract(st, h, t) {
     const b = st.ball, P = PHYS;
-    const half = h.w * 0.5;
+    const half = (h.pw ? hoopW(h, t) : h.w) * 0.5;
     if (b.x - h.x < -(half + P.R + 40)) { st.prevLy = NaN; return 0; }
     let ev = 0;
     const hy = hoopY(h, t), hvy = hoopVY(h, t);
@@ -1857,7 +1879,7 @@ input { caret-color: var(--accent-hi); }
           b.vx = vn2 * nx + vt2 * tx;
           b.vy = vn2 * ny + vt2 * ty + hvy;
           // the near rim, from above, with the ball's centre outside the middle of the tube: it falls off the front
-          if (side < 0 && dx * c + dy * s < 0 && -dx * s + dy * c < 0) { h.off = true; if (b.vx > 0) b.vx = 0; }
+          if (!h.v && side < 0 && dx * c + dy * s < 0 && -dx * s + dy * c < 0) { h.off = true; if (b.vx > 0) b.vx = 0; }
           if (firm || !h.touched) { st.impact = imp; st.rimHits++; ev |= EV.RIM; }
           if (firm) st.knockTick = st.tick;
           h.touched = true;
@@ -1880,6 +1902,14 @@ input { caret-color: var(--accent-hi); }
       return ev;
     }
 
+    // An upright ring (v17) is a gate: with c 0 and s -1, ly is how far the ball is past it and lx how far above its
+    // middle, so the same test scores a pass straight through the opening. It's missed once the ball is past it
+    // without scoring (it went over or under).
+    if (h.v) {
+      if (ly > P.RP + P.R + 2) { miss(st, h, lx > 0 ? 'over' : 'under'); ev |= EV.MISS; }
+      st.prevLy = ly;
+      return ev;
+    }
     // no net: the ball may rise up through the ring; only a downward pass scores.
     // the ring is missed once the ball is fully past its far side without scoring.
     if (lx > half + P.RP + P.R + 2) { miss(st, h, ly < 0 ? 'over' : 'under'); ev |= EV.MISS; }
@@ -1904,9 +1934,9 @@ input { caret-color: var(--accent-hi); }
     // Fair rims: after a touch, while the ball is over the opening its forward speed fades and the push waits,
     // so it drops in instead of rolling on over the back rim. A ball past the end of the rim still bounces out.
     const hn = st.hoops[st.next];
-    if (hn && hn.touched) {
+    if (hn && hn.touched && !hn.v) { // (an upright ring is flown straight through: nothing to settle into)
       const dx = b.x - hn.x, dy = b.y - hoopY(hn, st.tick * DT);
-      const lx = dx * hn.c + dy * hn.s, ly = -dx * hn.s + dy * hn.c, half = hn.w * 0.5;
+      const lx = dx * hn.c + dy * hn.s, ly = -dx * hn.s + dy * hn.c, half = (hn.pw ? hoopW(hn, st.tick * DT) : hn.w) * 0.5;
       if (ly < 0 && ly > -P.SETTLE_H && lx > -half && lx < half) { kx = 0; b.vx -= b.vx * (P.SETTLE_D * DT); }
       // Outer half falls off: after a landing outside the middle of the near rim, the push waits while the ball is
       // still above the rim line and outside that end, so it rolls off the front (until a tap, or it has dropped past)
@@ -1995,7 +2025,7 @@ input { caret-color: var(--accent-hi); }
   return {
     VERSION, TICK_HZ, DT, WORLD, PHYS, HOOPS_PER_LEVEL, LEVELS, MAX_TICKS, Y_MIN, Y_MAX, DIFFS, EV,
     makeRng, hashSeed, dsin, dcos, wave, waveD, hoopY, hoopVY,
-    levelConfig, levelFeatures, generateLevel, createState, step, replay, validTaps,
+    levelConfig, levelFeatures, generateLevel, createState, step, replay, validTaps, hoopW,
     hoopMultiplier, applyLevel
   };
 });
@@ -2093,7 +2123,7 @@ input { caret-color: var(--accent-hi); }
     bot.key = st.next; bot.h = h;
     // average vertical rim speed, used to scale error on moving rims
     const mv = h.amp ? (h.amp * 3.0 / h.period) : 0;
-    const tiltDeg = Math.abs(h.tilt) * 57.29577951308232;
+    const tiltDeg = h.v ? 0 : Math.abs(h.tilt) * 57.29577951308232; // an upright ring isn't a leaning one
     const speedK = st.speed / 165;
     let sd = p.aim * speedK * (1 + p.moveK * mv / 100) * (1 + p.tiltK * tiltDeg / 20);
     if (p.tail && rng() < p.tail) sd *= p.tailK;
@@ -2157,6 +2187,49 @@ input { caret-color: var(--accent-hi); }
     return { xc: b.x + vx * s, vc: b.vy + P.G * s };
   }
 
+  // Upright rings (engine v17) are gates: the ball has to be at the right height as it passes, and it's steadiest
+  // there at the top of a hop, so the plan is one tap that puts the top of a hop at the gate. Until a hop that far
+  // ahead can reach it, the ball is held around the gate's height (a tap each time it sinks a little below). Aim
+  // error is a height error here (the drop error of a flat ring, about two thirds of it), and the rest is as usual:
+  // tap jitter, misjudged timing on moving gates and the occasional lapse. Levels without upright rings never get here.
+  const GATE_AIM = 0.65, GATE_LOW = 12, GATE_VK = 0.035;
+  function fallTo(y, vy, s) {
+    const v = vy + P.G * s;
+    if (v <= P.VMAX) return [y + vy * s + 0.5 * P.G * s * s, v];
+    const tc = (P.VMAX - vy) / P.G;
+    return [y + vy * tc + 0.5 * P.G * tc * tc + P.VMAX * (s - tc), P.VMAX];
+  }
+  function decideGate(bot, st, h) {
+    const p = bot.p, b = st.ball, t0 = st.tick * DT;
+    const vx = b.vx < st.speed * 0.85 ? (b.vx + st.speed) * 0.5 : st.speed;
+    const T = (h.x - b.x) / vx;
+    if (T < 0) return false; // past it: nothing a tap can do
+    const yT = perceivedY(bot, t0 + T);
+    const cost = (yc, vc) => Math.abs(yc - yT) + Math.abs(vc) * GATE_VK;
+    const [ny, nv] = fallTo(b.y, b.vy, T);
+    let best = { k: -1, err: Math.abs(ny - yT), cost: ny > W.FLOOR - P.R - 4 ? 1e9 : cost(ny, nv) };
+    const stepK = bot.fine ? 1 : 2, kMax = Math.min(100, Math.floor(T / DT));
+    for (let k = 0; k <= kMax; k += stepK) {
+      const tk = k * DT, [yk] = fallTo(b.y, b.vy, tk);
+      if (yk > W.FLOOR - P.R - 6) break;
+      if (yk - (P.FLAP * P.FLAP) / (2 * P.G) < P.R + 2) continue; // would bonk the ceiling
+      const [yc, vc] = fallTo(yk, -P.FLAP, T - tk);
+      if (yc > W.FLOOR - P.R - 4) continue;
+      const c = cost(yc, vc);
+      if (c < best.cost) best = { k, err: Math.abs(yc - yT), cost: c };
+    }
+    const horizon = Math.round(p.commit / DT);
+    if (best.k < 0) {
+      if (best.err < 14) return false; // already on a line through it
+    } else if (best.err < 14) {
+      if (best.k <= horizon) return schedule(bot, st, best.k, true);
+      return false;
+    }
+    // too far for one hop: hold the ball around the gate's height
+    if (b.vy > 0 && b.y > Math.max(P.R + 90, perceivedY(bot, t0) + GATE_LOW)) return schedule(bot, st, 0, false);
+    return false;
+  }
+
   function schedule(bot, st, k, final) {
     const p = bot.p;
     let jit = p.timing ? gauss(bot.rng) * p.timing : 0;
@@ -2182,7 +2255,8 @@ input { caret-color: var(--accent-hi); }
     if (!bot.fine && (st.tick & 1)) return false; // humans decide ~60x/s, not 120x/s
     const h = st.hoops[st.next];
     if (!h) return false;
-    if (bot.key !== st.next) acquire(bot, st, h);
+    if (bot.key !== st.next) { acquire(bot, st, h); if (h.v) { bot.aimDY = bot.aimDX * GATE_AIM - AIM_BIAS * GATE_AIM; bot.aimDX = 0; } }
+    if (h.v) return decideGate(bot, st, h);
     const b = st.ball;
     const vx = b.vx < st.speed * 0.85 ? (b.vx + st.speed) * 0.5 : st.speed;
     const aimX = h.x + bot.aimDX * h.c;
@@ -2225,78 +2299,52 @@ input { caret-color: var(--accent-hi); }
   return { SKILLS, createBot, decide, gauss, AIM_BIAS };
 });
 </script>
-<script>/* SOL DUNK challenge pots: shared by the browser, the server and the simulator.
+<script>/* SOL DUNK daily pot: shared by the browser, the server and the tests.
  *
- * Each pot runs for one UTC day. Players pay a fixed entry into the pot, then play ordinary runs. Everyone who
- * meets the pot's challenge in a run (started after they entered, on the named tier or harder) before the pot
- * closes splits it equally. The house keeps RAKE of every entry, whoever wins, so the pot pays the house from
- * every player however skilled; the players' own runs are bets as usual. If nobody makes it, the pot rolls over
- * into the next one.
+ * The pot is a game of its own (the owner asked for it to stop riding on regular runs): one course a UTC day, the
+ * same for everyone, built from a seed fixed when the pot opens and shown to everyone. Each attempt costs the entry,
+ * and every entry goes into the pot; a player's best attempt is what counts. When the day ends the best three split
+ * the pot, PLACES of it in turn (half, three tenths and a fifth). The house keeps RAKE of every entry whoever wins,
+ * and never takes a side, so the pot earns the same from every player however skilled.
  *
- * Challenges are judged only from a run's verified ring outcomes ('S' swish, 'R' rim) per level, so the server
- * can decide them from the taps it replays, and the browser shows the same progress live.
+ * The course is about 40 rings that start wide and still and get harder ring by ring (the duel's course, src/duel.cjs,
+ * so the time between rims never shrinks), with the day's theme on top: rings that stand on their side to be flown
+ * straight through, rings that breathe wider and tighter, every ring moving (engine v17). Hardly anyone sees the last
+ * ring, so attempts rank: more rings first, then the higher score (the game's own: a rim hit 1, a swish more with
+ * each swish in a row). Players level on both share their places. With fewer than three players the places they
+ * fill share the whole pot in the same proportions. Nobody in it: the pot rolls into the next day's.
+ *
+ * Attempts are judged only from the replay of the player's taps on the day's course (the server's own), never from
+ * the client's word.
  */
 (function (root, factory) {
-  const P = factory();
+  const P = factory(root);
   if (typeof module === 'object' && module.exports) module.exports = P;
   else root.DunkPots = P;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (root) {
   'use strict';
 
+  // the course builder lives with the duels; looked up when it's needed (in the page it loads after this file)
+  const D = () => root.DunkDuel || (typeof require === 'function' ? require('./duel.cjs') : null);
+
   const RAKE = 0.1;               // the house's share of every entry
-  const ENTRY = 0.05;             // entry in SOL (the server can set its own)
+  const ENTRY = 0.05;             // what an attempt costs, in SOL (the server can set its own)
   const DAY_MS = 86400000;
-  const HOOPS = 6;
+  const PLACES = [0.5, 0.3, 0.2]; // what the best three take of the pot
+  const RINGS = 40;               // the course's length
+  const CUTOFF_MS = 4 * 60000;    // no new attempt this close to the end of the day, so every flight is in before it closes
 
-  // ring points, the same as the score in the game: a rim hit 1, a swish 1 + streak (up to 6), a perfect level +10
-  const ringPoints = (o, streak) => (o === 'S' ? 1 + Math.min(streak, 5) : 1);
-
-  // The challenges. tier = the easiest mode where it counts (0 Easy, 1 Hard; engine v14 has just the two).
-  // p = the chance one run makes it at that tier for a [casual, average, good] player, from the simulator
-  // (they keep going until they bust); the demo uses it to simulate other entrants. Aim: an average player
-  // makes one in about 4-15% of runs, a strong one in 25-50%. Measured on engine v13 (20,000 runs per skill):
-  // with the rings spread out 1:1 with the speed, swishes got rarer (an average player swishes 65% of Pro's
-  // level-1 rings, down from 71%), so the streak, swish and score challenges came down and "Swish every ring in
-  // a level" moved to Pro. Each replaced its v12 challenge in place, so every day keeps the same kind of challenge.
-  // Engine v14 has two modes, Easy (v13's Pro rings) and Hard (v13's Legend rings); every challenge was measured
-  // again (node sim/pots.cjs, 3000 runs per skill). Hard's three drifted below the aim on Legend's rings and were
-  // replaced in place by easier ones (Clear level 4, Swish 12 rings, Swish 5 in a row), and Score 120 by Clear
-  // level 6 on Easy.
-  // Engine v15 (the outer half of the near rim falls off) moved them by under a point; p holds its measurement
-  // (5,000 runs per skill).
-  const GOALS = [
-    { id: 'streak8', kind: 'best', n: 8, tier: 0, text: 'Swish 8 in a row', p: [0.02, 0.087, 0.328] },
-    { id: 'perfect1', kind: 'perfect', n: 1, tier: 0, text: 'Swish every ring in a level', p: [0.037, 0.126, 0.399] },
-    { id: 'clear4', kind: 'clears', n: 4, tier: 1, text: 'Clear level 4', p: [0.024, 0.105, 0.372] },
-    { id: 'score90', kind: 'score', n: 90, tier: 0, text: 'Score 90 in one run', p: [0.005, 0.06, 0.465] },
-    { id: 'swish12', kind: 'swishes', n: 12, tier: 1, text: 'Swish 12 rings in one run', p: [0.008, 0.075, 0.422] },
-    { id: 'streak5', kind: 'best', n: 5, tier: 1, text: 'Swish 5 in a row', p: [0.043, 0.123, 0.355] },
-    { id: 'clear6', kind: 'clears', n: 6, tier: 0, text: 'Clear level 6', p: [0.023, 0.108, 0.386] },
-    // five more kinds (the owner asked for more fun and unique challenges), measured the same way on engine v15 (5,000 runs per skill):
-    // the green ring itself, arriving at a checkpoint on fire, a streak after a rim hit, and a fast start
-    { id: 'green4', kind: 'greens', n: 4, tier: 0, text: 'Swish 4 green rings in one run', p: [0.018, 0.106, 0.408] },
-    { id: 'hot2', kind: 'hot', n: 2, tier: 0, text: 'Reach 2 checkpoints on fire', p: [0.029, 0.117, 0.426] },
-    { id: 'comeback7', kind: 'comeback', n: 7, tier: 0, text: 'Hit a rim, then swish 7 in a row', p: [0.032, 0.109, 0.351] },
-    { id: 'early10', kind: 'early', n: 10, tier: 0, text: 'Swish 10 of your first 12 rings', p: [0.015, 0.095, 0.341] },
-    { id: 'early8', kind: 'early', n: 8, tier: 1, text: 'Swish 8 of your first 12 rings', p: [0.029, 0.099, 0.352] }
+  // The themes take turns, one a day: what the day's course has on top of its rings. Ring 0 is always plain.
+  const THEMES = [
+    { id: 'doors', name: 'Side doors', blurb: 'Every third ring stands on its side', up: (i) => i % 3 === 2 },
+    { id: 'switch', name: 'Switchback', blurb: 'A flat ring, then one on its side, all the way', up: (i) => i % 2 === 1 },
+    { id: 'heart', name: 'Heartbeat', blurb: 'The rings breathe wider and tighter', pulse: (i) => i >= 2 },
+    { id: 'storm', name: 'The storm', blurb: 'Every ring moves, and every fourth stands on its side', up: (i) => i % 4 === 3, moveAll: true },
+    { id: 'mix', name: 'Everything', blurb: 'Sideways rings, breathing rings, moving and leaning ones', up: (i) => i % 4 === 2, pulse: (i) => i % 4 === 0 && i > 0 }
   ];
-  // challenges taken out of the rotation (engine v13 and v14): no new pot gets one, but a pot that opened with one
-  // before an update is still shown and judged by it until it closes
-  const RETIRED = [
-    { id: 'clear5', kind: 'clears', n: 5, tier: 1, text: 'Clear level 5' },
-    { id: 'swish15', kind: 'swishes', n: 15, tier: 1, text: 'Swish 15 rings in one run' },
-    { id: 'streak6', kind: 'best', n: 6, tier: 1, text: 'Swish 6 in a row' },
-    { id: 'score120', kind: 'score', n: 120, tier: 0, text: 'Score 120 in one run' },
-    { id: 'streak10', kind: 'best', n: 10, tier: 0, text: 'Swish 10 in a row' },
-    { id: 'score100', kind: 'score', n: 100, tier: 0, text: 'Score 100 in one run' },
-    { id: 'swish25', kind: 'swishes', n: 25, tier: 0, text: 'Swish 25 rings in one run' },
-    { id: 'streak8a', kind: 'best', n: 8, tier: 1, text: 'Swish 8 in a row' }
-  ];
-  const GOAL_BY = Object.fromEntries(RETIRED.concat(GOALS).map((g) => [g.id, g]));
-  const TIER_NAMES = ['Easy', 'Hard'];
-  const tierText = (t) => (t >= 1 ? 'on Hard' : 'in either mode');
+  const THEME_BY = Object.fromEntries(THEMES.map((t) => [t.id, t]));
 
-  // a small seeded generator (the same mulberry32 the engine uses), so every pot's challenge is fixed by its day
+  // a small seeded generator (mulberry32), for the demo's simulated field
   function rng(seedStr) {
     let h = 1779033703 ^ seedStr.length;
     for (let i = 0; i < seedStr.length; i++) { h = Math.imul(h ^ seedStr.charCodeAt(i), 3432918353); h = (h << 13) | (h >>> 19); }
@@ -2311,71 +2359,61 @@ input { caret-color: var(--accent-hi); }
 
   // windows: one pot per UTC day ("2026-11-24"); the demo can add rounds to a day ("2026-11-24#2")
   const dayKey = (ts) => new Date(ts).toISOString().slice(0, 10);
-  const dayStart = (day) => Date.parse(day + 'T00:00:00Z');
-  const closesAt = (key) => dayStart(String(key).slice(0, 10)) + DAY_MS;
-  // Each run of GOALS.length days uses every challenge once, in a shuffled order, so no challenge comes up two
-  // days running (a demo round moves one step along the same order).
+  const dayStart = (day) => Date.parse(String(day).slice(0, 10) + 'T00:00:00Z');
+  const closesAt = (key) => dayStart(key) + DAY_MS;
   const EPOCH = Date.UTC(2026, 0, 5);
-  function order(cycle) {
-    const a = GOALS.slice(), r = rng('potcycle|' + cycle);
-    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
-    return a;
+  // the day's theme (a demo round moves one step along)
+  function themeFor(key) {
+    const n = Math.floor((dayStart(key) - EPOCH) / DAY_MS) + (+String(key).split('#')[1] || 0);
+    return THEMES[((n % THEMES.length) + THEMES.length) % THEMES.length];
   }
-  function goalFor(key) {
-    const L = GOALS.length, n = Math.floor((dayStart(String(key).slice(0, 10)) - EPOCH) / DAY_MS) + (+String(key).split('#')[1] || 0);
-    const cycle = Math.floor(n / L), pos = ((n % L) + L) % L, a = order(cycle);
-    if (a[0] === order(cycle - 1)[L - 1]) { const t = a[0]; a[0] = a[1]; a[1] = t; } // no repeat across cycles either
-    return a[pos];
+  // the day's course: the same for everyone who plays it
+  function course(seed, theme, n) {
+    const T = typeof theme === 'string' ? THEME_BY[theme] : theme;
+    return D().generate('pot|' + seed, n || RINGS, { prefix: 'pot', up: T.up, pulse: T.pulse, moveAll: T.moveAll });
   }
 
-  // levels: [{ outcomes: 'SSRSSS', clear: true }, ...] in order, as verified so far
-  // best: longest swish streak; greens: green (checkpoint) rings swished; hot: checkpoints reached on fire (3 or more
-  // swishes in a row as the level ends); comeback: longest swish streak after the run's first rim hit; early: swishes
-  // among the run's first EARLY rings
-  const EARLY = 12, FIRE = 3;
-  function facts(levels) {
-    let streak = 0, best = 0, swishes = 0, score = 0, perfect = 0, clears = 0, greens = 0, hot = 0, comeback = 0, early = 0, rings = 0, rimmed = false;
-    for (const lv of levels) {
-      const o = String(lv.outcomes || '');
-      for (const c of o) {
-        if (c === 'S') { streak++; swishes++; if (rings < EARLY) early++; } else { streak = 0; rimmed = true; }
-        rings++;
-        score += ringPoints(c, streak);
-        if (streak > best) best = streak;
-        if (rimmed && streak > comeback) comeback = streak;
-      }
-      if (lv.clear) {
-        clears++;
-        if (o.length === HOOPS && !o.includes('R')) { perfect++; score += 10; }
-        if (o[o.length - 1] === 'S') greens++;
-        if (streak >= FIRE) hot++;
-      }
+  // attempts rank by rings, then score; level on both is a tie
+  const cmp = (a, b) => (a.rings !== b.rings ? b.rings - a.rings : b.score - a.score);
+  const same = (a, b) => a.rings === b.rings && a.score === b.score;
+  const better = (a, b) => !b || cmp(a, b) < 0;
+  // The standings: entries [{ id, rings, score, ... }] best first, each with its place (1 for the best; ties share
+  // the place of the first of them).
+  function standings(entries) {
+    const list = entries.slice().sort(cmp);
+    list.forEach((e, i) => { e.place = i && same(e, list[i - 1]) ? list[i - 1].place : i + 1; });
+    return list;
+  }
+  // what a player would be placed with this attempt, among the others' bests (1 = first)
+  const placeOf = (mine, others) => 1 + others.filter((o) => cmp(o, mine) < 0).length;
+
+  // Close a pot. paidIn: every entry paid in; carryIn: rolled in from earlier pots; list: its standings (best first).
+  // Returns what each placed player gets (by id), the house's rake (its share of the entries, plus the odd units left
+  // over by a split) and what rolls over (everything, if nobody played). integer = true works in whole lamports.
+  function settle(paidIn, carryIn, list, integer) {
+    const rake0 = integer ? Math.ceil(paidIn * RAKE) : paidIn * RAKE, pool = carryIn + paidIn - rake0;
+    if (!list.length) return { pays: {}, rake: rake0, carry: pool, pool };
+    const k = Math.min(PLACES.length, list.length), tot = PLACES.slice(0, k).reduce((a, b) => a + b, 0);
+    const frac = PLACES.slice(0, k).map((p) => p / tot); // fewer than three: the places they fill share it all
+    const pays = {};
+    let paid = 0;
+    for (let i = 0; i < k;) {
+      let j = i;
+      while (j + 1 < list.length && same(list[j + 1], list[i])) j++;
+      let f = 0;
+      for (let m = i; m <= Math.min(j, k - 1); m++) f += frac[m];
+      const each = integer ? Math.floor((pool * f) / (j - i + 1)) : (pool * f) / (j - i + 1);
+      for (let m = i; m <= j; m++) { pays[list[m].id] = each; paid += each; }
+      i = j + 1;
     }
-    return { best, swishes, score, perfect, clears, greens, hot, comeback, early };
+    return { pays, rake: rake0 + (pool - paid), carry: 0, pool };
   }
-  // where a run stands on a challenge: { value, target, done }. A run below the challenge's tier never counts.
-  function progress(goal, levels, tier) {
-    const g = typeof goal === 'string' ? GOAL_BY[goal] : goal;
-    if (!g) return { value: 0, target: 1, done: false, counts: false };
-    const counts = tier >= g.tier;
-    const value = facts(levels)[g.kind] || 0;
-    return { value: Math.min(value, g.n), target: g.n, done: counts && value >= g.n, counts };
-  }
+  // the pot as it stands: what's in it for the best three
+  const poolOf = (paidIn, carryIn) => carryIn + paidIn * (1 - RAKE);
+  // what each place would take of it now
+  const placePays = (pool) => PLACES.map((p) => pool * p);
 
-  // Close a pot. entries: total paid in (lamports or SOL); carryIn: rolled in from earlier pots; winners: how many
-  // made it. Returns what each winner gets, the house's rake, and what rolls over (all of it if nobody made it,
-  // otherwise just the indivisible remainder). integer = true works in whole lamports.
-  function split(entries, carryIn, winners, integer) {
-    const rake = integer ? Math.ceil(entries * RAKE) : entries * RAKE;
-    const pool = carryIn + entries - rake;
-    if (!winners) return { share: 0, rake, carry: pool, pool };
-    const share = integer ? Math.floor(pool / winners) : pool / winners;
-    return { share, rake, carry: integer ? pool - share * winners : 0, pool };
-  }
-  // the pot as it stands: what's in it for the winners
-  const poolOf = (entries, carryIn) => carryIn + entries * (1 - RAKE);
-
-  return { RAKE, ENTRY, DAY_MS, GOALS, GOAL_BY, TIER_NAMES, tierText, rng, dayKey, dayStart, closesAt, goalFor, facts, progress, split, poolOf };
+  return { RAKE, ENTRY, DAY_MS, PLACES, RINGS, CUTOFF_MS, THEMES, THEME_BY, rng, dayKey, dayStart, closesAt, themeFor, course, cmp, same, better, standings, placeOf, settle, poolOf, placePays };
 });
 </script>
 <script>/* SOL DUNK daily and weekly missions: shared by the browser, the server and the simulator.
@@ -2825,12 +2863,23 @@ input { caret-color: var(--accent-hi); }
     // layout from WALLS; see walls() below for where they stand.
     { id: 'walls', name: 'The wall', blurb: 'Fly over a wall between rings', t: { moveScale: 0.5 }, ob: 'wall' },
     { id: 'hurdles', name: 'Hurdles', blurb: 'A quicker ball and low walls', t: { fast: 1.2, moveScale: 0.5 }, ob: 'low' },
-    { id: 'fortress', name: 'The fortress', blurb: 'Walls, and every ring moves', t: { moveP: 1, moveAmpMin: 30 }, ob: 'wall' }
+    { id: 'fortress', name: 'The fortress', blurb: 'Walls, and every ring moves', t: { moveP: 1, moveAmpMin: 30 }, ob: 'wall' },
+    // Three with rings the regular game doesn't have (engine v17; the owner asked for more special features, like
+    // vertical rings, and much more interesting levels): rings that stand on their side, to be flown straight through
+    // like a gate, and rings that breathe wider and tighter. fx marks them: like the walls, they take turns opening one
+    // prize a day, so the day's rotation of the twelve ring twists is unchanged.
+    { id: 'side', name: 'Side doors', blurb: 'Every ring stands on its side: fly straight through', t: {}, upright: 'all', fx: true },
+    { id: 'switch', name: 'Switchback', blurb: 'A flat ring, then one on its side', t: { moveScale: 0.5 }, upright: 'alt', fx: true },
+    { id: 'pulse', name: 'Heartbeat', blurb: 'Every ring breathes wider and tighter', t: { moveScale: 0.5 }, pulse: true, fx: true }
   ];
+  // an upright ring is this much wider than a flat one of its grade (a gate has to be met at the right height while
+  // the ball rises and falls, where a flat ring is met as it comes down); a breathing ring breathes PULSE.w either
+  // side of its width, over PULSE.p seconds, never tighter than W_MIN
+  const GATE_W = 18, GATE_TAPER = 1.2, PULSE = { w: [9, 14], p: [1.6, 2.4] };
   const PER_DAY = 3;
   const PER_SLOT = 5;        // a prize has this many specials a day: clear one and the next takes its place
   const BY = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
-  const PLAIN = RECIPES.filter((r) => !r.ob), OBST = RECIPES.filter((r) => r.ob);
+  const PLAIN = RECIPES.filter((r) => !r.ob && !r.fx), OBST = RECIPES.filter((r) => r.ob), FX = RECIPES.filter((r) => r.fx);
   // Walls: how thick; and for each layout, where in the gap between two rings each wall stands (a range, as a share
   // of the gap) and how far above the line from one ring to the next its top is (a range; below the line if negative)
   const WALL_W = 18, WALL_PAD = 8, WALL_TOP = 120, WALL_REACT = 0.2, WALL_DIVE = 90;
@@ -3035,9 +3084,45 @@ input { caret-color: var(--accent-hi); }
         [[-0.03, -0.72197, -0.004865], [0.0371, -0.66971, 0.01075], [-0.0243, -0.46063, 0.000596], [-0.0319, -0.28034, 0.001102], [-0.0556, -0.15658, 0.000014]],
         [[0.0016, -0.94403, 0.008109], [-0.0471, -0.71323, -0.003463], [-0.0486, -0.5504, -0.007142], [-0.0353, -0.41656, 0.001549], [-0.0589, -0.24002, -0.001218]],
         [[-0.0324, -1.05132, -0.001951], [0.0974, -1.01266, 0.016769], [-0.0973, -0.6979, -0.006772], [-0.1028, -0.46205, -0.01016], [-0.0539, -0.38518, 0.00033]]
+      ],
+      side: [
+        [[-0.0652, -0.26825, -0.000346], [-0.0271, -0.1464, 0.00041], [-0.0311, -0.06826, 0.000095], [-0.0127, -0.01913, -0.000028], [-0.0001, -0.00277, -0.000025]],
+        [[-0.0909, -0.32383, 0.002207], [-0.0698, -0.15412, -0.000589], [-0.0351, -0.08331, -0.000097], [-0.0079, -0.02598, -0.000067], [0.0006, -0.00557, 0.000047]],
+        [[-0.0821, -0.3975, 0.002736], [-0.046, -0.21425, -0.000403], [-0.0393, -0.1092, -0.000029], [-0.0134, -0.03585, -0.00016], [-0.0042, -0.00875, 0.000049]],
+        [[0.1249, -0.48095, 0.004793], [0.055, -0.26348, -0.000352], [0.0479, -0.15005, 0.000288], [0.001, -0.05283, 0.000005], [-0.0074, -0.01559, 0.000103]],
+        [[0.095, -0.509, 0.001963], [0.0414, -0.28088, -0.001538], [0.0286, -0.17684, 0.000499], [0.0067, -0.06906, 0.00022], [-0.014, -0.02057, 0.000083]],
+        [[0.0555, -0.56409, -0.000499], [0.0485, -0.34851, -0.000149], [0.0265, -0.2031, -0.000124], [-0.0032, -0.09147, 0.000451], [-0.0177, -0.02279, -0.000171]],
+        [[0.0599, -0.65024, 0.002542], [0.0797, -0.40255, 0.001053], [0.0537, -0.27803, 0.002835], [-0.0071, -0.10605, -0.000208], [-0.0168, -0.03771, -0.000001]],
+        [[0.018, -0.76318, 0.000895], [0.1049, -0.57189, 0.00394], [0.0236, -0.3471, 0.001177], [0.0092, -0.17735, 0.00044], [-0.008, -0.0693, 0.000125]],
+        [[-0.0526, -0.88572, -0.018894], [0.1019, -0.74404, 0.009687], [0.0019, -0.46521, -0.003343], [-0.0154, -0.25313, -0.000049], [-0.0376, -0.11688, 0.000111]],
+        [[-0.0145, -1.15616, 0], [0.1065, -0.93357, 0.006259], [0.0329, -0.70843, 0.000946], [-0.0405, -0.40757, 0.001925], [-0.0781, -0.19173, -0.00066]]
+      ],
+      switch: [
+        [[0.0675, -0.17054, -0.000163], [0.0581, -0.09529, 0.000191], [0.0275, -0.04262, 0.000042], [0.0133, -0.01447, 0.000076], [0.0018, -0.0028, 0.000044]],
+        [[0.0642, -0.22316, 0.00087], [0.0495, -0.11022, -0.00004], [0.0231, -0.05934, 0.000197], [0.0046, -0.01824, -0.000024], [0.0023, -0.00337, -0.000008]],
+        [[0.0252, -0.26185, -0.000816], [0.0272, -0.1577, 0.000191], [0.0057, -0.0807, 0.000046], [0.0068, -0.0295, 0.000005], [-0.0004, -0.00585, -0.000024]],
+        [[0.0937, -0.36399, 0.0041], [0.0286, -0.19585, 0.000332], [-0.0017, -0.10425, -0.000081], [0.0003, -0.04211, 0.00016], [-0.0063, -0.00964, -0.000042]],
+        [[0.1033, -0.41685, 0.004114], [0.0198, -0.23434, 0.001026], [-0.0024, -0.12683, -0.000081], [-0.0086, -0.05299, -0.000017], [-0.0107, -0.01398, -0.000085]],
+        [[0.1033, -0.46522, 0.004362], [0.0351, -0.26315, 0.001019], [-0.0207, -0.15856, -0.000178], [-0.0094, -0.07194, 0.000031], [-0.0109, -0.02108, -0.000102]],
+        [[0.1332, -0.55308, 0.008601], [0.0394, -0.3181, -0.000541], [-0.0014, -0.20499, 0.00069], [-0.0203, -0.09078, -0.000058], [-0.0147, -0.03645, 0.000058]],
+        [[0.0883, -0.64719, 0.002304], [-0.0065, -0.41233, -0.001306], [-0.0327, -0.28325, -0.000107], [-0.0536, -0.15925, 0.000422], [-0.0465, -0.06944, -0.000044]],
+        [[0.1153, -0.83062, 0.016528], [-0.0325, -0.48501, -0.009981], [-0.013, -0.39867, 0.000273], [-0.0532, -0.23699, 0.001068], [-0.0716, -0.11276, -0.000146]],
+        [[0.0707, -0.9322, 0], [0.0388, -0.71389, 0.002819], [-0.0663, -0.48156, -0.00517], [-0.0463, -0.33175, -0.000962], [-0.074, -0.19191, 0.000099]]
+      ],
+      pulse: [
+        [[-0.0148, -0.08631, 0.000228], [0.0172, -0.0431, -0.000083], [0.0064, -0.02126, 0.000023], [0.0035, -0.00545, -0.000002], [0.0003, -0.0009, 0]],
+        [[-0.0263, -0.1142, -0.000227], [0.0098, -0.06777, -0.000053], [0.0039, -0.03349, -0.000067], [0.0077, -0.01422, 0.000093], [0.0034, -0.00439, 0.000024]],
+        [[-0.0207, -0.20191, 0.000495], [0.0055, -0.12125, -0.000127], [-0.0017, -0.0686, 0.000015], [0.0101, -0.02879, 0.00005], [0.0009, -0.00844, -0.000024]],
+        [[-0.0081, -0.23406, 0.000101], [-0.0067, -0.15502, 0.000237], [-0.008, -0.09693, 0.000384], [-0.0144, -0.03487, 0.000033], [-0.0055, -0.01192, 0.000014]],
+        [[-0.0056, -0.29129, 0.00178], [-0.017, -0.17369, -0.001153], [0.004, -0.12556, 0.000299], [-0.0149, -0.05291, 0.000111], [-0.0125, -0.01551, -0.000089]],
+        [[-0.0375, -0.30735, -0.00319], [0.0194, -0.24433, 0.000663], [-0.0153, -0.14881, -0.000327], [-0.0096, -0.07552, 0.000019], [-0.0105, -0.03271, 0.000109]],
+        [[-0.0688, -0.35912, -0.005071], [0.0094, -0.28908, 0.000718], [0.0105, -0.20798, 0.001025], [-0.0233, -0.10192, -0.000166], [-0.0237, -0.04464, -0.000101]],
+        [[-0.0203, -0.55175, 0.005513], [-0.021, -0.39812, -0.002143], [-0.0104, -0.31712, -0.000515], [-0.0242, -0.18364, 0.000185], [-0.0337, -0.10448, 0.000228]],
+        [[0.0298, -0.74787, 0.010994], [-0.0351, -0.51936, -0.002467], [-0.001, -0.4221, 0.000321], [-0.024, -0.27458, -0.000736], [-0.044, -0.15358, -0.000701]],
+        [[-0.0823, -0.73457, -0.019403], [-0.0535, -0.65228, 0], [0.0045, -0.58649, 0.005767], [-0.0089, -0.42144, 0.005565], [-0.0367, -0.24567, -0.000615]]
       ]
     }
-  }; // engine v16, 2000 attempts per cell, 2026-11-26
+  }; // engine v17, 2000 attempts per cell, 2026-11-26
   // @@END@@
 
   // ---------------------------------------------------------------- courses
@@ -3069,6 +3154,7 @@ input { caret-color: var(--accent-hi); }
     const hoops = [], mid = (E.Y_MIN + E.Y_MAX) / 2, half = (E.Y_MAX - E.Y_MIN) / 2;
     let x = C.firstX, prevY = START_Y;
     const wPhase = rng(), wLen = 5 + Math.floor(rng() * 3); // the wave's starting point and length (rings)
+    const pr = R.pulse ? E.makeRng('specialpulse|' + seed + '|' + R.id + '|' + g) : null;
     for (let i = 0; i < n; i++) {
       // a fixed number of draws per ring, as in the engine
       const r1 = rng(), r2 = rng(), r3 = rng(), r4 = rng(), r5 = rng(), r6 = rng(), r7 = rng(), r8 = rng(), r9 = rng();
@@ -3093,13 +3179,20 @@ input { caret-color: var(--accent-hi); }
       if (prevY - (y - amp) > maxUp) y = prevY - maxUp + amp;
       if (y - amp < E.Y_MIN) y = E.Y_MIN + amp;
       if (y + amp > E.Y_MAX) y = E.Y_MAX - amp;
+      const up = R.upright === 'all' || (R.upright === 'alt' && i % 2 === 1);
       let tilt = 0;
-      if (r6 < C.tiltP) tilt = (R.lean === 'alt' ? (i % 2 ? 1 : -1) : r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * DEG;
-      let w = C.hoopW;
+      if (r6 < C.tiltP && !up) tilt = (R.lean === 'alt' ? (i % 2 ? 1 : -1) : r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * DEG;
+      let w = C.hoopW + (up ? GATE_W - GATE_TAPER * g : 0); // gates come closer to a flat ring's width on the harder grades
       if (R.width === 'squeeze') w = Math.round((C.hoopW + Math.max(-14, 12 - 2.2 * i)) * 10) / 10; // wide at first, then tighter than Needle
       else if (R.width === 'alt') w = Math.round((C.hoopW + (i % 2 ? -13 : 16)) * 10) / 10;
       if (w < W_MIN) w = W_MIN;
-      hoops.push({ i, x, y0: y, w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 });
+      const hp = { i, x, y0: y, w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 };
+      if (up) { hp.v = true; hp.tilt = -90 * DEG; hp.c = 0; hp.s = -1; } // stands on its side: a gate (engine v17)
+      if (pr) { // breathes: its own stream of numbers (three a ring), so the rings are the ones it would have without
+        const a = pr(), b = pr(), c = pr();
+        hp.pw = Math.min(PULSE.w[0] + (PULSE.w[1] - PULSE.w[0]) * a, w - W_MIN); hp.pp = PULSE.p[0] + (PULSE.p[1] - PULSE.p[0]) * b; hp.pph = c;
+      }
+      hoops.push(hp);
       prevY = y;
     }
     const ws = R.ob ? walls(R, C, hoops, E.makeRng('specialwalls|' + seed + '|' + R.id + '|' + g)) : null;
@@ -3174,6 +3267,8 @@ input { caret-color: var(--accent-hi); }
     const a = order(Math.floor(k / CYCLE)), mod = (v, m) => ((v % m) + m) % m;
     const q = SLOTS.map((x, slot) => [a[pos * PER_DAY + slot]]);
     if (OBST.length) { const s = mod(k + Math.floor(k / OBST.length), SLOTS.length); q[s].unshift(OBST[mod(k, OBST.length)]); }
+    // and the next prize along opens with one of the new-ring courses (engine v17), also in turn
+    if (FX.length) { const s = mod(k + Math.floor(k / OBST.length) + 1, SLOTS.length); q[s].unshift(FX[mod(k, FX.length)]); }
     const used = new Set([].concat(...q)), rest = RECIPES.filter((r) => !used.has(r)), r = E.makeRng('specialnext|' + k);
     for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = rest[i]; rest[i] = rest[j]; rest[j] = t; }
     let s = 0;
@@ -3292,7 +3387,7 @@ input { caret-color: var(--accent-hi); }
   return {
     ENTRY, DAY_MS, START_Y, SLOTS, TARGET, N_MIN, N_MAX, N_IDEAL, GRADES, RECIPES, BY, ANCHORS, LEVEL_NAMES, GRID,
     D_MIN, D_MAX, PRIOR_MU, PRIOR_SD, START, DOWN, SLOT_MARGIN, UNLOCK, TABLES,
-    config, generate, gradeText, dayKey, dayStart, closesAt, specialsFor, queuesFor, CYCLE, PER_DAY, PER_SLOT, W_MIN, PLAIN, OBST, WALLS, WALL_W,
+    config, generate, gradeText, dayKey, dayStart, closesAt, specialsFor, queuesFor, CYCLE, PER_DAY, PER_SLOT, W_MIN, PLAIN, OBST, FX, WALLS, WALL_W, GATE_W, PULSE, walls,
     blank, addLevel, regular, startFor, levelOf, addSpecial, up, levelName, rating, courseFor, todayFor, missReg, clearP
   };
 });
@@ -3347,9 +3442,15 @@ input { caret-color: var(--accent-hi); }
   }
 
   // The course from a seed: the same shape of object as engine.generateLevel (a fixed number of draws per ring).
-  function generate(seed, n) {
+  // feat (the daily pot's course, src/pots.cjs; a duel has none, and its rings are exactly what they were): prefix
+  // names its stream of random numbers; up(i) stands ring i on its side and pulse(i) makes it breathe (engine v17);
+  // moveAll makes every ring from the fourth on move. Breathing rings draw from their own stream, three numbers a
+  // ring, so ring i never depends on the course's length.
+  const GATE_W = [18, 8], PULSE = { w: [9, 14], p: [1.6, 2.4] };
+  function generate(seed, n, feat) {
     n = n || RINGS;
-    const rng = E.makeRng('duel|' + seed), hoops = [];
+    const F = feat || null, pre = (F && F.prefix) || 'duel';
+    const rng = E.makeRng(pre + '|' + seed), pr = F && F.pulse ? E.makeRng(pre + 'pulse|' + seed) : null, hoops = [];
     let x = FIRST_X, prevY = START_Y;
     for (let i = 0; i < n; i++) {
       const r1 = rng(), r2 = rng(), r3 = rng(), r4 = rng(), r5 = rng(), r6 = rng(), r7 = rng(), r8 = rng(), r9 = rng();
@@ -3357,7 +3458,8 @@ input { caret-color: var(--accent-hi); }
       let gap = FIRST_X;
       if (i > 0) { gap = SPACING * (0.92 + 0.16 * r9); x += gap; }
       let amp = 0, period = 1, phase = 0;
-      if (r2 < C.moveP) { amp = C.moveAmp * (0.75 + 0.25 * r3); period = C.period * (0.85 + 0.3 * r4); phase = r5; }
+      const up = !!(F && F.up && F.up(i));
+      if (r2 < (F && F.moveAll && i >= 3 ? 1 : C.moveP)) { amp = C.moveAmp * (0.75 + 0.25 * r3); period = C.period * (0.85 + 0.3 * r4); phase = r5; }
       let y = i === 0 ? 320 + (r1 * 2 - 1) * 40 : prevY + (r1 * 2 - 1) * C.dy;
       if (y < E.Y_MIN) y = E.Y_MIN + (E.Y_MIN - y) * 0.5;
       if (y > E.Y_MAX) y = E.Y_MAX - (y - E.Y_MAX) * 0.5;
@@ -3368,11 +3470,18 @@ input { caret-color: var(--accent-hi); }
       if (y - amp < E.Y_MIN) y = E.Y_MIN + amp;
       if (y + amp > E.Y_MAX) y = E.Y_MAX - amp;
       let tilt = 0;
-      if (r6 < C.tiltP) tilt = (r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * DEG;
-      hoops.push({ i, x, y0: y, w: C.w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 });
+      if (r6 < C.tiltP && !up) tilt = (r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * DEG;
+      const w = up ? Math.round((C.w + lerp(GATE_W[0], GATE_W[1], Math.min(1, i / RAMP))) * 10) / 10 : C.w;
+      const hp = { i, x, y0: y, w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 };
+      if (up) { hp.v = true; hp.tilt = -90 * DEG; hp.c = 0; hp.s = -1; }
+      if (pr) {
+        const a = pr(), b = pr(), c = pr();
+        if (F.pulse(i)) { hp.pw = Math.min(PULSE.w[0] + (PULSE.w[1] - PULSE.w[0]) * a, w - W_MIN); hp.pp = PULSE.p[0] + (PULSE.p[1] - PULSE.p[0]) * b; hp.pph = c; }
+      }
+      hoops.push(hp);
       prevY = y;
     }
-    return { seed: String(seed), di: 0, L: 0, special: 'duel', speed: SPEED, startY: START_Y, hoops, endX: x + SPACING, maxTicks: E.TICK_HZ * (20 + 3 * n) };
+    return { seed: String(seed), di: 0, L: 0, special: pre, speed: SPEED, startY: START_Y, hoops, endX: x + SPACING, maxTicks: E.TICK_HZ * (20 + 3 * n) };
   }
 
   // a flight's score from its ring outcomes ('S' swish, anything else a rim hit): the game's own score, without the
@@ -3944,83 +4053,129 @@ input { caret-color: var(--accent-hi); }
   })();
   function buzz(ms) { if (settings.haptics && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* ignore */ } } }
 
-  // ---------------------------------------------------------------- challenge pot, demo (rules in src/pots.cjs)
-  // The demo runs the same pot with demo SOL. There are no other players in the demo, so the other entrants are
-  // simulated, and labelled so: a field drawn from the pot's key, each a casual, average or good player who plays a
-  // few runs with the simulator's chance of making the challenge. The real pot (ServerBank) has only real players.
+  // ---------------------------------------------------------------- daily pot, demo (rules in src/pots.cjs)
+  // The demo runs the same pot game on demo SOL: one course a day, attempts into the pot, the best three split it.
+  // There are no other players in the demo, so the field is simulated, and labelled so: a few dozen of the game's own
+  // autopilots, from novices to pros, each flying the day's course a few times at moments spread over the day (their
+  // attempts come in as the day goes on). The real pot (ServerBank) has only real players.
   const DemoPot = {
-    s: null, last: null, fee: POTS.ENTRY,
+    s: null, last: null, fee: POTS.ENTRY, cur: null, fld: null, busy: null,
     load() {
       if (this.s) return this.s;
-      const s = store.get('pot', null), day = POTS.dayKey(Date.now());
-      this.s = s && s.key ? s : { key: day, open: POTS.dayStart(day), carryIn: 0, me: null };
+      let s = store.get('pot', null);
       this.last = store.get('potLast', null);
+      if (s && !s.seed) { // a challenge pot from before the pot was its own game: an entry in it comes back
+        if (s.me) wallet.balance = round9(wallet.balance + this.fee);
+        s = null; this.last = null;
+      }
+      const day = POTS.dayKey(Date.now());
+      this.s = s && s.open != null ? s : this.fresh(day, POTS.dayStart(day), 0);
+      this.save();
       return this.s;
     },
+    fresh(key, open, carryIn) { return { key, open, seed: randomHex(16), theme: POTS.themeFor(key).id, carryIn, me: { attempts: 0, best: null } }; },
     save() { store.set('pot', this.s); store.set('potLast', this.last); },
-    field(key, open) {
-      const close = POTS.closesAt(key), g = POTS.goalFor(key), r = POTS.rng('field|' + key), out = [];
-      const n = 24 + Math.floor(r() * 48);
-      for (let i = 0; i < n; i++) {
-        const join = open + r() * (close - open) * 0.9, u = r(), skill = u < 0.35 ? 0 : u < 0.8 ? 1 : 2;
-        const runs = 1 + Math.floor(-Math.log(1 - r() * 0.999) * 5);
-        let k = -1;
-        for (let j = 0; j < runs; j++) if (r() < g.p[skill]) { k = j; break; }
-        out.push({ join, done: k < 0 ? null : join + ((k + 1) / (runs + 1)) * (close - join) });
+    // the simulated field: each entrant's attempts and when they come in, flown once a pot (a few frames' work)
+    async field() {
+      const s = this.load();
+      if (this.fld && this.fld.key === s.key) return this.fld.list;
+      if (this.busy && this.busy.key === s.key) return this.busy.p;
+      const key = s.key, p = (async () => {
+        const r = POTS.rng('potfield|' + key + '|' + s.seed), close = POTS.closesAt(key), def = POTS.course(s.seed, s.theme), list = [];
+        const n = 16 + Math.floor(r() * 26), SK = ['novice', 'casual', 'average', 'good', 'pro'], WT = [0.2, 0.3, 0.3, 0.15, 0.05];
+        for (let i = 0; i < n; i++) {
+          let u = r(), k = 0;
+          while (k < 4 && u > WT[k]) { u -= WT[k]; k++; }
+          const who = Array.from({ length: 8 }, () => B58[Math.floor(r() * 58)]).join(''), tries = 1 + Math.floor(r() * r() * 5), at = [];
+          for (let j = 0; j < tries; j++) {
+            const t = s.open + r() * (close - s.open) * 0.95, st = E.createState(def), bot = BOT.createBot(SK[k], E.makeRng('potbot|' + key + '|' + i + '|' + j)), taps = [];
+            let tap = true;
+            while (!st.done) { if (tap) taps.push(st.tick); E.step(st, tap); tap = BOT.decide(bot, st); }
+            at.push({ t, rings: st.outcomes.length, score: DU.score(st.outcomes), taps });
+          }
+          list.push({ id: 'f' + i, who: who.slice(0, 4) + '…' + who.slice(4), at });
+          if (i % 4 === 3) await new Promise((res) => setTimeout(res, 0));
+        }
+        this.fld = { key, list }; this.busy = null;
+        return list;
+      })();
+      this.busy = { key, p };
+      return p;
+    },
+    // everyone's best as it stands at `now` (the field's attempts come in through the day), and the player's
+    entries(list, now) {
+      const out = [];
+      let n = 0;
+      for (const f of list) {
+        let best = null;
+        for (const a of f.at) if (a.t <= now) { n++; if (POTS.better(a, best)) best = a; }
+        if (best) out.push({ id: f.id, who: f.who, rings: best.rings, score: best.score, taps: best.taps });
       }
-      return out;
+      const me = this.s.me;
+      if (me.best) out.push({ id: 'me', who: 'You', rings: me.best.rings, score: me.best.score, taps: me.best.taps });
+      return { list: POTS.standings(out), attempts: n + me.attempts };
     },
-    // close the pot once its day is over (or now, when the demo's "close now" asks), pay out and open the next one
-    roll(force) {
-      const s = this.load(), now = Date.now(), close = POTS.closesAt(s.key);
-      if (!force && now < close) return false;
-      const sim = this.field(s.key, s.open), mine = s.me ? 1 : 0, myDone = !!(s.me && s.me.done);
-      const winners = sim.filter((x) => x.done !== null).length + (myDone ? 1 : 0);
-      const r = POTS.split((sim.length + mine) * this.fee, s.carryIn, winners, false);
-      const won = myDone ? round9(r.share) : 0;
-      if (won) { wallet.balance = round9(wallet.balance + won); }
-      this.last = { key: s.key, goal: POTS.goalFor(s.key).text, entrants: sim.length + mine, winners, share: round9(r.share), rolled: winners ? 0 : round9(r.carry), me: s.me ? { done: myDone, won } : null };
-      const today = POTS.dayKey(now), sameDay = String(s.key).slice(0, 10) === today;
-      const key = force && sameDay ? today + '#' + ((+String(s.key).split('#')[1] || 0) + 1) : today;
-      this.s = { key, open: force && sameDay ? now : POTS.dayStart(today), carryIn: winners ? 0 : round9(r.carry), me: null };
-      this.save(); saveAll();
-      return true;
-    },
-    view() {
-      const s = this.load(), now = Date.now(), g = POTS.goalFor(s.key);
-      const joined = this.field(s.key, s.open).filter((x) => x.join <= now), mine = s.me ? 1 : 0;
+    async view() {
+      await this.roll();
+      const s = this.load(), list0 = await this.field(), { list, attempts } = this.entries(list0, Date.now()), T = POTS.THEME_BY[s.theme];
+      const mine = list.find((e) => e.id === 'me'), top = list[0];
       return {
-        key: s.key, goal: { id: g.id, kind: g.kind, n: g.n, tier: g.tier, text: g.text, sub: POTS.tierText(g.tier) },
-        fee: this.fee, rake: POTS.RAKE, entrants: joined.length + mine,
-        completed: joined.filter((x) => x.done !== null && x.done <= now).length + (s.me && s.me.done ? 1 : 0),
-        pool: round9(POTS.poolOf((joined.length + mine) * this.fee, s.carryIn)), carryIn: s.carryIn, closesAt: POTS.closesAt(s.key), simulated: true,
-        me: s.me ? { entered: true, done: !!s.me.done, best: s.me.best || 0 } : { entered: false }, last: this.last
+        key: s.key, seed: s.seed, theme: { id: T.id, name: T.name, blurb: T.blurb }, rings: POTS.RINGS, legacy: false,
+        fee: this.fee, rake: POTS.RAKE, places: POTS.PLACES, pool: round9(POTS.poolOf(attempts * this.fee, s.carryIn)), carryIn: s.carryIn,
+        entrants: list.length, attempts, closesAt: POTS.closesAt(s.key), cutoffMs: POTS.CUTOFF_MS, simulated: true,
+        board: list.slice(0, 10).map((e) => ({ who: e.who, rings: e.rings, score: e.score, place: e.place, me: e.id === 'me' })),
+        marks: list.map((e) => [e.rings, e.score]),
+        leader: top ? { rings: top.rings, score: top.score, taps: top.taps, me: top.id === 'me' } : null,
+        me: { attempts: s.me.attempts, best: s.me.best ? { rings: s.me.best.rings, score: s.me.best.score, taps: s.me.best.taps } : null, place: mine ? mine.place : null, blocked: false },
+        last: this.last
       };
     },
-    enter() {
-      this.roll();
-      const s = this.load();
-      if (s.me) throw new Error('You’re already in this pot');
-      if (POTS.closesAt(s.key) - Date.now() < 60000) throw new Error('This pot is about to close. The next one opens at midnight UTC.');
+    async start() {
+      const v = await this.view(), s = this.s;
+      if (v.closesAt - Date.now() < POTS.CUTOFF_MS) throw new Error('This pot is about to close. The next one opens at midnight UTC.');
       if (wallet.balance + 1e-12 < this.fee) throw new Error('Not enough demo SOL for the entry.');
       wallet.balance = round9(wallet.balance - this.fee);
       DemoRake.add('pot', this.fee);
-      s.me = { at: Date.now(), done: false, best: 0 };
+      const ready = DemoMissions.play(this.fee);
+      s.me.attempts++;
+      this.cur = { key: s.key, seed: s.seed, theme: s.theme };
       this.save(); saveAll();
-      return this.view();
+      const L = v.leader, ghost = L && !L.me ? { name: 'Leader', taps: L.taps, rings: L.rings, score: L.score } : v.me.best ? { name: 'Your best', taps: v.me.best.taps, rings: v.me.best.rings, score: v.me.best.score } : null;
+      return { seed: s.seed, theme: s.theme, fee: this.fee, ghost, missions: { ready }, pot: await this.view() };
     },
-    // a level the demo bank has just verified: did it complete the challenge? (runs started after entering only)
-    check(cur) {
-      this.roll();
-      const s = this.load();
-      if (!s.me || !(cur.potAt >= s.me.at)) return null;
-      const pr = POTS.progress(POTS.goalFor(s.key), cur.levels, cur.di);
-      if (!pr.counts) return { counts: false, done: !!s.me.done };
-      if (pr.value > (s.me.best || 0)) s.me.best = pr.value;
-      const just = !s.me.done && pr.done;
-      if (just) { s.me.done = true; s.me.doneAt = Date.now(); }
-      this.save();
-      return { counts: true, done: !!s.me.done, just, value: pr.value, target: pr.target };
+    // an attempt's taps, replayed on the course it was flown on: the player's best if it beats it (and the pot's still open)
+    async finish(taps) {
+      const c = this.cur;
+      if (!c) throw new Error('No attempt in progress');
+      this.cur = null;
+      await this.roll();
+      const s = this.load(), f = DU.fly(POTS.course(c.seed, c.theme), taps), late = s.key !== c.key, improved = !late && POTS.better(f, s.me.best);
+      if (improved) s.me.best = { rings: f.rings, score: f.score, taps: taps.slice(), at: Date.now() };
+      this.save(); saveAll();
+      const v = await this.view();
+      return { you: { rings: f.rings, score: f.score, cleared: f.cleared }, improved, late, best: s.me.best ? { rings: s.me.best.rings, score: s.me.best.score } : null, place: v.me.place, pot: v, serverSeed: c.seed };
+    },
+    // close the pot once its day is over (or now, when the demo's "close now" asks, as if the day had ended), pay the
+    // best three and open the next
+    async roll(force) {
+      const s = this.load(), now = Date.now(), close = POTS.closesAt(s.key);
+      if (!force && now < close) return false;
+      const list0 = await this.field();
+      if (this.s !== s) return false; // closed meanwhile
+      const { list, attempts } = this.entries(list0, force ? Infinity : close);
+      const r = POTS.settle(attempts * this.fee, s.carryIn, list, false), mine = list.find((e) => e.id === 'me'), won = round9(r.pays.me || 0);
+      if (won) wallet.balance = round9(wallet.balance + won);
+      this.last = {
+        key: s.key, theme: POTS.THEME_BY[s.theme].name, entrants: list.length, refunded: false, rolled: round9(r.carry),
+        results: list.slice(0, POTS.PLACES.length).map((e) => ({ who: e.who, rings: e.rings, score: e.score, place: e.place, won: round9(r.pays[e.id] || 0) })),
+        me: s.me.attempts ? { place: mine ? mine.place : null, rings: mine ? mine.rings : 0, won } : null
+      };
+      const today = POTS.dayKey(now), sameDay = String(s.key).slice(0, 10) === today;
+      const key = force && sameDay ? today + '#' + ((+String(s.key).split('#')[1] || 0) + 1) : today;
+      this.s = this.fresh(key, force && sameDay ? now : POTS.dayStart(today), round9(r.carry));
+      this.fld = null;
+      this.save(); saveAll();
+      return true;
     }
   };
 
@@ -4199,7 +4354,7 @@ input { caret-color: var(--accent-hi); }
       const ready = DemoMissions.play(bet);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
       saveAll();
-      this.cur = { di, bet, serverSeed, clientSeed, nonce, level: 1, total: 1, streak: 0, levels: [], potAt: Date.now() };
+      this.cur = { di, bet, serverSeed, clientSeed, nonce, level: 1, total: 1, streak: 0, levels: [] };
       return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, levelSeed: deriveLevelSeed(serverSeed, clientSeed, nonce, 1), missions: { ready } };
     },
     // Re-verifies the level by replaying the taps, exactly as the server does.
@@ -4211,20 +4366,20 @@ input { caret-color: var(--accent-hi); }
       c.total = a.total; c.streak = a.streak; c.level = L;
       c.levels.push(verifiedLevel(def, r, a.capped ? a.capIndex : -1));
       profile.skill = SP.addLevel(profile.skill, c.di, L, a.capped ? a.capIndex + 1 : r.outcomes.length, !a.capped && r.result !== 'clear'); // rates the player for the special levels
-      const pot = DemoPot.check(c);
       const status = a.capped ? 'maxwin' : r.result === 'clear' ? (L >= NL ? 'final' : 'checkpoint') : 'bust';
       let payout = 0, missions = null;
       if (status === 'maxwin' || status === 'final') payout = this._pay();
       if (status !== 'checkpoint') { missions = DemoMissions.run(c.levels); saveAll(); } // the run is over
-      return { status, total: c.total, payout, serverSeed: status === 'checkpoint' ? null : c.serverSeed, pot, missions };
+      return { status, total: c.total, payout, serverSeed: status === 'checkpoint' ? null : c.serverSeed, missions };
     },
     async next() { const c = this.cur; c.level++; return { levelSeed: deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, c.level) }; },
     async cashout() { const payout = this._pay(), missions = DemoMissions.run(this.cur.levels); saveAll(); return { payout, serverSeed: this.cur.serverSeed, missions }; },
     _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); saveAll(); return payout; },
     pot: {
-      async state() { DemoPot.roll(); return DemoPot.view(); },
-      async enter() { return DemoPot.enter(); },
-      async closeNow() { DemoPot.roll(true); return DemoPot.view(); } // demo only
+      async state() { return DemoPot.view(); },
+      async start() { return DemoPot.start(); },
+      async finish(taps) { return DemoPot.finish(taps); },
+      async closeNow() { await DemoPot.roll(true); return DemoPot.view(); } // demo only
     },
     missions: { view: () => DemoMissions.view(), async state() { return DemoMissions.view(); }, async claim(win, i) { return DemoMissions.claim(win, i); } },
     rakeback: { view: () => DemoRake.view(), levelUp: () => DemoRake.levelUp(), claim: () => DemoRake.claim() },
@@ -4284,7 +4439,7 @@ input { caret-color: var(--accent-hi); }
     },
     async level(L, taps) {
       const j = await this.api('/api/run/level', { runId: this.runId, level: L, taps });
-      return { status: j.status, total: j.total, payout: (j.payoutLamports || 0) / 1e9, serverSeed: j.serverSeed || null, pot: j.pot || null, missions: this.mfrom(j.missions) };
+      return { status: j.status, total: j.total, payout: (j.payoutLamports || 0) / 1e9, serverSeed: j.serverSeed || null, missions: this.mfrom(j.missions) };
     },
     async next() { return this.api('/api/run/continue', { runId: this.runId }); },
     async cashout() { const j = await this.api('/api/run/cashout', { runId: this.runId }); return { payout: j.payoutLamports / 1e9, serverSeed: j.serverSeed, missions: this.mfrom(j.missions) }; },
@@ -4358,15 +4513,24 @@ input { caret-color: var(--accent-hi); }
     },
     pot: {
       view(j) {
-        const L = j.last;
+        const m = (x) => (x || 0) / 1e9, L = j.last;
         return {
-          key: j.key, goal: j.goal, fee: j.feeLamports / 1e9, rake: j.rake, entrants: j.entrants, completed: j.completed,
-          pool: j.poolLamports / 1e9, carryIn: j.carryInLamports / 1e9, closesAt: j.closesAt, simulated: false, me: j.me || null,
-          last: L ? { key: L.key, goal: L.goal, entrants: L.entrants, winners: L.winners, share: L.shareLamports / 1e9, rolled: L.rolledLamports / 1e9, me: L.me ? { done: L.me.done, won: L.me.wonLamports / 1e9 } : null } : null
+          key: j.key, seed: j.seed, theme: j.theme, rings: j.rings, legacy: !!j.legacy, fee: m(j.feeLamports), rake: j.rake, places: j.places,
+          pool: m(j.poolLamports), carryIn: m(j.carryInLamports), entrants: j.entrants, attempts: j.attempts, closesAt: j.closesAt, cutoffMs: j.cutoffMs, simulated: false,
+          board: j.board || [], marks: j.marks || [], leader: j.leader || null, me: j.me || null,
+          last: L ? { key: L.key, theme: L.theme, entrants: L.entrants, refunded: !!L.refunded, rolled: m(L.rolledLamports), results: (L.results || []).map((r) => ({ who: r.who, rings: r.rings, score: r.score, place: r.place, won: m(r.wonLamports) })), me: L.me ? { place: L.me.place, rings: L.me.rings, won: m(L.me.wonLamports) } : null } : null
         };
       },
       async state() { return this.view(await ServerBank.api('/api/pot')); },
-      async enter() { return this.view(await ServerBank.api('/api/pot/enter', {})); }
+      async start() {
+        const j = await ServerBank.api('/api/pot/start', {});
+        ServerBank.potId = j.runId;
+        return { seed: j.seed, theme: j.theme, fee: j.feeLamports / 1e9, ghost: j.ghost || null, missions: ServerBank.mfrom(j.missions), pot: this.view(j.pot) };
+      },
+      async finish(taps) {
+        const j = await ServerBank.api('/api/pot/finish', { runId: ServerBank.potId, taps });
+        return { you: j.you, improved: !!j.improved, late: !!j.late, best: j.best || null, place: j.place, pot: this.view(j.pot), serverSeed: j.serverSeed || '' };
+      }
     }
   };
   const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
@@ -4396,14 +4560,14 @@ input { caret-color: var(--accent-hi); }
       const a = E.applyLevel(PAY.PAYTABLE[c.di][L - 1], r.outcomes, c.total, E.DIFFS[c.di].maxWin, c.streak);
       c.total = a.total; c.streak = a.streak; c.level = L;
       const status = a.capped ? 'maxwin' : r.result === 'clear' ? (L >= NL ? 'final' : 'checkpoint') : 'bust';
-      return { status, total: c.total, payout: 0, serverSeed: status === 'checkpoint' ? null : c.serverSeed, pot: null, missions: null };
+      return { status, total: c.total, payout: 0, serverSeed: status === 'checkpoint' ? null : c.serverSeed, missions: null };
     },
     async next() { const c = this.cur; c.level++; return { levelSeed: deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, c.level) }; },
     async cashout() { return { payout: 0, serverSeed: this.cur.serverSeed, missions: null }; }
   };
   const runBank = () => (run.mode === 'practice' ? PracticeBank : bank); // the bank the run in progress talks to
   const practicing = () => run.mode === 'practice';
-  const course = () => run.mode === 'special' || run.mode === 'duel'; // one long course with no checkpoints
+  const course = () => run.mode === 'special' || run.mode === 'duel' || run.mode === 'pot'; // one long course with no checkpoints
 
   // ---------------------------------------------------------------- canvas & view
   // The client shows a 352-unit-wide window of the 400-unit world (a little zoomed in),
@@ -4801,9 +4965,16 @@ input { caret-color: var(--accent-hi); }
   let potShown = 0, potUpTimer = 0;
   function fmtDelta(d) { return d >= 0.0001 ? fmtSol(d) : d >= 0.000001 ? d.toFixed(6) : '0'; }
   function setPot(animate) {
-    ui.potCap.classList.toggle('prize', course());
+    ui.potCap.classList.toggle('prize', course() && run.mode !== 'pot');
+    ui.potCap.classList.toggle('rank', run.mode === 'pot'); // a pot attempt shows where it would place, not an amount
     ui.potCap.classList.toggle('practice', practicing());
     if (practicing()) { ui.mult.textContent = fmtMult(run.total); ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = 'Practice'; potShown = 0; return; }
+    if (run.mode === 'pot') { // rings so far, and where that would place on today's board
+      const pl = run.place || potPlace();
+      ui.mult.textContent = String(run.hoops);
+      ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = run.hoops ? ordinal(pl) + ' place' : run.ghostOf ? ringsText(run.ghostOf.rings) + ' to beat' : 'First on the board'; potShown = 0;
+      return;
+    }
     if (run.mode === 'duel') { // rings against rings: yours, then the rival's so far
       ui.mult.textContent = run.hoops + (ghost ? '–' + ghost.st.outcomes.length : '');
       ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = fmtAmt(run.prize); potShown = run.prize;
@@ -4966,8 +5137,6 @@ input { caret-color: var(--accent-hi); }
   const KIND_NAME = { daily: 'Daily mission', weekly: 'Weekly mission', career: 'Career mission' };
   function liveGoals() {
     if (!run.told || phase === 'lobby' || run.mode !== 'run') return; // specials and practice runs don't count toward goals
-    const pp = potProgress();
-    if (pp && pp.done && !run.told.pot) { run.told.pot = 1; potNotice(); }
     const r = runFacts(0);
     const mv = mview(), met = { daily: mv.played.day >= mv.need.day - 1e-9, weekly: mv.played.week >= mv.need.week - 1e-9 };
     for (const m of openMissions(r)) {
@@ -4983,12 +5152,10 @@ input { caret-color: var(--accent-hi); }
       run.told[a.id] = 1; notice('n-ach', troIcon(a.id), a.name, a.desc + ' · +' + a.xp + ' XP');
     }
   }
-  // the next goal, shown under each level's banner: the pot challenge if you're in it, else the next mission
+  // the next goal, shown under each level's banner: the mission nearest done
   function goalLine() {
     if (course()) return '';
     if (practicing()) return 'Practice · nothing is at stake';
-    const pl = potLine();
-    if (pl) return pl;
     const m = nearestMission(runFacts(0));
     return m ? m.text + ' · ' + m.p + '/' + m.n : '';
   }
@@ -4996,7 +5163,7 @@ input { caret-color: var(--accent-hi); }
   function shareText(head) {
     const em = { S: '🏀', F: '🔥', N: '💥', R: '⚪', X: '❌' };
     const url = CFG.shareUrl || (/^https?:/.test(location.protocol) && !/claude|usercontent|localhost/.test(location.host) ? location.origin + location.pathname : 'https://nickrileyh.github.io/sol-dunk/');
-    return [run.mode === 'duel' ? 'SOL DUNK · Duel' : run.mode === 'special' ? `SOL DUNK · Special: ${SP.BY[run.recipe].name}` : `SOL DUNK · ${E.DIFFS[run.di].name}`, head, `Score ${run.score} · best streak ${run.best}`, ...(run.log || []).map((lv) => lv.map((o) => em[o]).join('')), url].join('\n');
+    return [run.mode === 'pot' ? 'SOL DUNK · Daily pot: ' + (POTS.THEME_BY[run.theme] ? POTS.THEME_BY[run.theme].name : '') : run.mode === 'duel' ? 'SOL DUNK · Duel' : run.mode === 'special' ? `SOL DUNK · Special: ${SP.BY[run.recipe].name}` : `SOL DUNK · ${E.DIFFS[run.di].name}`, head, `Score ${run.score} · best streak ${run.best}`, ...(run.log || []).map((lv) => lv.map((o) => em[o]).join('')), url].join('\n');
   }
   async function copyText(t) {
     try { if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(t); return true; } } catch (e) { /* fall back */ }
@@ -5037,7 +5204,7 @@ input { caret-color: var(--accent-hi); }
       const now = !!(st && !st.done && i === st.next);
       if (cl.contains('now') !== now) cl.toggle('now', now);
     }
-    const lv = run.mode === 'duel' ? (ghost ? 'You – Rival' : 'Duel') : run.mode === 'special' ? SP.BY[run.recipe].name : 'Level ' + run.level;
+    const lv = run.mode === 'pot' ? (POTS.THEME_BY[run.theme] ? POTS.THEME_BY[run.theme].name : 'Daily pot') : run.mode === 'duel' ? (ghost ? 'You – Rival' : 'Duel') : run.mode === 'special' ? SP.BY[run.recipe].name : 'Level ' + run.level;
     if (ui.level.textContent !== lv) { ui.level.textContent = lv; HUD_DIRTY.on = true; }
   }
   function setBalance() {
@@ -5125,20 +5292,25 @@ input { caret-color: var(--accent-hi); }
     setBalance();
   }
 
-  // ---------------------------------------------------------------- challenge pot: lobby row, sheet, run progress
+  // ---------------------------------------------------------------- the daily pot: its card, its page and its runs
+  // A game of its own (rules in src/pots.cjs): the day's course, the same for everyone; every attempt goes into the
+  // pot and the best one counts; the best three split it when the day ends.
   let potState = null, potBusy = false;
+  const ordinal = (n) => n + ((n % 100 >= 11 && n % 100 <= 13) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
+  const ringsText = (n) => n + (n === 1 ? ' ring' : ' rings');
   async function refreshPot() {
     if (potBusy) return;
     potBusy = true;
-    try { potState = await bank.pot.state(); } catch (e) { potState = potState || null; }
+    try { const last = potState && potState.last; potState = await bank.pot.state(); if (!potState.last && last) potState.last = last; } catch (e) { potState = potState || null; }
     potBusy = false;
     renderPotRow();
-    // a pot you were in has closed since you last looked: say how it went
+    // a pot you played has closed since you last looked: say how it went
     const L = potState && potState.last;
     if (L && L.me && prefs.potSeen !== L.key) {
       prefs.potSeen = L.key; saveAll();
-      if (L.me.won > 0) { toast('Pot closed: you won ' + fmtAmt(L.me.won) + ' SOL'); Sound.cash(); setBalance(); celebrate(130); }
-      else toast('Pot closed: ' + L.winners + ' of ' + L.entrants + ' made it');
+      if (L.me.won > 0) { toast('Pot closed: you came ' + ordinal(L.me.place) + ' and won ' + fmtAmt(L.me.won) + ' SOL'); Sound.cash(); setBalance(); celebrate(130); }
+      else if (L.refunded) toast('The old challenge pot closed: your entry came back');
+      else toast('Pot closed: you came ' + (L.me.place ? ordinal(L.me.place) : 'in') + ' of ' + L.entrants);
     }
   }
   const leftText = (ms) => { const m = Math.max(1, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min'; };
@@ -5148,48 +5320,102 @@ input { caret-color: var(--accent-hi); }
     if (nav.page === 'pot') renderPage(true);
     if (nav.tab === 'challenges') renderChallenges(true);
   }
-  // where the run stands on the pot challenge (null if you're not in it, it's done, or this tier doesn't count)
-  function potLevels() {
-    return (run.log || []).map((lv, i, a) => ({ outcomes: lv.filter((o) => o !== 'X').map((o) => (o === 'R' ? 'R' : 'S')).join(''), clear: i < a.length - 1 }));
-  }
-  function potProgress() {
-    const p = potState;
-    if (!p || !p.me || !p.me.entered || p.me.done || !run.log) return null;
-    return POTS.progress(p.goal.id, potLevels(), run.di);
-  }
-  function potLine() {
-    const p = potState;
-    if (!p || !p.me || !p.me.entered || p.me.done) return '';
-    if (run.di < p.goal.tier) return 'The pot challenge counts ' + p.goal.sub;
-    const pr = potProgress();
-    return pr ? 'Pot · ' + p.goal.text + ' · ' + pr.value + '/' + pr.target : '';
-  }
-  function potNotice() { notice('n-pot', ICON.trophy, 'Pot challenge done', 'You’re in for a share of the pot' + (potState ? ' · ' + fmtBal(potState.pool) + ' SOL' : ''), true); }
-  // a level the bank verified: the official word on the pot
-  function potResult(note) {
-    if (!note || !potState || !potState.me) return;
-    if (note.value > (potState.me.best || 0)) potState.me.best = note.value;
-    if (note.done) potState.me.done = true;
-    if (note.just) { run.potJust = true; if (!run.told.pot) { run.told.pot = 1; potNotice(); } }
+  // the board: the best ten (and you, if you're further down)
+  function potBoard(p, n) {
+    const rows = p.board.slice(0, n), mine = p.me && p.me.best && !rows.some((b) => b.me) ? { who: 'You', rings: p.me.best.rings, score: p.me.best.score, place: p.me.place, me: true } : null;
+    const li = (b) => `<li class="${b.me ? 'me' : ''}${b.place <= 3 ? ' top' : ''}"><span class="pl">${ordinal(b.place)}</span><span class="who">${b.me ? 'You' : b.who}</span><span class="sc">${b.score}</span><b class="num">${b.rings}</b></li>`;
+    return rows.length ? `<ol class="pboard">${rows.map(li).join('')}${mine ? '<li class="gap" aria-hidden="true">···</li>' + li(mine) : ''}</ol>` : '';
   }
   function potHtml() {
     const p = potState;
     if (!p) return '<p>The pot isn’t available right now. Try again in a moment.</p>';
-    const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done), left = p.closesAt - Date.now();
-    const each = p.completed ? p.pool / p.completed : 0;
-    let me;
-    if (done) me = `<div class="pot-me done">${ICON.check}<div><b>You made it</b><span>You’ll split the pot with everyone else who does. If it closed now: ${fmtSol(each)} SOL each.</span></div></div>`;
-    else if (inn) me = `<div class="pot-me">${ICON.target}<div><b>You’re in</b><span>Make it in any run ${p.goal.sub} before the pot closes.${p.me.best ? ' Best so far: ' + p.me.best + ' / ' + p.goal.n + '.' : ''}</span></div></div>`;
-    else me = `<button class="btn btn-primary" id="potEnter">Enter for ${fmtBet(p.fee)} SOL</button><div class="err" id="potErr" role="alert"></div>`;
+    if (p.legacy) return `<div class="empty">Today’s pot is the old challenge pot. It closes at midnight UTC and every entry in it comes back. The new pot starts then.</div>`;
+    const left = p.closesAt - Date.now(), T = p.theme, me = p.me || { attempts: 0 }, pays = POTS.placePays(p.pool);
+    const play = me.blocked ? '<div class="empty">The pot isn’t available on this account.</div>'
+      : left < (p.cutoffMs || POTS.CUTOFF_MS) ? '<div class="empty">This pot is about to close. The next one opens at midnight UTC.</div>'
+      : `<button class="btn btn-primary" id="potPlay">${me.attempts ? 'Fly again' : 'Fly'} for ${fmtBet(p.fee)} SOL</button><div class="err" id="potErr" role="alert"></div>`;
+    const mine = me.best ? `<div class="pot-me${me.place <= 3 ? ' done' : ''}">${me.place <= 3 ? ICON.check : ICON.target}<div><b>${ordinal(me.place)} place · ${ringsText(me.best.rings)}</b><span>Your best of ${me.attempts} ${me.attempts === 1 ? 'attempt' : 'attempts'}, score ${me.best.score}. ${me.place <= 3 ? 'If it closed now, you’d take ' + fmtAmt(pays[me.place - 1]) + ' SOL.' : 'Get into the top three to win a share.'}</span></div></div>` : '';
     const L = p.last;
-    const last = L ? `<div class="pot-last"><span class="k">Last pot</span><span>${L.goal} · ${L.winners ? L.winners + ' of ' + L.entrants + ' made it · ' + fmtSol(L.share) + ' SOL each' : 'nobody made it · ' + fmtSol(L.rolled) + ' SOL rolled over'}${L.me ? (L.me.won > 0 ? ' · <b class="won">you won ' + fmtSol(L.me.won) + ' SOL</b>' : ' · you didn’t make it') : ''}</span></div>` : '';
-    return `<div class="pot-goal"><span class="pot-ic">${ICON.trophy}</span><div><b>${p.goal.text}</b><span>In one run ${p.goal.sub}</span></div></div>
+    const last = L ? `<div class="pot-last"><span class="k">Last pot${L.theme ? ' · ' + L.theme : ''}</span><span>${L.refunded ? 'Every entry came back' : L.results.length ? L.results.map((r) => ordinal(r.place) + ' ' + r.who + ' · ' + ringsText(r.rings) + ' · ' + fmtAmt(r.won) + ' SOL').join('<br>') : 'Nobody played it · ' + fmtAmt(L.rolled) + ' SOL rolled over'}${L.me ? (L.me.won > 0 ? '<br><b class="won">You came ' + ordinal(L.me.place) + ' and won ' + fmtAmt(L.me.won) + ' SOL</b>' : L.me.place ? '<br>You came ' + ordinal(L.me.place) : '') : ''}</span></div>` : '';
+    return `<div class="pot-goal"><span class="pot-ic">${ICON.trophy}</span><div><b>${T ? T.name : 'Today’s course'}</b><span>${T ? T.blurb : ''} · ${p.rings} rings</span></div></div>
+      <div class="sp-card"><canvas class="sp-course" id="potCourse" aria-hidden="true"></canvas><div class="sp-cap">The first 16 rings of today’s course. It’s the same for everyone, all day.</div></div>
       <div class="sp-prize pot"><span class="k">In the pot</span><div class="big"><span class="num">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></div></div>
-      ${me}
-      <div class="tiles"><div><b>${p.entrants}</b><span>Entered</span></div><div><b>${p.completed}</b><span>Made it</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Closing'}</b><span>Left</span></div></div>
-      <p class="pot-rules">Enter, then meet the challenge in a run you start after entering (your runs are bets as usual). At midnight UTC, everyone who made it splits the pot equally. The house keeps ${Math.round(p.rake * 100)}% of each entry. If nobody makes it, the pot rolls over to the next day.${p.carryIn > 0 ? ' This pot includes ' + fmtSol(p.carryIn) + ' SOL rolled over.' : ''}</p>
+      <div class="tiles places">${pays.map((v, i) => `<div><b>${fmtAmt(v)}</b><span>${ordinal(i + 1)} · ${Math.round(p.places[i] * 100)}%</span></div>`).join('')}</div>
+      ${play}
+      ${mine}
+      ${p.board.length ? `<div class="sec-h"><h3>Today’s board</h3><span class="sec-k">Rings</span></div>${potBoard(p, 10)}` : '<div class="empty">Nobody has flown today’s course yet.</div>'}
+      <div class="tiles"><div><b>${p.entrants}</b><span>Players</span></div><div><b>${p.attempts}</b><span>Attempts</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Closing'}</b><span>Left</span></div></div>
+      <p class="pot-rules">Fly today’s course as often as you like. Each attempt costs ${fmtBet(p.fee)} SOL and goes into the pot, and your best one counts: the most rings, then the higher score. At midnight UTC the best three split the pot: ${p.places.map((x) => Math.round(x * 100) + '%').join(', ')}. The house keeps ${Math.round(p.rake * 100)}% of each entry. You race the leader’s best flight as a pale ball.${p.carryIn > 0 ? ' This pot includes ' + fmtAmt(p.carryIn) + ' SOL rolled over.' : ''}</p>
       ${last}
-      ${p.simulated ? `<div class="pot-demo"><p>Demo: the other entrants are simulated, from how often players at different skill levels make the challenge.</p><button class="btn btn-plain" id="potClose">Close this pot now</button></div>` : ''}`;
+      ${p.simulated ? `<div class="pot-demo"><p>Demo: the other players are simulated. They’re the game’s autopilot, from novice to pro, flying today’s course through the day.</p><button class="btn btn-plain" id="potClose">Close this pot now</button></div>` : ''}`;
+  }
+  // a pot attempt: the entry goes into the pot, and the leader's best flight (or your own, if you lead) flies beside you
+  async function startPot() {
+    if (run.busy || (phase !== 'lobby' && phase !== 'over')) return;
+    Sound.unlock();
+    run.busy = true;
+    let r;
+    try {
+      r = await bank.pot.start();
+      const others = (r.pot.marks || []).map(([rings, score]) => ({ rings, score })), me = r.pot.me && r.pot.me.best;
+      if (me) { const i = others.findIndex((o) => o.rings === me.rings && o.score === me.score); if (i >= 0) others.splice(i, 1); } // race the others, not your own best
+      Object.assign(run, { mode: 'pot', recipe: null, theme: r.theme, potSeed: r.seed, ghostOf: r.ghost, others, myBest: me || null, prize: 0, di: 0, bet: r.fee, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: '', clientSeed: '', nonce: 0, serverSeed: r.seed, levelSeed: r.seed, place: 0 }, RUN_FRESH);
+      run.log = []; run.told = {}; run.share = '';
+      potState = Object.assign(r.pot, { last: potState && potState.last });
+    } catch (e) {
+      run.busy = false;
+      const el = nav.page === 'pot' ? $('potErr') : null;
+      if (el && phase === 'lobby') el.textContent = e.message; else toast(e.message);
+      if (phase === 'over') { backToLobby(); setTab('challenges'); }
+      return;
+    }
+    run.busy = false;
+    stats.runs++; stats.wagered = round9(stats.wagered + run.bet); saveAll();
+    enterRun(r.missions);
+  }
+  // where this flight would place now, among everyone else's best; said out loud as it climbs into the top three
+  function potPlace() { return POTS.placeOf({ rings: run.hoops, score: run.score }, run.others || []); }
+  function potLive() {
+    const pl = potPlace();
+    if (pl < run.place || !run.place) {
+      if (run.place && pl <= 3 && !run.told['pl' + pl]) { run.told['pl' + pl] = 1; notice('n-pot', ICON.trophy, pl === 1 ? 'In the lead' : 'Into ' + ordinal(pl) + ' place', pl === 1 ? 'Best flight on today’s course so far' : 'In the money if it holds', true); }
+      run.place = pl;
+    }
+    const b = run.myBest;
+    if (b && !run.told.pb && POTS.better({ rings: run.hoops, score: run.score }, b) && run.hoops > b.rings) { run.told.pb = 1; notice('n-pot', ICON.check, 'New best', 'Past your best of ' + ringsText(b.rings), true); }
+    setPot();
+  }
+  // the attempt is over: the bank replays it and says whether it's the player's best and where it stands
+  function potFinish(how, kind) {
+    phase = 'over';
+    clearCallouts(); clearNotices();
+    if (how === 'clear') {
+      hideStreak();
+      if (!REDUCED) view.shake = Math.max(view.shake, 2);
+      Sound.checkpoint(); buzz([12, 40, 12]);
+      ball.glide = null; ball.fall = { vx: Math.max(120, run.st.ball.vx), vy: -240, hover: true, t: 0 };
+    }
+    bank.pot.finish(run.taps.slice()).then((r) => {
+      potState = Object.assign(r.pot, { last: potState && potState.last });
+      run.serverSeed = r.serverSeed || run.potSeed;
+      recordPot(r);
+      const you = r.you, best = r.best, wait = REDUCED ? 200 : 650, top = r.place && r.place <= 3;
+      const sub = r.late ? 'The pot had closed before this flight came in' : r.improved ? ordinal(r.place) + ' place on today’s board · score ' + you.score : best ? 'Your best: ' + ringsText(best.rings) + ' · ' + ordinal(r.place) + ' place' : '';
+      const title = r.improved ? (r.place === 1 ? 'In the lead' : 'New best') : how === 'clear' ? 'Course cleared' : BUST_TITLES[kind] || 'Missed';
+      if (r.improved && top) { confetti(ball.x, ball.y - 30, 40); winFx(0.8); }
+      setTimeout(() => showResult(title, String(you.rings), r.improved && top ? 'win' : '', sub), r.improved && top ? 700 : wait);
+    }).catch(netFail);
+  }
+  function recordPot(r) {
+    stats.hoops += run.hoops; stats.swishes += run.swishes;
+    stats.history.unshift({ t: Date.now(), kind: 'pot', theme: run.theme, di: 0, bet: run.bet, payout: 0, level: 1, mult: 0, result: r.improved ? 'best' : 'done', rings: r.you.rings, place: r.place, seedHash: '', serverSeed: run.serverSeed, clientSeed: '', nonce: 0 });
+    stats.history.length = Math.min(stats.history.length, 30);
+    // XP for the points, as in a special; the pot doesn't count toward missions or trophies (its entry counts as play)
+    const before = lvlOf(profile.xp), steps = LV.stepsOf(profile.xp), xp = LV.specialXp(run.score, false);
+    profile.tot.swish += run.swishes; profile.xp += xp;
+    if (LV.stepsOf(profile.xp) > steps) bank.rakeback.levelUp();
+    run.prog = { xp, runXp: xp, before, after: lvlOf(profile.xp), newBest: false, prevBest: 0, achs: [], dailies: [], weeklies: [], careers: [], chapter: null, unlocks: grantUnlocks(), paid: [] };
+    saveAll(); setBalance();
   }
 
   // ---------------------------------------------------------------- duels: one course, two flights, further wins (rules in src/duel.cjs)
@@ -5284,11 +5510,12 @@ input { caret-color: var(--accent-hi); }
     // the rings as the game draws them: purple hoops seen from a little above, the finish in green, each in its own light
     for (const h of hs) {
       const cx = sx(h.x), cy = sy(h.y0), half = Math.max(3, half0 * Math.pow(h.w / wMax, 2.4)); // a tighter ring reads as clearly smaller
-      const ry = Math.max(1.5, half * 0.36), a = h.tilt * 1.8, rgb = h.cp ? '20,241,149' : '153,69,255';
+      const ry = Math.max(1.5, half * 0.36), a = h.v ? -Math.PI / 2 : h.tilt * 1.8, rgb = h.cp ? '20,241,149' : '153,69,255';
       g.save(); g.translate(cx, cy); g.rotate(a);
       g.shadowColor = 'rgba(' + rgb + ',0.75)'; g.shadowBlur = h.cp ? 9 : 6;
       g.strokeStyle = h.cp ? '#14f195' : '#b98cff'; g.lineWidth = 2;
       g.beginPath(); g.ellipse(0, 0, half, ry, 0, 0, Math.PI * 2); g.stroke();
+      if (h.pw) { g.shadowBlur = 0; g.globalAlpha = 0.45; g.setLineDash([2, 3]); g.lineWidth = 1.2; const k = 1 + h.pw / h.w * 1.6; g.beginPath(); g.ellipse(0, 0, half * k, ry * k, 0, 0, Math.PI * 2); g.stroke(); g.setLineDash([]); g.globalAlpha = 1; }
       g.restore();
     }
     g.shadowColor = 'rgba(255,255,255,0.6)'; g.shadowBlur = 8;
@@ -5324,10 +5551,12 @@ input { caret-color: var(--accent-hi); }
   function potCard() {
     const p = potState;
     if (!p) return '';
-    const inn = !!(p.me && p.me.entered), done = !!(p.me && p.me.done);
-    const act = done ? '<span class="pill ok">Made it</span>' : inn ? '<span class="pill in">You’re in</span>' : `<button class="pill go" id="chPotEnter">Enter ${fmtBet(p.fee)} SOL</button>`;
-    return `<div class="cc pot"><div class="cc-h"><span class="cc-k">${ICON.trophy}Daily pot</span><span class="cc-t">Closes in ${leftOf(p.closesAt - Date.now())}<span class="chev">${ICON.chev}</span></span></div><button class="cc-open" data-page="pot" aria-label="Daily pot: ${fmtAmt(p.pool)} SOL, ${p.goal.text}. Details"><span class="cc-big"><span class="num" data-count="${p.pool}">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></span><span class="cc-g">${p.goal.text}</span><span class="cc-s">In one run ${p.goal.sub}</span></button>
-      <div class="cc-act"><span class="cc-v">${p.entrants} ${p.entrants === 1 ? 'player' : 'players'} in</span>${act}</div></div>`;
+    const T = p.theme, me = p.me || {}, open = !p.legacy && p.closesAt - Date.now() >= (p.cutoffMs || POTS.CUTOFF_MS);
+    const act = me.blocked ? '<span class="pill off">Not available</span>' : !open ? '<span class="pill off">Closed</span>' : `<button class="pill go" id="chPot" aria-label="Fly today’s pot course for ${fmtBet(p.fee)} SOL">Fly ${fmtBet(p.fee)}</button>`;
+    const you = me.best ? `You: ${ordinal(me.place)} · ${ringsText(me.best.rings)}` : p.entrants ? p.entrants + (p.entrants === 1 ? ' player' : ' players') + ' in' : 'Nobody in yet';
+    return `<div class="cc pot"><div class="cc-h"><span class="cc-k">${ICON.trophy}Daily pot</span><span class="cc-t">Closes in ${leftOf(p.closesAt - Date.now())}<span class="chev">${ICON.chev}</span></span></div><button class="cc-open" data-page="pot" aria-label="Daily pot: ${fmtAmt(p.pool)} SOL. ${T ? T.name : ''}. Details"><span class="cc-big"><span class="num" data-count="${p.pool}">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></span><span class="cc-g">${T ? T.name : 'Today’s course'}</span><span class="cc-s">${T ? T.blurb : ''} · the best three split it</span></button>
+      ${p.board.length ? potBoard({ board: p.board.slice(0, 3), me: null }, 3).replace('class="pboard"', 'class="pboard mini"') : ''}
+      <div class="cc-act"><span class="cc-v">${you}</span>${act}</div></div>`;
   }
   let potCountAt = 0; // when the pot card's count-up started
   function potCount(fresh) {
@@ -5357,15 +5586,10 @@ input { caret-color: var(--accent-hi); }
     wireChallenges(); potCount(!keep); if (keep) riseIn($('vChallenges'), false);
     if (specState && prefs.specSeen !== specState.day) { prefs.specSeen = specState.day; saveAll(); syncBadges(); }
   }
-  async function enterPot(e) {
-    const b = e.currentTarget; b.disabled = true;
-    try { potState = await bank.pot.enter(); setBalance(); Sound.click(); buzz(8); toast('You’re in. Make it in any run ' + potState.goal.sub + '.'); renderPotRow(); }
-    catch (err) { const el = nav.page === 'pot' ? $('potErr') : null; if (el) el.textContent = err.message; else toast(err.message); b.disabled = false; }
-  }
   function wireChallenges() {
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
     document.querySelectorAll('#cBody .spr .pill[data-slot]').forEach((b) => b.addEventListener('click', () => startSpecial(+b.dataset.slot)));
-    on('chPotEnter', enterPot);
+    on('chPot', () => startPot());
     on('chDuel', () => startDuel());
   }
 
@@ -5379,7 +5603,7 @@ input { caret-color: var(--accent-hi); }
     try {
       r = await bank.start(prefs.di, bet);
       Object.assign(run, { mode: 'run', recipe: null, prize: 0, di: prefs.di, bet, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.levelSeed }, RUN_FRESH);
-      run.log = []; run.told = {}; run.share = ''; run.potJust = false; // every ring of the run, and the goals already announced
+      run.log = []; run.told = {}; run.share = ''; // every ring of the run, and the goals already announced
       $('lobbyErr').textContent = '';
     } catch (e) {
       $('lobbyErr').textContent = e.message; run.busy = false;
@@ -5399,7 +5623,7 @@ input { caret-color: var(--accent-hi); }
     try {
       r = await bank.special.start(slot);
       Object.assign(run, { mode: 'special', slot: r.slot, recipe: r.recipe, g: r.grade, n: r.rings, x: r.x, prize: r.prize, di: SP.GRADES[r.grade][0], bet: r.fee, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.seed }, RUN_FRESH);
-      run.log = []; run.told = {}; run.share = ''; run.potJust = false;
+      run.log = []; run.told = {}; run.share = '';
       if (r.special) specState = r.special;
     } catch (e) {
       run.busy = false;
@@ -5421,7 +5645,7 @@ input { caret-color: var(--accent-hi); }
     try {
       r = await bank.duel.start();
       Object.assign(run, { mode: 'duel', recipe: null, rival: r.rival, prize: r.prize, di: 0, bet: r.fee, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.seed }, RUN_FRESH);
-      run.log = []; run.told = {}; run.share = ''; run.potJust = false;
+      run.log = []; run.told = {}; run.share = '';
       if (r.duel) duelState = r.duel;
     } catch (e) {
       run.busy = false;
@@ -5440,7 +5664,7 @@ input { caret-color: var(--accent-hi); }
     Sound.unlock();
     const r = await PracticeBank.start(prefs.di);
     Object.assign(run, { mode: 'practice', recipe: null, prize: 0, di: prefs.di, bet: prefs.bet, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.levelSeed }, RUN_FRESH);
-    run.log = []; run.told = {}; run.share = ''; run.potJust = false;
+    run.log = []; run.told = {}; run.share = '';
     $('lobbyErr').textContent = '';
     enterRun(null);
   }
@@ -5459,13 +5683,14 @@ input { caret-color: var(--accent-hi); }
   }
 
   function beginLevel(first) {
-    const sp = course(), du = run.mode === 'duel';
-    const def = du ? DU.generate(run.levelSeed) : sp ? SP.generate(run.levelSeed, run.recipe, run.g, run.n) : E.generateLevel(run.levelSeed, run.di, run.level);
+    const sp = course(), du = run.mode === 'duel', pt = run.mode === 'pot';
+    const def = pt ? POTS.course(run.potSeed, run.theme) : du ? DU.generate(run.levelSeed) : sp ? SP.generate(run.levelSeed, run.recipe, run.g, run.n) : E.generateLevel(run.levelSeed, run.di, run.level);
     const prev = view.st;
     view.prevHoops = keepBehind(prev);
     view.offset = first && prev ? ball.x + 140 : ball.x + 24;
     run.st = E.createState(def); view.st = run.st; run.taps = []; run.lvlStart = run.total;
-    ghost = du && run.rival ? newGhost(def, run.rival.taps) : null;
+    warmRings(def);
+    ghost = du && run.rival ? newGhost(def, run.rival.taps, 'Rival') : pt && run.ghostOf ? newGhost(def, run.ghostOf.taps, run.ghostOf.name) : null;
     if (autoBot) autoBot = BOT.createBot(autoBot.p, E.makeRng('auto' + Math.random()));
     settleOffset();
     ball.glide = glideTo(view.offset, def.startY, 0.45, 0, 0);
@@ -5475,7 +5700,7 @@ input { caret-color: var(--accent-hi); }
     if (run.mode === 'run') profile.lv[run.di][run.level - 1][0]++;
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
     if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
-    showPrompt(KB ? (run.level === 1 ? 'Press Space to fly' : 'Press Space to go') : run.level === 1 ? 'Tap to fly' : 'Tap to go', du ? (run.rival ? 'Get further than your rival to win ' + fmtAmt(run.prize) + ' SOL' : 'Fly as far as you can. The next player races your mark.') : sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL'
+    showPrompt(KB ? (run.level === 1 ? 'Press Space to fly' : 'Press Space to go') : run.level === 1 ? 'Tap to fly' : 'Tap to go', pt ? (run.ghostOf ? (run.ghostOf.name === 'Leader' ? 'The leader’s best: ' + ringsText(run.ghostOf.rings) + '. Beat it.' : 'Your best: ' + ringsText(run.ghostOf.rings) + '. Beat it.') : 'Nobody has flown it yet. Set the mark.') : du ? (run.rival ? 'Get further than your rival to win ' + fmtAmt(run.prize) + ' SOL' : 'Fly as far as you can. The next player races your mark.') : sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL'
       : run.level === 1 ? (practicing() ? 'Free practice: nothing is at stake' : newPlayer() ? 'Drop down through each ring' : goalLine()) : '');
   }
 
@@ -5553,6 +5778,7 @@ input { caret-color: var(--accent-hi); }
     addPoints(pts);
     if (capped) { endWin('maxwin'); return true; }
     if (duelClinched()) { duelFinish('clinch'); return true; }
+    if (run.mode === 'pot') potLive();
     liveGoals();
     return false;
   }
@@ -5571,6 +5797,7 @@ input { caret-color: var(--accent-hi); }
     if (run.streak > 0) run.greens++; // the level's last ring, the green one, was a swish
     if (run.mode === 'special') { specialFinish(true); return; }
     if (run.mode === 'duel') { duelFinish('clear'); return; }
+    if (run.mode === 'pot') { potFinish('clear'); return; }
     if (run.mode === 'run') profile.lv[run.di][run.level - 1][1]++;
     if (!REDUCED) {
       view.shake = Math.max(view.shake, 2);
@@ -5592,7 +5819,6 @@ input { caret-color: var(--accent-hi); }
     const L = run.level;
     runBank().level(L, run.taps.slice()).then((r) => {
       if (r.status !== 'checkpoint' || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
-      potResult(r.pot);
       setTimeout(() => showCheckpoint(), REDUCED ? 100 : CALL.busy ? 900 : 450);
     }).catch(netFail);
   }
@@ -5618,11 +5844,11 @@ input { caret-color: var(--accent-hi); }
     Sound.bust(); buzz([30, 60, 50]);
     if (run.mode === 'special') { specialFinish(false, kind); return; }
     if (run.mode === 'duel') { duelFinish('bust', kind); return; }
+    if (run.mode === 'pot') { potFinish('bust', kind); return; }
     const L = run.level, taps = run.taps.slice();
     runBank().level(L, taps).then((r) => {
       if (r.status !== 'bust') return verifyFail();
       if (practicing()) { run.prog = null; setTimeout(() => showResult('Practice: ' + (BUST_TITLES[kind] || 'Missed').toLowerCase(), 'Out', 'loss', `A real run would have lost its ${fmtBet(run.bet)} SOL bet on level ${L}`), REDUCED ? 200 : 650); return; }
-      potResult(r.pot);
       run.serverSeed = r.serverSeed || '';
       record(0, 'bust', r.missions);
       setTimeout(() => showResult(BUST_TITLES[kind] || 'Missed', '−' + fmtBet(run.bet), 'loss', `Your run was worth ${fmtAmt(lostPot)} SOL on level ${L}`), REDUCED ? 200 : 650);
@@ -5655,7 +5881,6 @@ input { caret-color: var(--accent-hi); }
     runBank().level(L, run.taps.slice()).then((r) => {
       if (r.status !== kind || Math.abs(r.total - run.total) > 1e-9) return verifyFail();
       if (practicing()) { run.prog = null; winFx(1.3); setTimeout(() => showResult(kind === 'maxwin' ? 'Practice: max win' : 'Practice: all ' + NL + ' levels', fmtMult(run.total), 'even', `A ${fmtBet(run.bet)} SOL bet would have paid ${fmtAmt(run.bet * run.total)} SOL`), 700); return; }
-      potResult(r.pot);
       run.serverSeed = r.serverSeed || '';
       winFx(kind === 'maxwin' ? 1.6 : 1.3);
       record(r.payout, kind, r.missions);
@@ -5676,7 +5901,7 @@ input { caret-color: var(--accent-hi); }
   // The rival's taps are replayed on the same course, tick for tick beside the player's own, and drawn as a pale ball
   // at the ball's own size. It only shows where the rival was: the two never touch.
   let ghost = null;
-  function newGhost(def, taps) { const st = E.createState(def); return { st, taps, ti: 0, x: st.ball.x, y: st.ball.y, px: st.ball.x, py: st.ball.y, a: 1 }; }
+  function newGhost(def, taps, label) { const st = E.createState(def); return { st, taps, label: label || 'Rival', ti: 0, x: st.ball.x, y: st.ball.y, px: st.ball.x, py: st.ball.y, a: 1 }; }
   function stepGhost() {
     const g = ghost, s = g.st, was = s.outcomes.length;
     g.px = s.ball.x; g.py = s.ball.y;
@@ -5685,7 +5910,7 @@ input { caret-color: var(--accent-hi); }
     E.step(s, tap);
     g.x = s.ball.x; g.y = s.ball.y;
     if (s.outcomes.length !== was) setPot();
-    if (s.done) rivalOut();
+    if (s.done && run.mode === 'duel') rivalOut();
   }
   function rivalOut() {
     const n = ghost.st.outcomes.length;
@@ -5709,7 +5934,7 @@ input { caret-color: var(--accent-hi); }
     c.moveTo(x - R * 0.5, y - R * 0.86); c.quadraticCurveTo(x - R * 0.05, y, x - R * 0.5, y + R * 0.86);
     c.moveTo(x + R * 0.5, y - R * 0.86); c.quadraticCurveTo(x + R * 0.05, y, x + R * 0.5, y + R * 0.86); c.stroke();
     c.globalAlpha = 0.85 * g.a;
-    drawText(c, textSprite('Rival', 700, 11 * scale * dpr, FONT_DISPLAY, '#d6c8f5'), x, y - P.R - 12, scale * dpr);
+    drawText(c, textSprite(g.label, 700, 11 * scale * dpr, FONT_DISPLAY, '#d6c8f5'), x, y - P.R - 12, scale * dpr);
     c.restore();
   }
   // the duel is over (out, the course cleared, or past a rival who's out): the bank replays the flight and settles it
@@ -5888,21 +6113,21 @@ input { caret-color: var(--accent-hi); }
     $('resTitle').textContent = title;
     if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtAmt(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
     $('resAmount').className = 'big ' + cls;
+    $('resAmount').querySelector('.unit').textContent = run.mode === 'pot' ? (amount === '1' ? 'ring' : 'rings') : 'SOL'; // a pot attempt's number is its rings: the money comes at midnight
     $('resSub').textContent = sub;
-    const sp = run.mode === 'special', du = run.mode === 'duel', prac = practicing();
+    const sp = run.mode === 'special', du = run.mode === 'duel', pt = run.mode === 'pot', prac = practicing();
     ui.res.classList.toggle('practice', prac);
-    run.share = prac ? '' : shareText(du ? title + (sub ? ' · ' + sub : '') : sp ? (cls === 'win' ? 'Cleared it' : title + ' at ring ' + Math.min(run.st ? run.st.hoops.length : 0, run.hoops + 1)) : cls !== 'loss' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
+    run.share = prac ? '' : shareText(pt ? ringsText(+amount) + (sub ? ' · ' + sub : '') : du ? title + (sub ? ' · ' + sub : '') : sp ? (cls === 'win' ? 'Cleared it' : title + ' at ring ' + Math.min(run.st ? run.st.hoops.length : 0, run.hoops + 1)) : cls !== 'loss' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
     $('resStats').innerHTML = [[run.score, nb ? 'New best' : 'Score', nb], [run.hoops, 'Rings'], [run.best, 'Best streak']]
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
     const spNow = sp && specState && specState.specials ? specState.specials[run.slot] : null;
-    $('againT').textContent = prac ? 'Practice again' : du ? 'Duel again' : sp ? (cls === 'win' ? 'Play next' : 'Try again') : 'Play again';
-    $('againBtn').hidden = !!(spNow && spNow.done); // every special at that prize is cleared: it's back tomorrow
-    $('againAmt').textContent = prac ? '' : fmtBet(sp || du ? run.bet : prefs.bet) + ' SOL';
-    $('lobbyBtn').textContent = sp || du || prac ? 'Back' : 'Change bet';
+    $('againT').textContent = prac ? 'Practice again' : pt ? 'Fly again' : du ? 'Duel again' : sp ? (cls === 'win' ? 'Play next' : 'Try again') : 'Play again';
+    $('againBtn').hidden = !!(spNow && spNow.done) || !!(pt && potState && potState.closesAt - Date.now() < (potState.cutoffMs || POTS.CUTOFF_MS)); // every special at that prize is cleared, or the pot's about to close
+    $('againAmt').textContent = prac ? '' : fmtBet(sp || du || pt ? run.bet : prefs.bet) + ' SOL';
+    $('lobbyBtn').textContent = sp || du || pt || prac ? 'Back' : 'Change bet';
     showProgress(pr);
-    show(ui.res, true); armCard(ui.res, 600); refreshPot(); if (sp) refreshSpecial(); if (du) refreshDuel();
+    show(ui.res, true); armCard(ui.res, 600); if (!pt) refreshPot(); if (sp) refreshSpecial(); if (du) refreshDuel();
     if (cls === 'win') setTimeout(() => celebrate(run.total >= 5 || sp ? 150 : 100, ui.res), 140);
-    else if (run.potJust) setTimeout(() => celebrate(60, ui.res), 140);
     setTimeout(() => ui.res.focus({ preventScroll: true }), 60);
     refreshLobby();
   }
@@ -5987,7 +6212,6 @@ input { caret-color: var(--accent-hi); }
       Sound.levelUp(); buzz([10, 40, 10]); celebrate(60, ui.res); // from the card's top corners, clear of its text
     }, 1100));
     const g = [], rbReady = bank.rakeback.view().ready, msReady = mview().readyAll, tix = (rbReady > 0 ? 1 : 0) + (msReady > 0 ? 1 : 0);
-    if (run.potJust && potState) g.push(['pot', ICON.trophy, 'Pot challenge done · in for a share']);
     const released = (pr.ready || []).length;
     // mission SOL earned but waiting for the window's play: say how much more unlocks it
     if (run.mode !== 'special' && (pr.dailies.length || pr.weeklies.length)) {
@@ -6087,7 +6311,7 @@ input { caret-color: var(--accent-hi); }
   function rimFx(h, st) {
     const p = st.impact;
     // contact normal from the nearer rim end, so the squash flattens the ball against that end
-    const t = st.tick * DT, hy = E.hoopY(h, t), half = h.w / 2;
+    const t = st.tick * DT, hy = E.hoopY(h, t), half = E.hoopW(h, t) / 2;
     let nx = 0, ny = -1, best = Infinity;
     for (let sd = -1; sd <= 1; sd += 2) {
       const px = view.offset + h.x + sd * half * h.c, py = hy + sd * half * h.s;
@@ -6112,11 +6336,14 @@ input { caret-color: var(--accent-hi); }
       const nova = streak >= 5, hot = streak >= 3, pal = hot ? flameHex(nova) : null;
       for (let i = 0; i < 16; i++) { const a = rnd(0, Math.PI * 2), s = rnd(60, 230); spawn({ x: hx, y: hy + 6, vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.55 - 30, life: 0.55, max: 0.55, size: rnd(1.4, 2.8), color: pal ? pal[i % 4] : '#ffffff', kind: 0, drag: 2.2 }); }
       const rc = nova ? heatHex(1, 'inner') : hot ? heatHex(0, 'inner') : '#ffffff', lc = h.cp ? RING_GLOW.cp : nova ? heatRgb(1) : hot ? heatRgb(0) : '214,196,255';
-      spawn({ x: hx, y: hy, kind: 3, life: 0.5, max: 0.5, size: h.w / 2 + P.RP, color: rc });
+      const hw = E.hoopW(h, st.tick * DT), rot = h.v ? -Math.PI / 2 : 0; // an upright ring's ripple stands up with it
+      spawn({ x: hx, y: hy, kind: 3, life: 0.5, max: 0.5, size: hw / 2 + P.RP, color: rc, rot });
       if (!REDUCED) {
-        // a wider, softer ripple after the first, and a shaft of light dropping through the ring
-        spawn({ x: hx, y: hy, kind: 3, life: 0.75, max: 0.75, size: h.w / 2 + P.RP, grow: 64 + 8 * Math.min(streak, 5), lw: 5, a: 0.3, color: rc });
-        spawn({ x: hx, y: hy, kind: 12, life: 0.5, max: 0.5, size: 46 + 6 * Math.min(streak, 5), w: h.w * 0.36, a: 0.2 + 0.035 * Math.min(streak, 5), color: lc });
+        // a wider, softer ripple after the first, and a shaft of light dropping through the ring (or, through an
+        // upright one, a burst of light out the far side)
+        spawn({ x: hx, y: hy, kind: 3, life: 0.75, max: 0.75, size: hw / 2 + P.RP, grow: 64 + 8 * Math.min(streak, 5), lw: 5, a: 0.3, color: rc, rot });
+        if (h.v) spawn({ x: hx + 30, y: hy, kind: 13, life: 0.5, max: 0.5, size: 26, grow: 46 + 6 * Math.min(streak, 5), ry: 0.45, a: 0.24 + 0.035 * Math.min(streak, 5), color: lc });
+        else spawn({ x: hx, y: hy, kind: 12, life: 0.5, max: 0.5, size: 46 + 6 * Math.min(streak, 5), w: hw * 0.36, a: 0.2 + 0.035 * Math.min(streak, 5), color: lc });
       }
       if (streak === 3 || streak === 5) { ignite(nova ? 1 : 0); if (!REDUCED) spawn({ x: ball.x, y: ball.y, kind: 13, life: 0.55, max: 0.55, size: RV * 2, grow: 150, a: 0.5, color: heatRgb(nova ? 1 : 0) }); }
       if (!REDUCED && streak >= 2) ball.flareT = Math.max(ball.flareT || 0, streak === 3 || streak === 5 ? 1.6 : 0.9); // each swish feeds the fire
@@ -6313,7 +6540,7 @@ input { caret-color: var(--accent-hi); }
         const o = st.outcomes[st.outcomes.length - 1];
         attract.streak = o === 'S' ? attract.streak + 1 : 0;
         const v = hoopVis(st.hoops[hi]); v.flash = 1;
-        if (o === 'S') spawn({ x: view.offset + st.hoops[hi].x, y: E.hoopY(st.hoops[hi], st.tick * DT), kind: 3, life: 0.5, max: 0.5, size: st.hoops[hi].w / 2 + P.RP, color: '#ffffff' });
+        if (o === 'S') spawn({ x: view.offset + st.hoops[hi].x, y: E.hoopY(st.hoops[hi], st.tick * DT), kind: 3, life: 0.5, max: 0.5, size: st.hoops[hi].w / 2 + P.RP, color: '#ffffff', rot: st.hoops[hi].v ? -Math.PI / 2 : 0 });
       }
       if (st.done) {
         attract.st = null; attract.wait = 0.15;
@@ -6733,7 +6960,7 @@ input { caret-color: var(--accent-hi); }
     // each ring casts a soft shadow on the boards below it, so the rings sit in the space
     if (rings) for (const o of rings) {
       const h = o.h, x = o.off + h.x, d = clamp((F - E.hoopY(h, o.t)) / 700, 0, 1);
-      const rx = (h.w / 2 + P.RP) * (1 + 0.5 * d), a = (0.42 - 0.3 * d) * (h.st === 1 ? 0.4 : 1);
+      const rx = ((h.v ? h.w / 2 * RING_RY : E.hoopW(h, o.t) / 2) + P.RP) * (1 + 0.5 * d), a = (0.42 - 0.3 * d) * (h.st === 1 ? 0.4 : 1);
       softGlow(c, x, F + 3, rx, rx * 0.13, '0,0,0', a, 0);
     }
     c.globalAlpha = 1;
@@ -6825,26 +7052,31 @@ input { caret-color: var(--accent-hi); }
       return el;
     };
     sp = { back: make(false), front: make(true), w: Wd, h: Ht };
-    if (ringCache.size > 96) ringCache.clear();
+    if (ringCache.size > 320) ringCache.clear(); // (breathing rings use one sprite per unit of width)
     ringCache.set(key, sp);
     return sp;
   }
   const RING_GLOW = { ring: '153,69,255', cp: '20,241,149' };
+  // a breathing ring's sprites, one per unit of width, made when its level begins rather than in a frame
+  function warmRings(def) {
+    for (const h of def.hoops) if (h.pw) for (let w = Math.round(h.w - h.pw) - 1; w <= Math.round(h.w + h.pw) + 1; w++) ringSprites(w, h.cp ? 'cp' : eqRim());
+  }
   function drawRing(c, o, back) {
     const h = o.h, v = hoopVis(h);
     const x = o.off + h.x, y = E.hoopY(h, o.t);
-    const sp = ringSprites(h.w, h.st === 2 ? 'grey' : h.cp ? 'cp' : eqRim());
+    const wn = h.pw ? Math.round(E.hoopW(h, o.t)) : h.w; // a breathing ring is drawn at its width now (to the unit; sprites made when the level begins)
+    const sp = ringSprites(wn, h.st === 2 ? 'grey' : h.cp ? 'cp' : eqRim());
     const next = h === view.nextRing && h.st === 0;
     c.save();
     c.translate(x, y);
     const lf = !back && next && h.cp ? clamp((x - (view.drawX || 0) - 70) / 80, 0, 1) : 0;
     if (lf > 0) { // the checkpoint ring ahead says what it is, and gets out of the way as the ball arrives
       c.globalAlpha = (0.62 + 0.18 * Math.sin(view.time * 5)) * lf;
-      drawText(c, textSprite('Checkpoint', 700, 12 * scale * dpr, FONT_DISPLAY, 'rgba(255,255,255,0.92)'), 0, -(h.w / 2) * RING_RY - P.RP - 13, scale * dpr);
+      drawText(c, textSprite('Checkpoint', 700, 12 * scale * dpr, FONT_DISPLAY, 'rgba(255,255,255,0.92)'), 0, -(wn / 2) * (h.v ? 1 : RING_RY) - P.RP - 13, scale * dpr);
       c.globalAlpha = 1;
     }
     c.rotate(h.tilt);
-    const rx = h.w / 2, ry = rx * RING_RY, pop = v.pop || 0;
+    const rx = wn / 2, ry = rx * RING_RY, pop = v.pop || 0;
     if (back && h.st !== 2) {
       // each ring glows with its own light, so it sits in the dark hall: the one you're heading for breathes
       // brighter, the ones after it sit back, and a ring just passed flares as the ball goes through
@@ -6853,6 +7085,12 @@ input { caret-color: var(--accent-hi); }
       c.globalCompositeOperation = 'lighter';
       softGlow(c, 0, 0, rx * 1.75, rx * 0.95, h.cp ? RING_GLOW.cp : RING_GLOW.ring, base + 0.4 * pop, 0.3);
       c.globalCompositeOperation = 'source-over';
+    }
+    if (back && h.pw && h.st === 0) {
+      // a breathing ring shows how wide it gets: a faint dashed outline at its widest
+      const wx = (h.w + h.pw) / 2;
+      c.strokeStyle = 'rgba(185,140,255,' + (0.22 * (o.later || 1)).toFixed(3) + ')'; c.lineWidth = 1.5; c.setLineDash([3, 6]);
+      c.beginPath(); c.ellipse(0, 0, wx + P.RP, wx * RING_RY + P.RP, 0, 0, Math.PI * 2); c.stroke(); c.setLineDash([]);
     }
     if (pop > 0.01 && h.st === 1) c.scale(1 + 0.1 * pop, 1 + 0.1 * pop); // a passed ring only: rings in play stay at their collision size
     c.globalAlpha = h.st === 1 ? 0.32 + 0.5 * pop : o.later || 1;
@@ -7320,7 +7558,7 @@ input { caret-color: var(--accent-hi); }
       else if (p.kind === 1) { c.globalAlpha = Math.min(1, t * 2); c.save(); c.translate(p.x, p.y); c.rotate(p.rot); c.fillStyle = p.color; c.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2); c.restore(); }
       else if (p.kind === 3) { // a ripple: it eases out as it spreads (grow) and thins as it fades (lw)
         const e = 1 - t * t, rr = p.size + e * (p.grow || 28);
-        c.globalAlpha = t * (p.a || 0.6); c.strokeStyle = p.color; c.lineWidth = (p.lw || 2) * t + 0.5; c.beginPath(); c.ellipse(p.x, p.y, rr, rr * (p.ry || RING_RY), 0, 0, Math.PI * 2); c.stroke();
+        c.globalAlpha = t * (p.a || 0.6); c.strokeStyle = p.color; c.lineWidth = (p.lw || 2) * t + 0.5; c.beginPath(); c.ellipse(p.x, p.y, rr, rr * (p.ry || RING_RY), p.rot || 0, 0, Math.PI * 2); c.stroke();
       } else if (p.kind === 12) { // a shaft of light dropping through a ring the ball swished: quick in, slow out
         const e = Math.min(1, (1 - t) * 9) * t;
         softGlow(c, p.x, p.y + p.size * (1.1 + 0.5 * (1 - t)), p.w, p.size * (1.2 + 0.5 * (1 - t)), p.color, (p.a || 0.3) * e, 0.05);
@@ -7515,7 +7753,7 @@ input { caret-color: var(--accent-hi); }
 
   $('cashBtn').addEventListener('click', cashOut);
   $('goBtn').addEventListener('click', keepGoing);
-  const again = () => { show(ui.res, false); if (run.mode === 'special') startSpecial(run.slot); else if (run.mode === 'duel') startDuel(); else if (practicing()) startPractice(); else startRun(); };
+  const again = () => { show(ui.res, false); if (run.mode === 'special') startSpecial(run.slot); else if (run.mode === 'duel') startDuel(); else if (run.mode === 'pot') startPot(); else if (practicing()) startPractice(); else startRun(); };
   $('againBtn').addEventListener('click', () => { if (armed(ui.res)) again(); });
   $('lobbyBtn').addEventListener('click', () => { Sound.click(); const sp = course(); backToLobby(); if (sp) setTab('challenges'); });
   $('shareBtn').addEventListener('click', shareRun);
@@ -7587,7 +7825,7 @@ input { caret-color: var(--accent-hi); }
       row('mission', 'purple', 'Missions', `Three at a time, new every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week: tap Claim to collect it. Finish all three to open the next round, which pays more.`) +
       row('medal', 'gold', 'Trophies', `Fifteen one-time goals. Each adds XP and pays a little SOL: claim it on the Trophies page once your bets cover it.`) +
       row('back', 'green', 'Rakeback', `Every bet sets a little SOL aside for you: ${Math.round(LV.RATE * 100)}% of the house's cut. Level up to claim it.`) +
-      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. Clear one and a new one takes its place; some have walls to fly over. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Duel</b>: race a rival over the same rings; whoever gets further takes the pot. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
+      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. Clear one and a new one takes its place; some have walls to fly over, rings on their side to fly straight through, or rings that breathe. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Duel</b>: race a rival over the same rings; whoever gets further takes the pot. <b>Daily pot</b>: one course for everyone each day. Fly it as often as you like; your best counts, and the best three split the pot.`) +
       `</div>`;
   }
   // ---------------------------------------------------------------- the quick tour
@@ -7775,11 +8013,11 @@ input { caret-color: var(--accent-hi); }
     if (!stats.history.length) return `<div class="empty rich"><i>${ICON.chart}</i><span><b>No runs yet</b>Each run shows up here with how it ended and what it made.</span></div>`;
     const spName = (h) => (SP.BY[h.recipe] ? SP.BY[h.recipe].name : 'Special level');
     const duel = { won: 'Won a duel', lost: 'Lost a duel', draw: 'Drew a duel', waiting: 'Set a duel mark' };
-    const what = (h) => (h.kind === 'duel' ? (duel[h.result] || 'Duel') + ' · ' + h.rings + (h.rings === 1 ? ' ring' : ' rings') : h.kind === 'special' ? (h.result === 'won' ? 'Cleared ' + spName(h) + ' · ' + fmtMult(h.mult) : 'Missed ' + spName(h))
+    const what = (h) => (h.kind === 'pot' ? (h.result === 'best' ? 'New best on the pot · ' : 'Pot attempt · ') + ringsText(h.rings || 0) + (h.place ? ' · ' + ordinal(h.place) : '') : h.kind === 'duel' ? (duel[h.result] || 'Duel') + ' · ' + h.rings + (h.rings === 1 ? ' ring' : ' rings') : h.kind === 'special' ? (h.result === 'won' ? 'Cleared ' + spName(h) + ' · ' + fmtMult(h.mult) : 'Missed ' + spName(h))
       : h.result === 'bust' ? 'Out on level ' + h.level : h.result === 'maxwin' ? 'Max win · ' + fmtMult(h.mult) : h.result === 'final' ? 'All ' + NL + ' levels · ' + fmtMult(h.mult) : 'Cashed out at ' + fmtMult(h.mult));
     return `<div class="runs">${stats.history.map((h) => {
         const p = h.payout - h.bet;
-        return `<div class="rr"><i class="rr-i${p > 1e-9 ? ' win' : ''}" aria-hidden="true">${p > 1e-9 ? ICON.check : p < -1e-9 ? RUN_X : RUN_EVEN}</i><span class="rr-t"><b>${what(h)}</b><span>${h.kind === 'duel' ? 'Duel' : h.kind === 'special' ? 'Special level' : E.DIFFS[h.di].name} · ${fmtBet(h.bet)} SOL · ${agoText(h.t)}</span></span><span class="rr-v num ${p > 1e-9 ? 'pos' : p < -1e-9 ? 'neg' : ''}">${p > 1e-9 ? '+' : p < -1e-9 ? '−' : ''}${fmtSol(Math.abs(p))}<span class="unit">SOL</span></span></div>`;
+        return `<div class="rr"><i class="rr-i${p > 1e-9 ? ' win' : ''}" aria-hidden="true">${p > 1e-9 ? ICON.check : p < -1e-9 ? RUN_X : RUN_EVEN}</i><span class="rr-t"><b>${what(h)}</b><span>${h.kind === 'pot' ? 'Daily pot' : h.kind === 'duel' ? 'Duel' : h.kind === 'special' ? 'Special level' : E.DIFFS[h.di].name} · ${fmtBet(h.bet)} SOL · ${agoText(h.t)}</span></span><span class="rr-v num ${p > 1e-9 ? 'pos' : p < -1e-9 ? 'neg' : ''}">${p > 1e-9 ? '+' : p < -1e-9 ? '−' : ''}${fmtSol(Math.abs(p))}<span class="unit">SOL</span></span></div>`;
       }).join('')}</div>`;
   }
   function wirePanel(kind) {
@@ -7790,8 +8028,8 @@ input { caret-color: var(--accent-hi); }
     if (kind === 'special') on('spPlay', () => startSpecial(nav.sp));
     if (kind === 'duel') on('duPlay', () => startDuel());
     if (kind === 'pot') {
-      on('potEnter', enterPot);
-      on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
+      on('potPlay', () => startPot());
+      on('potClose', async () => { if (!bank.pot.closeNow) return; const last = potState && potState.last; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
     }
     if (kind === 'trophies') document.querySelectorAll('#pgBody [data-claim]').forEach((b) => b.addEventListener('click', () => claimTrophy(b.dataset.claim, b)));
     if (kind === 'how') on('howTour', () => { closePage(); setTimeout(() => showTour(0), 280); });
@@ -7863,6 +8101,8 @@ input { caret-color: var(--accent-hi); }
       const day = specState.day, slot = sc.slot;
       requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[sc.recipe.id]) drawCourse(c, SP.generate('preview|' + day + '|' + slot, sc.recipe.id, sc.course.grade, sc.course.rings)); });
     }
+    const ps = nav.page === 'pot' && potState && potState.seed && potState.theme ? potState : null;
+    if (ps) requestAnimationFrame(() => { const c = $('potCourse'); if (!c) return; const d = POTS.course(ps.seed, ps.theme.id); drawCourse(c, Object.assign({}, d, { hoops: d.hoops.slice(0, 16) })); });
     if (keepScroll) body.scrollTop = y;
   }
   function closePage(quiet) {
@@ -8155,7 +8395,8 @@ input { caret-color: var(--accent-hi); }
   function showPause(on) {
     const el = $('pauseCard');
     if (on) {
-      $('pauseSub').textContent = run.mode === 'duel' ? 'Duel · ring ' + (run.hoops + 1) + ' · ' + fmtAmt(run.prize) + ' SOL to win'
+      $('pauseSub').textContent = run.mode === 'pot' ? 'Daily pot · ring ' + (run.hoops + 1) + ' · ' + ordinal(run.place || potPlace()) + ' place'
+        : run.mode === 'duel' ? 'Duel · ring ' + (run.hoops + 1) + ' · ' + fmtAmt(run.prize) + ' SOL to win'
         : run.mode === 'special' ? SP.BY[run.recipe].name + ' · ring ' + Math.min(run.st.hoops.length, run.hoops + 1) + ' of ' + run.st.hoops.length + ' · ' + fmtAmt(run.prize) + ' SOL to win'
         : practicing() ? 'Level ' + run.level + ' · practice' : 'Level ' + run.level + ' · ' + fmtSol(run.bet * run.total) + ' SOL pot';
       syncSettings();
@@ -8198,7 +8439,8 @@ input { caret-color: var(--accent-hi); }
     hold: (on) => { dbg.hold = !!on; },   // stop the clock with the last frame on screen
     step: (n, dt) => { dbg.steps = n | 0; dbg.stepDt = dt > 0 ? dt : 1 / 60; },  // while held: play n frames of 1/60 s (or dt)
     stepsLeft: () => dbg.steps | 0,
-    pot: () => potState, // the challenge pot as the client sees it
+    pot: () => potState, // the daily pot as the client sees it
+    potField: () => (DemoPot.fld ? DemoPot.fld.list.map((f) => ({ who: f.who, at: f.at.map((a) => [Math.round(a.t / 1000), a.rings, a.score]) })) : null), // the demo's simulated field
     special: () => specState, // today's special level as the client sees it
     duel: () => duelState, // the duel as the client sees it
     ghost: () => (ghost ? { rings: ghost.st.outcomes.length, done: ghost.st.done, tick: ghost.st.tick, a: ghost.a } : null), // the rival's flight in a duel

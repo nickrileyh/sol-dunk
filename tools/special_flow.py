@@ -179,7 +179,7 @@ async def main():
         # the daily pot has its own page
         await page.click('#tabChallenges'); await page.wait_for_timeout(500)
         await page.click('#cBody [data-page="pot"]'); await page.wait_for_timeout(500)
-        check(await page.evaluate("!!document.getElementById('potEnter') || document.getElementById('pgBody').innerText.includes('You’re in')"), 'the Daily pot page has the pot')
+        check(await page.evaluate("!!document.getElementById('potPlay') && document.getElementById('pgBody').innerText.includes('In the pot')"), 'the Daily pot page has the pot')
         await page.screenshot(path=OUT + 'pot.png')
         check(not errs, 'no page errors ' + json.dumps(errs))
         await b.close()

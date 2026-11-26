@@ -48,9 +48,15 @@
   }
 
   // The course from a seed: the same shape of object as engine.generateLevel (a fixed number of draws per ring).
-  function generate(seed, n) {
+  // feat (the daily pot's course, src/pots.cjs; a duel has none, and its rings are exactly what they were): prefix
+  // names its stream of random numbers; up(i) stands ring i on its side and pulse(i) makes it breathe (engine v17);
+  // moveAll makes every ring from the fourth on move. Breathing rings draw from their own stream, three numbers a
+  // ring, so ring i never depends on the course's length.
+  const GATE_W = [18, 8], PULSE = { w: [9, 14], p: [1.6, 2.4] };
+  function generate(seed, n, feat) {
     n = n || RINGS;
-    const rng = E.makeRng('duel|' + seed), hoops = [];
+    const F = feat || null, pre = (F && F.prefix) || 'duel';
+    const rng = E.makeRng(pre + '|' + seed), pr = F && F.pulse ? E.makeRng(pre + 'pulse|' + seed) : null, hoops = [];
     let x = FIRST_X, prevY = START_Y;
     for (let i = 0; i < n; i++) {
       const r1 = rng(), r2 = rng(), r3 = rng(), r4 = rng(), r5 = rng(), r6 = rng(), r7 = rng(), r8 = rng(), r9 = rng();
@@ -58,7 +64,8 @@
       let gap = FIRST_X;
       if (i > 0) { gap = SPACING * (0.92 + 0.16 * r9); x += gap; }
       let amp = 0, period = 1, phase = 0;
-      if (r2 < C.moveP) { amp = C.moveAmp * (0.75 + 0.25 * r3); period = C.period * (0.85 + 0.3 * r4); phase = r5; }
+      const up = !!(F && F.up && F.up(i));
+      if (r2 < (F && F.moveAll && i >= 3 ? 1 : C.moveP)) { amp = C.moveAmp * (0.75 + 0.25 * r3); period = C.period * (0.85 + 0.3 * r4); phase = r5; }
       let y = i === 0 ? 320 + (r1 * 2 - 1) * 40 : prevY + (r1 * 2 - 1) * C.dy;
       if (y < E.Y_MIN) y = E.Y_MIN + (E.Y_MIN - y) * 0.5;
       if (y > E.Y_MAX) y = E.Y_MAX - (y - E.Y_MAX) * 0.5;
@@ -69,11 +76,18 @@
       if (y - amp < E.Y_MIN) y = E.Y_MIN + amp;
       if (y + amp > E.Y_MAX) y = E.Y_MAX - amp;
       let tilt = 0;
-      if (r6 < C.tiltP) tilt = (r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * DEG;
-      hoops.push({ i, x, y0: y, w: C.w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 });
+      if (r6 < C.tiltP && !up) tilt = (r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * DEG;
+      const w = up ? Math.round((C.w + lerp(GATE_W[0], GATE_W[1], Math.min(1, i / RAMP))) * 10) / 10 : C.w;
+      const hp = { i, x, y0: y, w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 };
+      if (up) { hp.v = true; hp.tilt = -90 * DEG; hp.c = 0; hp.s = -1; }
+      if (pr) {
+        const a = pr(), b = pr(), c = pr();
+        if (F.pulse(i)) { hp.pw = Math.min(PULSE.w[0] + (PULSE.w[1] - PULSE.w[0]) * a, w - W_MIN); hp.pp = PULSE.p[0] + (PULSE.p[1] - PULSE.p[0]) * b; hp.pph = c; }
+      }
+      hoops.push(hp);
       prevY = y;
     }
-    return { seed: String(seed), di: 0, L: 0, special: 'duel', speed: SPEED, startY: START_Y, hoops, endX: x + SPACING, maxTicks: E.TICK_HZ * (20 + 3 * n) };
+    return { seed: String(seed), di: 0, L: 0, special: pre, speed: SPEED, startY: START_Y, hoops, endX: x + SPACING, maxTicks: E.TICK_HZ * (20 + 3 * n) };
   }
 
   // a flight's score from its ring outcomes ('S' swish, anything else a rim hit): the game's own score, without the

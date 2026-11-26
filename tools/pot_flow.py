@@ -1,66 +1,80 @@
-"""Challenge pot, end to end in the demo: its page on the Challenges tab, entering (the entry is debited), completing
-the challenge in a run on its tier (live notice + result chip), and closing the pot (the share is paid).
-Screenshots to ./shots/pot_*.png. Usage: python3 tools/pot_flow.py"""
-import asyncio, re
+"""The daily pot in the demo, end to end: a game of its own on the day's course. The card on Challenges and its page
+(the course, the pot, each place's share, the board), attempts (each takes the entry and goes into the pot, the best
+counts), the leader's ghost and the live place in a run, the result card, and closing the pot (the best three paid)."""
+import asyncio, json
 from playwright.async_api import async_playwright
-from _paths import URL, SHOTS, CHROME
-OUT = SHOTS + '/pot_'
+from _paths import URL, CHROME
+fails = []
+def check(ok, msg):
+    if not ok: fails.append(msg); print('  FAIL', msg)
+    else: print('  ok  ', msg)
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=CHROME)
         ctx = await b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
-        page = await ctx.new_page(); errs = []; fails = []
+        page = await ctx.new_page(); errs = []
         page.on('pageerror', lambda e: errs.append(str(e)))
-        await page.goto(URL); await page.wait_for_timeout(2200)
-        bal = lambda: page.evaluate("__solDunk.bal()")
-        await page.wait_for_function('__solDunk.pot()', timeout=5000)
-        goal = await page.evaluate("__solDunk.pot().goal.text")
-        await page.click('#tabChallenges'); await page.wait_for_timeout(500)
-        if not await page.evaluate("!!document.getElementById('chPotEnter')"): fails.append('the Challenges page has no Enter button on the pot card')
-        await page.click('#cBody [data-page="pot"]'); await page.wait_for_timeout(500)
-        await page.screenshot(path=OUT + 'sheet.png')
-        b0 = await bal()
-        await page.click('#potEnter'); await page.wait_for_timeout(600)
-        await page.screenshot(path=OUT + 'entered.png')
-        b1 = await bal()
-        if abs((b0 - b1) - 0.05) > 1e-6: fails.append(f'entry debit {b0} -> {b1}')
-        if 'You’re in' not in await page.evaluate("document.getElementById('pgBody').innerText"): fails.append('the pot page does not say you are in')
-        await page.click('#pgBack'); await page.wait_for_timeout(450)
-        if 'You’re in' not in await page.evaluate("document.querySelector('#cBody .cc-act') ? [...document.querySelectorAll('#cBody .cc-act')].map((e) => e.innerText).join() : ''"): fails.append('the pot card does not say you are in')
-        tier = await page.evaluate("__solDunk.pot().goal.tier")
-        await page.click('#tabPlay'); await page.wait_for_timeout(400)
-        await page.click(f'#diff{tier}'); await page.wait_for_timeout(200)
-        await page.click('#playBtn'); await page.wait_for_timeout(700)
-        await page.evaluate("__solDunk.autoplay('perfect'); __solDunk.tap()")
-        noticed = False
-        for i in range(400):
-            ph = await page.evaluate('__solDunk.phase()')
-            if not noticed and await page.evaluate("document.getElementById('notice').classList.contains('n-pot') && document.getElementById('notice').classList.contains('show')"):
-                noticed = True; await page.screenshot(path=OUT + 'notice.png')
-            if ph == 'checkpoint':
-                done = await page.evaluate("!!(__solDunk.pot().me && __solDunk.pot().me.done)")
-                await page.wait_for_timeout(900)
-                if done: await page.click('#cashBtn'); break
-                await page.click('#goBtn'); await page.wait_for_timeout(900); await page.evaluate('__solDunk.tap()')
+        ev = page.evaluate
+        await page.goto(URL); await page.wait_for_timeout(3500)
+        await page.click('#tabChallenges'); await page.wait_for_timeout(1200)
+        p0 = await ev('__solDunk.pot()')
+        check(p0 and p0['simulated'] and p0['theme'] and p0['rings'] == 40 and abs(p0['fee'] - 0.05) < 1e-9 and p0['places'] == [0.5, 0.3, 0.2], 'the pot has a course, a theme, an entry and three places: ' + json.dumps({k: p0[k] for k in ('theme', 'rings', 'fee', 'places')}))
+        check(p0['entrants'] > 0 and len(p0['board']) > 0 and p0['leader'] and abs(p0['pool'] - p0['attempts'] * 0.05 * 0.9) < 1e-6, 'the simulated field has flown it, and every attempt is in the pot: ' + json.dumps([p0['entrants'], p0['attempts'], p0['pool']]))
+        card = await page.inner_text('#cBody .cc.pot')
+        check(p0['theme']['name'] in card and 'best three split it' in card and '1st' in card and 'Fly 0.05' in card, 'the card shows the theme, the top of the board and Fly: ' + card.replace('\n', ' | ')[:160])
+        await page.click('#cBody [data-page="pot"]'); await page.wait_for_timeout(900)
+        body = await page.inner_text('#pgBody')
+        check('In the pot' in body and '1st · 50%' in body and 'Today’s board' in body and 'simulated' in body and await ev("!!document.getElementById('potPlay')"), 'the page has the pot, the places, the board, Fly and the demo note')
+        drawn = await ev("(() => { const c = document.getElementById('potCourse'); if (!c) return 0; const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++; return n; })()")
+        check(drawn > 200, f'the course sketch is drawn ({drawn} px)')
+        bal0 = await ev('__solDunk.bal()')
+        await page.click('#potPlay'); await page.wait_for_timeout(1400)
+        check(await ev('__solDunk.mode()') == 'pot' and abs(await ev('__solDunk.bal()') - (bal0 - 0.05)) < 1e-9, 'an attempt takes the entry')
+        g = await ev('__solDunk.ghost()')
+        check(g is not None, 'the leader flies beside the ball as a ghost')
+        prompt = await page.inner_text('#prompt')
+        check('leader' in prompt.lower(), 'the start says what to beat: ' + prompt.replace('\n', ' '))
+        await ev("__solDunk.autoplay('good'); __solDunk.tap()")
+        places = set()
+        for i in range(900):
+            ph = await ev('__solDunk.phase()')
             if ph == 'over': break
-            await page.wait_for_timeout(120)
+            if i % 6 == 0: places.add(await page.inner_text('#hudPot'))
+            await page.wait_for_timeout(100)
+        check(any('place' in x for x in places), 'the HUD shows the place the flight would take: ' + ', '.join(sorted(places))[:120])
+        await page.wait_for_timeout(2000)
+        p1 = await ev('__solDunk.pot()')
+        me = p1['me']
+        unit = await page.inner_text('#resAmount .unit'); num = await page.inner_text('#resNum')
+        check(me['attempts'] == 1 and me['best'] and me['place'] and int(num) == me['best']['rings'] and unit in ('ring', 'rings'), f"the attempt is the player's best, shown as rings: {num} {unit}, place {me['place']}")
+        check(abs(p1['pool'] - p0['pool'] - 0.045) < 0.0451 * 3, 'the attempt went into the pot')
+        check(await page.inner_text('#againT') == 'Fly again', 'the result offers another attempt')
+        await ev("__solDunk.autoplay(null)")
+        # a second attempt that hits the floor at once: the best stays
+        await page.click('#againBtn'); await page.wait_for_timeout(1400)
+        g2 = await ev('__solDunk.ghost()')
+        await ev('__solDunk.tap()')
+        for i in range(200):
+            if await ev('__solDunk.phase()') == 'over': break
+            await page.wait_for_timeout(100)
         await page.wait_for_timeout(1800)
-        await page.screenshot(path=OUT + 'result.png')
-        gains = await page.evaluate("document.getElementById('resGains').innerText")
-        if not noticed: fails.append('no pot notice during the run')
-        if 'Pot challenge done' not in gains: fails.append('no pot chip on the result card: ' + gains)
+        p2 = await ev('__solDunk.pot()')
+        check(p2['me']['attempts'] == 2 and p2['me']['best']['rings'] == me['best']['rings'] and await page.inner_text('#resTitle') != 'New best', 'a worse attempt keeps the best')
+        # close the pot now (demo): the best three are paid, a new pot opens, and the result is told
         await page.click('#lobbyBtn'); await page.wait_for_timeout(800)
-        await page.click('#tabChallenges'); await page.wait_for_timeout(600)
-        await page.click('#cBody [data-page="pot"]'); await page.wait_for_timeout(500)
-        await page.screenshot(path=OUT + 'made.png')
-        b2 = await bal()
-        await page.click('#potClose'); await page.wait_for_timeout(900)
-        b3 = await bal()
-        toast = await page.evaluate("document.getElementById('toast').textContent")
-        await page.screenshot(path=OUT + 'closed.png')
-        won = re.search(r'you won ([0-9.]+) SOL', toast)
-        if not won: fails.append('no payout toast: ' + toast)
-        elif abs((b3 - b2) - float(won.group(1))) > 1e-4: fails.append(f'payout {won.group(1)} but balance {b2} -> {b3}')
-        print('goal', goal, '| toast', toast, '| fails', fails, '| errors', errs)
+        await page.click('#cBody [data-page="pot"]'); await page.wait_for_timeout(700)
+        bal1 = await ev('__solDunk.bal()')
+        await page.click('#potClose'); await page.wait_for_timeout(2500)
+        p3 = await ev('__solDunk.pot()'); L = p3['last']
+        check(L and L['key'] == p0['key'] and len(L['results']) == 3 and abs(sum(r['won'] for r in L['results']) - L['results'][0]['won'] / 0.5) < 1e-6, 'closing pays the best three half, three tenths and a fifth: ' + json.dumps(L['results'])[:220])
+        won = L['me']['won'] if L['me'] else 0
+        check(abs(await ev('__solDunk.bal()') - (bal1 + won)) < 1e-9 and (won > 0) == (L['me']['place'] is not None and L['me']['place'] <= 3), f"the player is paid for a top-three place only (place {L['me']['place']}, won {won})")
+        check(p3['key'] != p0['key'] and p3['seed'] != p0['seed'] and p3['me']['attempts'] == 0, 'a new pot opens on a new course')
+        check('Last pot' in await page.inner_text('#pgBody'), 'the page shows the last pot')
+        await page.click('#tabProfile'); await page.wait_for_timeout(400); await page.click('#pBody [data-page="stats"]'); await page.wait_for_timeout(500)
+        check('Daily pot' in await page.inner_text('#pgBody'), 'Stats lists the pot attempts')
+        check(not errs, 'no page errors: ' + str(errs))
         await b.close()
+    print('pot flow:', 'all checks passed' if not fails else f'{len(fails)} check(s) failed')
 asyncio.run(main())
+raise SystemExit(1 if fails else 0)

@@ -129,6 +129,19 @@ async def main():
             d1 = await page.evaluate("__solDunk.duel()"); me3 = call(base, '/api/me', None, token)
             title = await page.evaluate("document.getElementById('resTitle').textContent")
             if not (title == 'Mark set' and d1 and len(d1['waiting']) == 1 and me3['balance'] == me2['balance'] - 50_000_000): fails.append(f"the duel mark was not set: {title} {json.dumps(d1)} {me3['balance'] - me2['balance']}")
+            # a pot attempt on the day's course: the entry goes in, the flight is replayed and becomes the player's best
+            await page.click('#lobbyBtn'); await page.wait_for_timeout(900)
+            if await page.evaluate("!!document.getElementById('chPot')"):
+                await page.evaluate("document.getElementById('chPot').click()"); await page.wait_for_timeout(1500)
+                await page.evaluate("__solDunk.autoplay('average'); __solDunk.tap()")
+                for _ in range(600):
+                    if await page.evaluate("__solDunk.phase()") == 'over': break
+                    await page.wait_for_timeout(250)
+                await page.wait_for_timeout(1800); await page.screenshot(path=OUT + 'pot.png')
+                pv = call(base, '/api/pot', None, token); me4 = call(base, '/api/me', None, token)
+                unit = await page.evaluate("document.querySelector('#resAmount .unit').textContent")
+                if not (pv['me']['attempts'] == 1 and pv['me']['best'] is not None and unit in ('ring', 'rings') and me4['balance'] == me3['balance'] - 50_000_000): fails.append('the pot attempt did not go through: ' + json.dumps(pv.get('me'))[:200] + ' ' + unit)
+            else: fails.append('no pot card on Challenges')
             if csp: fails.append('content security policy violations: ' + ' | '.join(csp[:3]))
             if errs: fails.append('page errors: ' + ' | '.join(errs[:3]))
             await b.close()
@@ -136,6 +149,6 @@ async def main():
         os.killpg(srv.pid, signal.SIGTERM)
         try: srv.wait(timeout=15)
         except Exception: os.killpg(srv.pid, signal.SIGKILL)
-    print('server flow:', 'FAIL ' + '; '.join(fails) if fails else 'ok (wallet sign-in, a verified run, cash-out, a mission SOL claim, a withdrawal and a duel mark under the page\'s security policy)')
+    print('server flow:', 'FAIL ' + '; '.join(fails) if fails else 'ok (wallet sign-in, a verified run, cash-out, a mission SOL claim, a withdrawal, a duel mark and a pot attempt under the page\'s security policy)')
     sys.exit(1 if fails else 0)
 asyncio.run(main())

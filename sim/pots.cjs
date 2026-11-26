@@ -1,48 +1,27 @@
-// Pot challenge odds: the chance that one run makes each challenge, for casual, average and good players.
-// Runs start on level 1 of the challenge's own tier and play on until they bust (or clear all 8 levels).
-// Prints each challenge's measured chance next to its p in src/pots.cjs; copy the new numbers in after a
-// physics change. Extra challenges can be tried as kind:n@tier (kinds: best, swishes, score, perfect, clears,
-// greens, hot, comeback, early).
-//   node sim/pots.cjs [runs per skill, default 20000] [best:7@1,score:90@1,...]
-const E = require('../src/engine.cjs');
-const B = require('../src/bot.cjs');
-const P = require('../src/pots.cjs');
-
-const N = +(process.argv[2] || 20000);
-const extra = (process.argv[3] || '').split(',').filter(Boolean).map((s) => {
-  const [kn, tier] = s.split('@'), [kind, n] = kn.split(':');
-  return { id: `${kind}${n}@${tier}`, kind, n: +n, tier: +tier, text: 'try', p: null };
-});
-const SKILLS = ['casual', 'average', 'good'];
-
-function playLevel(seed, di, L, skill, botSeed) {
-  const st = E.createState(E.generateLevel(seed, di, L));
-  const bot = B.createBot(skill, E.makeRng(botSeed));
-  let tap = true; // the first tap starts the level
-  while (!st.done) { E.step(st, tap); tap = B.decide(bot, st); }
-  return { outcomes: st.outcomes.join(''), clear: st.result === 'clear' };
-}
-
-const goals = P.GOALS.concat(extra), t0 = Date.now();
-console.log(`engine v${E.VERSION}, ${N} runs per skill   chance per run [casual, average, good]   aim: average 4-15%, good 25-50%`);
-for (const tier of [...new Set(goals.map((g) => g.tier))].sort()) {
-  const here = goals.filter((g) => g.tier === tier), got = {};
-  for (const sk of SKILLS) {
-    const hit = Object.fromEntries(here.map((g) => [g.id, 0]));
+// Measures the daily pot's courses (src/pots.cjs): for each theme, how far each of the game's bots gets on it, and how
+// often one flies all of it. The pot ranks attempts by rings, so a course has to spread players out and end nearly
+// everyone: the aim is novices at a handful of rings, average players around ten, pros in the twenties, and even perfect
+// play not finishing every time. Run it after a change to the engine, the bot, src/duel.cjs's course or a theme.
+//
+//   node sim/pots.cjs [flights per theme and skill = 150]
+const E = require('../src/engine.cjs'), B = require('../src/bot.cjs'), PT = require('../src/pots.cjs');
+const N = +process.argv[2] || 150, t0 = Date.now();
+console.log(`rings passed on the pot's ${PT.RINGS}-ring course, 10th / 50th / 90th percentile (and how often all of it), ${N} flights each`);
+for (const T of PT.THEMES) {
+  const rows = [];
+  for (const s of Object.keys(B.SKILLS)) {
+    const rs = [];
+    let all = 0;
     for (let i = 0; i < N; i++) {
-      const levels = [];
-      for (let L = 1; L <= E.LEVELS; L++) {
-        const r = playLevel(`pot|${tier}|${sk}|${i}|${L}`, tier, L, sk, `potb|${tier}|${sk}|${i}|${L}`);
-        levels.push(r);
-        if (!r.clear) break;
-      }
-      for (const g of here) if (P.progress(g, levels, tier).done) hit[g.id]++;
+      const st = E.createState(PT.course('m' + (i % 12), T)), bot = B.createBot(s, E.makeRng('pb|' + s + '|' + i));
+      let tap = true;
+      while (!st.done) { E.step(st, tap); tap = B.decide(bot, st); }
+      rs.push(st.outcomes.length); if (st.result === 'clear') all++;
     }
-    for (const g of here) (got[g.id] = got[g.id] || []).push(+(hit[g.id] / N).toFixed(3));
+    rs.sort((a, b) => a - b);
+    const q = (p) => rs[Math.floor(p * (N - 1))];
+    rows.push(`${s} ${q(0.1)}/${q(0.5)}/${q(0.9)}${all ? ' (' + Math.round((100 * all) / N) + '%)' : ''}`);
   }
-  for (const g of here) {
-    const [, avg, good] = got[g.id], ok = avg >= 0.04 && avg <= 0.15 && good >= 0.25 && good <= 0.5;
-    console.log(`${g.id.padEnd(12)} ${P.TIER_NAMES[tier].padEnd(9)} ${JSON.stringify(got[g.id]).padEnd(22)} p now ${JSON.stringify(g.p)}${ok ? '' : '   outside the aim'}`);
-  }
+  console.log(T.name.padEnd(11), rows.join(' | '));
 }
-console.log(`time ${((Date.now() - t0) / 1000).toFixed(0)}s`);
+console.log(`time ${Math.round((Date.now() - t0) / 1000)} s`);
