@@ -1144,6 +1144,28 @@
     buzz: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="3.5" width="8" height="17" rx="2.2"/><path d="M4.6 9v6M19.4 9v6M2 10.8v2.4M22 10.8v2.4"/></svg>',
     gift: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 11h7v10H5a1 1 0 0 1-1-1zm9 0h7v9a1 1 0 0 1-1 1h-6zM3 7.5A1.5 1.5 0 0 1 4.5 6h15A1.5 1.5 0 0 1 21 7.5v1A1.5 1.5 0 0 1 19.5 10H13V6h-2v4H4.5A1.5 1.5 0 0 1 3 8.5zM8.6 2.6c1.4-.4 2.6.8 3.4 2.9.8-2.1 2-3.3 3.4-2.9 1.6.5 1.6 2.6-.3 3.4H8.9C7 5.2 7 3.1 8.6 2.6Z"/></svg>'
   };
+  // Each trophy has its own glyph (original line drawings on the 24-unit grid, like the How to play ones), so the
+  // trophy case reads at a glance instead of fifteen identical medals.
+  const TRO_ICON = {
+    swish1: '<ellipse cx="12" cy="16" rx="8.5" ry="3"/><path d="M12 3v11M8.6 10.6 12 14l3.4-3.4"/>',
+    cp1: '<path d="M6 21.5V3.2M6 4.4c4-2.1 6.4 1.9 11.4-.1v8.2c-5 2-7.4-2-11.4.1"/>',
+    fire3: '<g stroke="none">' + EMBLEMS.flame + '</g>',
+    moving: '<ellipse cx="12" cy="12" rx="8.2" ry="2.9"/><path d="M12 6.2V2.4M9.9 4.3 12 2.2l2.1 2.1M12 17.8v3.8M9.9 19.7l2.1 2.1 2.1-2.1"/>',
+    nova5: '<path fill="currentColor" stroke="none" d="M12 1.5l2.4 7.1 7.1 2.4-7.1 2.4L12 20.5l-2.4-7.1L2.5 11l7.1-2.4z"/>',
+    perfect: '<g stroke="none">' + EMBLEMS.star + '</g>',
+    tilted: '<ellipse cx="12" cy="13" rx="9" ry="3.2" transform="rotate(-24 12 13)"/><circle cx="6.2" cy="5.6" r="2.3" fill="currentColor" stroke="none"/>',
+    deep4: '<path d="m6.5 6.2 5.5 5.5 5.5-5.5M6.5 12.8l5.5 5.5 5.5-5.5"/>',
+    score50: '<path d="M12 19V4.2M6.2 10 12 4.2 17.8 10"/><path d="M5.5 21.6h13" opacity=".5"/>',
+    double: '<text x="12" y="16.4" text-anchor="middle" font-family="SD Display, ui-rounded, sans-serif" font-weight="700" font-size="12" fill="currentColor" stroke="none">2×</text>',
+    legend: '<g stroke="none">' + EMBLEMS.crown + '</g>',
+    deep6: '<path d="m6.5 3.4 5.5 5.5 5.5-5.5M6.5 9.4l5.5 5.5 5.5-5.5M6.5 15.4l5.5 5.5 5.5-5.5"/>',
+    streak10: '<g stroke="none">' + EMBLEMS.bolt + '</g>',
+    swish100: '<ellipse cx="12" cy="6.4" rx="8" ry="2.6"/><ellipse cx="12" cy="12" rx="8" ry="2.6"/><ellipse cx="12" cy="17.6" rx="8" ry="2.6"/>'
+  };
+  const TRO_SVG = {};
+  const troIcon = (id) => TRO_SVG[id] || (TRO_SVG[id] = TRO_ICON[id]
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + TRO_ICON[id] + '</svg>'
+    : id === 'champion' ? ICON.trophy : ICON.medal);
   // numbers roll to their new value instead of jumping
   // Numbers that count up (the pot, the checkpoint pot, a win) tick in the game's own frame, after the canvas is
   // drawn, so their writes to the page come last in the frame instead of landing before the next frame's work.
@@ -1279,7 +1301,7 @@
   }
   NOTE.el.innerHTML = '<span class="ni"></span><span class="nb"><span class="nt"></span><span class="ns"></span></span>';
   NOTE.parts = ['.ni', '.nt', '.ns'].map((q) => NOTE.el.querySelector(q));
-  [ICON.check, ICON.flag, ICON.medal, ICON.trophy, ICON.gift].forEach((i) => { if (i) noteIcon(i); }); // parsed now, not mid-run
+  [ICON.check, ICON.flag, ICON.medal, ICON.trophy, ICON.gift].concat(ACH.map((a) => troIcon(a.id))).forEach((i) => { if (i) noteIcon(i); }); // parsed now, not mid-run
   function notice(kind, icon, title, sub, first) {
     const n = { kind, icon, title, sub, first: !!first };
     if (first) NOTE.q.unshift(n); else NOTE.q.push(n);
@@ -1324,7 +1346,7 @@
     }
     for (const a of ACH) {
       if (profile.ach[a.id] || run.told[a.id] || a.id === 'double' || a.id === 'swish100' || !a.test(r)) continue;
-      run.told[a.id] = 1; notice('n-ach', ICON.medal, a.name, a.desc + ' · +' + a.xp + ' XP');
+      run.told[a.id] = 1; notice('n-ach', troIcon(a.id), a.name, a.desc + ' · +' + a.xp + ' XP');
     }
   }
   // the next goal, shown under each level's banner: the pot challenge if you're in it, else the next mission
@@ -1577,24 +1599,34 @@
   }
   // a sketch of a course: the rings in order, how wide each is, how far it bobs, and the green finish
   function drawCourse(el, def) {
-    const k = Math.min(window.devicePixelRatio || 1, 2), w = el.clientWidth || 340, ht = el.clientHeight || 118;
+    const k = Math.min(window.devicePixelRatio || 1, 2), w = el.clientWidth || 340, ht = el.clientHeight || 132;
     el.width = Math.round(w * k); el.height = Math.round(ht * k);
     const g = el.getContext('2d'); g.setTransform(k, 0, 0, k, 0, 0); g.clearRect(0, 0, w, ht);
-    const hs = def.hoops, x0 = -30, x1 = hs[hs.length - 1].x + 50, pad = 16, yT = E.Y_MIN - 70, yB = E.Y_MAX + 70;
-    const sx = (x) => pad + (x - x0) / (x1 - x0) * (w - pad * 2), sy = (y) => 8 + (y - yT) / (yB - yT) * (ht - 16);
+    const hs = def.hoops, x0 = -30, x1 = hs[hs.length - 1].x + 50, pad = 18, yT = E.Y_MIN - 70, yB = E.Y_MAX + 70;
+    const sx = (x) => pad + (x - x0) / (x1 - x0) * (w - pad * 2), sy = (y) => 10 + (y - yT) / (yB - yT) * (ht - 20);
     g.lineCap = 'round';
-    g.strokeStyle = 'rgba(255,255,255,0.14)'; g.lineWidth = 1.4; g.setLineDash([2, 5]);
+    // the way through: a dotted line from the ball to each ring in turn
+    g.strokeStyle = 'rgba(185,140,255,0.3)'; g.lineWidth = 1.4; g.setLineDash([1.5, 5]);
     g.beginPath(); g.moveTo(sx(0), sy(def.startY)); for (const h of hs) g.lineTo(sx(h.x), sy(h.y0)); g.stroke(); g.setLineDash([]);
-    const half0 = Math.max(5, Math.min(9, (w - pad * 2) / hs.length * 0.32)), wMax = Math.max(...hs.map((h) => h.w));
-    for (const h of hs) {
-      const cx = sx(h.x), cy = sy(h.y0), half = Math.max(2.6, half0 * Math.pow(h.w / wMax, 2.4)); // a tighter ring reads as clearly smaller
-      if (h.amp) { g.strokeStyle = 'rgba(255,255,255,0.13)'; g.lineWidth = 2; g.beginPath(); g.moveTo(cx, sy(h.y0 - h.amp)); g.lineTo(cx, sy(h.y0 + h.amp)); g.stroke(); }
-      const a = h.tilt * 1.8, dx = Math.cos(a) * half, dy = Math.sin(a) * half, col = h.cp ? '#14f195' : 'rgba(236,240,250,0.92)';
-      g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 2.2;
-      g.beginPath(); g.moveTo(cx - dx, cy - dy); g.lineTo(cx + dx, cy + dy); g.stroke();
-      for (const sg of [-1, 1]) { g.beginPath(); g.arc(cx + sg * dx, cy + sg * dy, 2.1, 0, Math.PI * 2); g.fill(); }
+    const half0 = Math.max(5.5, Math.min(10, (w - pad * 2) / hs.length * 0.34)), wMax = Math.max(...hs.map((h) => h.w));
+    for (const h of hs) { // how far each ring bobs: a soft track behind it
+      if (!h.amp) continue;
+      const cx = sx(h.x);
+      g.strokeStyle = 'rgba(185,140,255,0.16)'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx, sy(h.y0 - h.amp)); g.lineTo(cx, sy(h.y0 + h.amp)); g.stroke();
     }
-    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(sx(0), sy(def.startY), 4.2, 0, Math.PI * 2); g.fill();
+    // the rings as the game draws them: purple hoops seen from a little above, the finish in green, each in its own light
+    for (const h of hs) {
+      const cx = sx(h.x), cy = sy(h.y0), half = Math.max(3, half0 * Math.pow(h.w / wMax, 2.4)); // a tighter ring reads as clearly smaller
+      const ry = Math.max(1.5, half * 0.36), a = h.tilt * 1.8, rgb = h.cp ? '20,241,149' : '153,69,255';
+      g.save(); g.translate(cx, cy); g.rotate(a);
+      g.shadowColor = 'rgba(' + rgb + ',0.75)'; g.shadowBlur = h.cp ? 9 : 6;
+      g.strokeStyle = h.cp ? '#14f195' : '#b98cff'; g.lineWidth = 2;
+      g.beginPath(); g.ellipse(0, 0, half, ry, 0, 0, Math.PI * 2); g.stroke();
+      g.restore();
+    }
+    g.shadowColor = 'rgba(255,255,255,0.6)'; g.shadowBlur = 8;
+    g.fillStyle = '#ffffff'; g.beginPath(); g.arc(sx(0), sy(def.startY), 4, 0, Math.PI * 2); g.fill();
+    g.shadowBlur = 0; g.shadowColor = 'transparent';
   }
   // today's three specials in one card: a row each with its prize multiple, twist, length, prize and Play; tap a row for its page
   function specialCard() {
@@ -2139,7 +2171,7 @@
       }
     }
     pr.unlocks.forEach((u) => g.push(['unlock', '', 'New ' + itemName(u), u]));
-    pr.achs.forEach((x) => g.push(['ach', ICON.medal, x.name + ' · +' + x.xp + ' XP']));
+    pr.achs.forEach((x) => g.push(['ach', troIcon(x.id), x.name + ' · +' + x.xp + ' XP']));
     if (pr.chapter != null) g.push(['ach', ICON.flag, 'Chapter ' + (pr.chapter + 1) + ' done · ' + CAREER[pr.chapter].name]);
     pr.dailies.forEach((c) => g.push(['daily', ICON.check, dailyText(c) + ' · +' + c.xp + ' XP']));
     pr.weeklies.forEach((c) => g.push(['daily', ICON.check, weeklyText(c) + ' · +' + c.xp + ' XP']));
@@ -3639,7 +3671,9 @@
   }
   function walletHtml() {
     if (!CFG.serverUrl) {
-      return `<div class="tiles"><div><b>${fmtBal(wallet.balance)}</b><span>Demo SOL</span></div><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${stats.best ? fmtMult(stats.best) : '–'}</b><span>Best</span></div></div>
+      const net = stats.returned - stats.wagered, flat = Math.abs(net) < 0.00005;
+      return `<div class="sp-prize wl-bal"><span class="k">Demo balance</span><div class="big"><span class="num">${fmtBal(wallet.balance)}</span><span class="unit">SOL</span></div></div>
+        <div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${stats.best ? fmtMult(stats.best) : '–'}</b><span>Best</span></div><div><b class="${flat ? '' : net > 0 ? 'pos' : 'neg'}">${flat ? '0' : (net > 0 ? '+' : '−') + fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
         <div class="prose"><p>You're playing with demo SOL. Real SOL play runs through the SOL DUNK server with Phantom or Solflare.</p></div>
         <button class="btn btn-plain" id="resetBal">Reset to ${CFG.demoStart} demo SOL</button>`;
     }
@@ -3647,7 +3681,8 @@
       return `<div class="prose"><p>Connect a Solana wallet to play with real SOL on <b>${CFG.network}</b>.</p></div><button class="btn btn-primary" id="wConnect">Connect wallet</button>
         <p class="err" id="wErr"></p><div class="prose"><p>On a phone, open this page in the Phantom or Solflare browser.</p></div>`;
     }
-    return `<div class="tiles"><div><b>${fmtBal(ServerBank.bal)}</b><span>Balance SOL</span></div><div><b>${ServerBank.address.slice(0, 4)}…${ServerBank.address.slice(-4)}</b><span>Wallet</span></div><div><b>${CFG.network}</b><span>Network</span></div></div>
+    return `<div class="sp-prize wl-bal"><span class="k">Balance</span><div class="big"><span class="num">${fmtBal(ServerBank.bal)}</span><span class="unit">SOL</span></div></div>
+      <div class="tiles two"><div><b>${ServerBank.address.slice(0, 4)}…${ServerBank.address.slice(-4)}</b><span>Wallet</span></div><div><b>${CFG.network}</b><span>Network</span></div></div>
       <div class="group"><div class="row"><label class="k" for="wAmt">Amount</label><label class="bet-field"><input id="wAmt" class="bet-input" inputmode="decimal" value="0.1"><span class="unit">SOL</span></label></div></div>
       <div class="actions"><button class="btn btn-plain" id="wWithdraw">Withdraw</button><button class="btn btn-green" id="wDeposit">Deposit</button></div>
       <p class="err" id="wErr"></p>`;
@@ -3657,7 +3692,7 @@
     const got = ACH.filter((a) => profile.ach[a.id]).length;
     return `<p class="vsub">${got ? `${got} of ${ACH.length} earned. Each one adds XP, and some open titles for your player card.` : `None yet. Each one adds XP, and some open titles for your player card.`}</p>
       <div class="tro-sum" aria-hidden="true"><b class="num">${got}<small> / ${ACH.length}</small></b><span class="tro-seg">${ACH.map((a) => `<i${profile.ach[a.id] ? ' class="on"' : ''}></i>`).join('')}</span></div>
-      <div class="trophies">${ACH.map((a) => `<div class="tro${profile.ach[a.id] ? ' got' : ''}"><span class="ti">${ICON.medal}</span><b>${a.name}</b><span>${a.desc}</span></div>`).join('')}</div>`;
+      <div class="trophies">${ACH.map((a) => `<div class="tro${profile.ach[a.id] ? ' got' : ''}"><span class="ti">${troIcon(a.id)}</span><b>${a.name}</b><span>${a.desc}</span><em class="tx">${profile.ach[a.id] ? ICON.check + 'Earned' : '+' + a.xp + ' XP'}</em></div>`).join('')}</div>`;
   }
   // recent runs: what each one ended as, on which tier, and what it paid
   const agoText = (t) => {
