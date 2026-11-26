@@ -9,7 +9,8 @@
            red: a loss reads in grey
    TYPE    SD Display (Saira at its widest, bundled in src/fonts) for titles, numbers, buttons and callouts; the system face
            for reading text; sentence case everywhere, no caps labels
-   SURFACE flat fills, no glows or gradients; a key stands on a flat darker edge (no blur) and sinks into it when pressed;
+   SURFACE panels are flat; a key stands on a darker edge and sinks into it when pressed; soft light (the depth block at the
+           end) only on what's lit: keys, the HUD on a streak, lit segments, cards over the court; never gradient text;
            meters are lit segments; marquee bands are a lighter graphite
    BUTTONS purple key starts or spends a run; green key takes money back (cash out, deposit); every other button is the grey key
    INK     display amounts drop trailing zeros; numbers bold, labels quiet */
@@ -934,7 +935,7 @@ body[data-tab="locker"] #hud { opacity: 0; visibility: hidden; }
   .tiles b { font-size: 19px; }
 }
 /* a tab's blocks rise in when you open it: played by riseIn() in game.js */
-#fxLayer { position: fixed; inset: 0; z-index: 19; width: 100%; height: 100%; pointer-events: none; }
+#fxLayer { position: fixed; inset: 0; z-index: 9; /* behind the cards: confetti bursts out from behind a card and never covers its text */ width: 100%; height: 100%; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) {
   .tiers button[aria-checked="true"] { animation: none; }
   .btn, .pill, .round, .tiers button, .cc-open, .ct, .pcard, .lk-info .li-a, #tabbar button::before { transition: none; }
@@ -1034,4 +1035,65 @@ body.desk.hud-lobby #toast { left: calc(50% + var(--side) / 2); }
   body.desk #tabbar button:hover { color: var(--label); }
   .tiers button:hover .tn, .lk-cats button:hover { color: var(--label); }
   .foot-link:hover, .practice-link:hover, .back:hover, .tour-skip:hover, .panel .close:hover { opacity: 0.75; }
+/* ---------- depth: light in the dark hall (the owner chose the same colours with soft glows, gradients and lighting).
+   Still Solana purple and green only, and never gradient text; glows are soft and sit on things that are lit:
+   keys, the multiplier on a streak, lit segments, the cards over the court. ---------- */
+/* the frame of heat: the play column's edges glow with the flame while a streak burns, and flare on each swish.
+   Two layers that only ever change opacity, so the compositor does the work and the page isn't repainted. */
+#heatFrame, #heatPulse { position: fixed; top: 0; bottom: 0; left: 50%; z-index: 2; width: min(100%, var(--col, 100%)); transform: translateX(-50%); pointer-events: none; opacity: 0; will-change: opacity; }
+#heatFrame { box-shadow: inset 0 0 120px 4px rgba(var(--heat), 0.5), inset 0 0 26px rgba(var(--heat), 0.32); transition: opacity 0.6s; }
+#heatFrame.hot { opacity: 0.5; }
+#heatFrame.nova { opacity: 0.55; box-shadow: inset 0 0 110px 2px rgba(var(--nova), 0.4), inset 0 0 24px rgba(var(--nova), 0.3); }
+#heatPulse { box-shadow: inset 0 0 150px 14px rgba(var(--heat), 0.7); }
+#heatPulse.nova { box-shadow: inset 0 0 140px 8px rgba(var(--nova), 0.5); }
+.hud-lobby #heatFrame, .hud-lobby #heatPulse, body:has(#result:not(.hide)) #heatFrame { opacity: 0; }
+/* windows wider than the play column (tablets, desktops): the court fades out at the column's sides, so the frame does
+   too, and only its top and bottom glow, instead of drawing a lit box round the column */
+@media (min-aspect-ratio: 11/20) {
+  #heatFrame, #heatPulse { -webkit-mask-image: linear-gradient(90deg, transparent, #000 26%, #000 74%, transparent); mask-image: linear-gradient(90deg, transparent, #000 26%, #000 74%, transparent); }
+}
+/* the court dims behind a card, so the card is the lit thing */
+#dim { position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0; transition: opacity 0.4s; background: radial-gradient(120% 78% at 50% 44%, rgba(3, 2, 8, 0.36), rgba(3, 2, 8, 0.82)); }
+body.hud-play:has(.card:not(.hide)) #dim { opacity: 1; }
+
+/* the HUD: capsules catch the light from above; lit segments and the multiplier glow */
+.hud-play .glass, .hud-play .streak { background: linear-gradient(180deg, rgba(36, 28, 58, 0.84), rgba(12, 8, 20, 0.82)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 0 0 1px var(--glass-line); }
+.score.hot { text-shadow: 0 0 22px rgba(var(--heat), 0.7), 0 1px 12px rgba(0, 0, 0, 0.45); }
+.score.nova { text-shadow: 0 0 24px rgba(var(--nova), 0.62), 0 1px 12px rgba(0, 0, 0, 0.45); }
+#potCap.up { text-shadow: 0 0 14px rgba(20, 241, 149, 0.55), 0 1px 8px rgba(0, 0, 0, 0.7); }
+.delta { text-shadow: 0 0 12px rgba(20, 241, 149, 0.5), 0 1px 8px rgba(0, 0, 0, 0.6); }
+.seg-i.on.sw { box-shadow: 0 0 7px rgba(255, 255, 255, 0.5); }
+.seg-i.cp.on { box-shadow: 0 0 9px rgba(20, 241, 149, 0.75); }
+.streak.t3 { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 0 0 1px rgba(var(--heat), 0.55), 0 0 22px rgba(var(--heat), 0.34); }
+.streak.t5 { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 0 0 1px rgba(var(--nova), 0.5), 0 0 22px rgba(var(--nova), 0.3); }
+.streak.t3 .heat i.f { box-shadow: 0 0 7px rgba(var(--heat), 0.85); }
+.streak.t5 .heat i.f { box-shadow: 0 0 7px rgba(var(--nova), 0.8); }
+.streak.t3 .flame { filter: drop-shadow(0 0 5px rgba(var(--heat), 0.85)); }
+.streak.t5 .flame { filter: drop-shadow(0 0 5px rgba(var(--nova), 0.8)); }
+#notice .ni { box-shadow: 0 0 14px rgba(20, 241, 149, 0.4); }
+
+/* big moments glow in the flame's colour */
+#callout.fire .c1 { text-shadow: 0 0 28px rgba(var(--heat), 0.8), 0 2px 14px rgba(0, 0, 0, 0.5); }
+#callout.nova .c1 { text-shadow: 0 0 28px rgba(var(--nova), 0.7), 0 2px 14px rgba(0, 0, 0, 0.5); }
+#callout.gold .c1, #callout.green .c1 { text-shadow: 0 0 28px rgba(20, 241, 149, 0.6), 0 2px 14px rgba(0, 0, 0, 0.5); }
+#banner .b1 { text-shadow: 0 0 30px rgba(153, 69, 255, 0.6), 0 1px 14px rgba(0, 0, 0, 0.5); }
+
+/* cards over the court: lit from above, with the hall's purple round them; they spring in */
+.card { background: linear-gradient(180deg, #1e1833 0%, #141020 44%, #100c19 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.13), inset 0 0 0 1px var(--line), 0 30px 70px rgba(0, 0, 0, 0.7), 0 0 80px rgba(153, 69, 255, 0.18);
+  transition: transform 0.5s var(--spring), opacity 0.22s; }
+.card.hide { transform: translate(-50%, -44%) scale(0.92); transition: transform 0.25s ease-in, opacity 0.2s; }
+#checkpoint .kicker { background: linear-gradient(180deg, #2a2146, #1b1530); }
+.big.win { text-shadow: 0 0 30px rgba(20, 241, 149, 0.45); }
+.tiles div.hi b { text-shadow: 0 0 16px rgba(20, 241, 149, 0.5); }
+.under:not(.flat):not(.muted) { box-shadow: inset 0 0 0 1px rgba(20, 241, 149, 0.22), 0 0 20px rgba(20, 241, 149, 0.14); }
+
+/* keys: a lit top edge and their own colour's light under them */
+.btn-primary { background: linear-gradient(180deg, #aa61ff, #8c3af0); box-shadow: 0 var(--edge) 0 var(--k-edge), 0 12px 28px rgba(153, 69, 255, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+.btn-green { background: linear-gradient(180deg, #45f8b0, #0fdc87); box-shadow: 0 var(--edge) 0 var(--k-edge), 0 12px 28px rgba(20, 241, 149, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.5); }
+.btn-plain { background: linear-gradient(180deg, #2d2742, #221d33); box-shadow: 0 var(--edge) 0 var(--k-edge), inset 0 1px 0 rgba(255, 255, 255, 0.09); }
+.pill.go { background: linear-gradient(180deg, #aa61ff, #8c3af0); box-shadow: 0 3px 0 var(--accent-edge), 0 8px 18px rgba(153, 69, 255, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.28); }
+@media (prefers-reduced-motion: reduce) {
+  .card, .card.hide { transition: opacity 0.2s; }
+  #heatPulse { display: none; }
 }
