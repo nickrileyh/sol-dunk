@@ -1160,7 +1160,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
 .tro .ti svg { width: 22px; height: 22px; }
 .tro .tx { display: inline-flex; align-items: center; gap: 4px; margin-top: auto; padding-top: 9px; font-style: normal; font-family: var(--font-round); font-size: 11px; font-weight: 700; color: var(--label-3); font-variant-numeric: tabular-nums; }
 .tro .tx svg { width: 11px; height: 11px; }
-.tro.got { border-color: rgba(20, 241, 149, 0.26); background: linear-gradient(180deg, rgba(20, 241, 149, 0.07), rgba(20, 241, 149, 0) 62%), var(--surface); }
+.tro.got { border-color: rgba(20, 241, 149, 0.16); background: linear-gradient(180deg, rgba(20, 241, 149, 0.025), rgba(20, 241, 149, 0) 62%), var(--surface); } /* quiet: a full case mustn't turn the page green */
 .tro.got .ti { background: linear-gradient(180deg, #4df8b1, #14f195); color: var(--green-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px rgba(20, 241, 149, 0.26); }
 .tro.got .tx { color: var(--green); }
 .sp-head { padding-bottom: 12px; }
@@ -1237,3 +1237,44 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
 .rake.ready .rk-i { background: var(--green-soft); color: var(--green); }
 .rake.ready .rk-t b .num { color: var(--green); }
 .rk-b { --edge: 3px; width: auto; min-height: 38px; margin: 0; padding: 0 16px; border-radius: 12px; font-size: 14px; }
+
+/* ---------- stats at a glance ----------
+   Stats in the game's own meter language (the owner asked again for more style improvements): the last runs as a strip of
+   segments, lit green for the ones that came out ahead; how deep each mode has gone as a segment per level under its
+   best score; and a small mark at the start of each recent run, so wins and losses scan without reading. */
+.form { margin-top: 10px; padding: 13px 16px 15px; border: 1px solid var(--hair); border-top-color: rgba(255, 255, 255, 0.12); border-radius: 18px; background: var(--surface); }
+.form-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; font-size: 13px; color: var(--label-2); }
+.form-h b { font-family: var(--font-round); font-weight: 700; color: var(--label); white-space: nowrap; }
+.form-seg { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 3px; height: 8px; }
+.form-seg i { border-radius: 1px; background: var(--track); }
+.form-seg i.loss { background: rgba(231, 226, 248, 0.3); }
+.form-seg i.on { background: var(--green); box-shadow: 0 0 7px rgba(20, 241, 149, 0.6); }
+.bests .deep { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 3px; width: min(132px, 72%); height: 6px; margin: 9px auto 6px; }
+.bests .deep i { border-radius: 1px; background: var(--track); }
+.bests .deep i.on { background: var(--green); box-shadow: 0 0 6px rgba(20, 241, 149, 0.5); }
+.rr { grid-template-columns: auto minmax(0, 1fr) auto; }
+.rr-i { width: 30px; height: 30px; border-radius: 15px; display: grid; place-items: center; background: var(--surface-2); color: var(--label-3); box-shadow: inset 0 0 0 1px var(--hair); }
+.rr-i svg { width: 14px; height: 14px; }
+.rr-i.win { background: rgba(20, 241, 149, 0.14); color: var(--green); box-shadow: inset 0 0 0 1px rgba(20, 241, 149, 0.3); }
+
+/* ---------- trophy SOL ----------
+   Each trophy pays a little SOL (the owner asked for small SOL rewards with a claim button). Under a trophy: what it
+   pays; a green Claim key once it can be claimed (green takes money, like Cash out); how much more to bet until then;
+   or what was claimed. */
+.tro-sol { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: -2px 4px 12px; font-size: 13px; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.tro-sol b { font-family: var(--font-round); font-weight: 700; color: var(--green); white-space: nowrap; }
+.tro-claim { margin: auto 0 3px; height: 30px; padding: 0 12px; border-radius: 15px; font-family: var(--font-round); font-size: 12.5px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums;
+  background: linear-gradient(180deg, #4df8b1, #14f195); color: var(--green-ink); box-shadow: 0 3px 0 var(--green-edge), 0 8px 18px rgba(20, 241, 149, 0.26), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  transition: transform 0.3s var(--spring), box-shadow 0.3s var(--spring); }
+.tro-claim:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--green-edge); transition-duration: 0.06s; }
+.tro .ti + b + span { margin-bottom: 9px; }
+.tro .tx { padding-top: 0; }
+.tro .tx.wait, .tro .tx.two { flex-direction: column; gap: 1px; font-family: var(--font); font-weight: 500; }
+.tro .tx.wait { color: var(--label-2); }
+.tro .tx.two b { display: block; font-family: var(--font-round); font-size: 11px; font-weight: 700; color: var(--label-3); }
+.menu-list .mv .dot.gap { margin-right: 8px; }
+.tro-sol span + span { white-space: nowrap; }
+.tro .tx.wait b { display: block; font-family: var(--font-round); font-size: 11px; font-weight: 700; color: var(--label); }
+.tro .tx.paid { color: var(--green); }
+.tro.got .tx:not(.wait):not(.paid) { color: var(--green); }
+@media (hover: hover) and (pointer: fine) { .tro-claim:hover { filter: brightness(1.08); } }

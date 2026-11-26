@@ -15,11 +15,13 @@ style = re.sub(r'/\*fonts/([\w.-]+\.woff2)\*/url\("data:font/woff2;base64,([A-Za
 tmpl = h[:m.start(1)] + '/*@@STYLE@@*/' + h[m.end(1):]
 blocks = list(re.finditer(r'<script>(.*?)</script>', tmpl, re.S))
 # builds from before the challenge pots (src/pots.cjs) have five scripts, then six; from the SOL missions and the
-# special level (src/missions.cjs, src/special.cjs) on, eight; from levels and rakeback (src/levels.cjs) on, nine
+# special level (src/missions.cjs, src/special.cjs) on, eight; from levels and rakeback (src/levels.cjs) on, nine;
+# from trophy SOL (src/trophies.cjs) on, ten
 names = {5: ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'GAME'], 6: ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'POTS', 'GAME'],
          8: ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'POTS', 'MISSIONS', 'SPECIAL', 'GAME'],
-         9: ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'POTS', 'MISSIONS', 'SPECIAL', 'LEVELS', 'GAME']}.get(len(blocks), [])
-files = {'ENGINE': 'engine.cjs', 'PAYTABLE': 'paytable.cjs', 'BOT': 'bot.cjs', 'POTS': 'pots.cjs', 'MISSIONS': 'missions.cjs', 'SPECIAL': 'special.cjs', 'LEVELS': 'levels.cjs', 'GAME': 'game.js'}
+         9: ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'POTS', 'MISSIONS', 'SPECIAL', 'LEVELS', 'GAME'],
+         10: ['CONFIG', 'ENGINE', 'PAYTABLE', 'BOT', 'POTS', 'MISSIONS', 'TROPHIES', 'SPECIAL', 'LEVELS', 'GAME']}.get(len(blocks), [])
+files = {'ENGINE': 'engine.cjs', 'PAYTABLE': 'paytable.cjs', 'BOT': 'bot.cjs', 'POTS': 'pots.cjs', 'MISSIONS': 'missions.cjs', 'TROPHIES': 'trophies.cjs', 'SPECIAL': 'special.cjs', 'LEVELS': 'levels.cjs', 'GAME': 'game.js'}
 assert len(blocks) == len(names), len(blocks)
 files = {k: f for k, f in files.items() if k in names}
 parts = {}

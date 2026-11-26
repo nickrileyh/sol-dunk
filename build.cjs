@@ -40,6 +40,7 @@ const parts = {
   '/*@@BOT@@*/': r('bot.cjs'),
   '/*@@POTS@@*/': r('pots.cjs'),
   '/*@@MISSIONS@@*/': r('missions.cjs'),
+  '/*@@TROPHIES@@*/': r('trophies.cjs'),
   '/*@@SPECIAL@@*/': r('special.cjs'),
   '/*@@LEVELS@@*/': r('levels.cjs'),
   '/*@@GAME@@*/': r('game.js')

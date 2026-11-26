@@ -33,6 +33,7 @@ const E = require('../src/engine.cjs');
 const PAY = require('../src/paytable.cjs');
 const POTS = require('../src/pots.cjs');
 const MS = require('../src/missions.cjs');
+const TR = require('../src/trophies.cjs');
 const SP = require('../src/special.cjs');
 const LV = require('../src/levels.cjs');
 
@@ -427,7 +428,7 @@ export async function createServer(CFG, log) {
   // the rings of a run that counted, level by level (a max win ends the run at the capped ring, which isn't a clear)
   const verifiedLevels = (run) => run.levels.map((l) => {
     const n = l.counted == null ? l.outcomes.length : l.counted;
-    return { outcomes: l.outcomes.slice(0, n), clear: l.result === 'clear' && !l.capped, mov: l.mov || '' };
+    return { outcomes: l.outcomes.slice(0, n), clear: l.result === 'clear' && !l.capped, mov: l.mov || '', tilt: l.tilt || '' };
   });
   app.get('/api/missions', wrap(async (req) => tx(async (t) => missionView(await auth(t, req)))));
   // claim the rakeback a level up has released
@@ -441,6 +442,33 @@ export async function createServer(CFG, log) {
       await t.incSetting('rakebackPaid', lamports);
     }
     return { claimedLamports: lamports, ...publicMe(u) };
+  })));
+
+  // ---------------------------------------------------------------- trophies (rules in src/trophies.cjs)
+  // Fifteen one-time goals, judged from the levels the server verified in regular runs (settle). Each pays a little
+  // SOL that the player claims. Claims never pass TR.RATE (0.2%) of everything the player has bet (u.wagered: run bets
+  // and special entries), so trophy SOL stays inside the house's edge and a fresh account can't farm the easy ones.
+  const TR_UNIT = Math.round(TR.UNIT * 1e9); // lamports per XP of a trophy
+  function trophyView(u) {
+    const v = TR.view(u.tro, u.wagered, TR_UNIT);
+    return { rate: v.rate, playedLamports: v.played, claimedLamports: v.claimed, open: v.open,
+      list: v.list.map((x) => ({ id: x.id, xp: x.xp, rewardLamports: x.reward, earned: x.earned, claimedLamports: x.claimed, can: x.can, moreLamports: Math.ceil(x.more) })) };
+  }
+  app.get('/api/trophies', wrap(async (req) => tx(async (t) => ({ trophies: trophyView(await auth(t, req)) }))));
+  app.post('/api/trophies/claim', limit('runs', 240, 60_000, who), wrap(async (req) => tx(async (t) => {
+    const u = await auth(t, req);
+    const id = String((req.body || {}).id || '');
+    const r = TR.claim(u.tro, id, u.wagered, TR_UNIT);
+    u.tro = r.s;
+    if (r.error === 'unknown') throw new HttpError(404, 'Trophy not found');
+    if (r.error === 'locked') throw bad('Earn this trophy first');
+    if (r.error === 'claimed') throw bad('Already claimed');
+    if (r.error) throw bad('Bet ' + Math.ceil(r.more / 1e7) / 100 + ' SOL more to claim this');
+    await t.credit(u, r.amount, 'trophy', id);
+    u.returned += r.amount; u.trophyPaid = (u.trophyPaid || 0) + r.amount; // counts in the player's return
+    await t.incSetting('trophyPaid', r.amount);
+    await review(t, u);
+    return { id, lamports: r.amount, trophies: trophyView(u), ...publicMe(u) };
   })));
 
   // ---------------------------------------------------------------- reviews: limits, holds, big wins, bots
@@ -489,6 +517,9 @@ export async function createServer(CFG, log) {
       const r = MS.run(u.ms, verifiedLevels(run), potNow(), CFG.missionNeed);
       u.ms = r.s; run.missions = { done: r.done, opened: r.opened, paid: await missionPay(t, u, r.paid) };
       xpAdd(u, LV.runXp(r.facts) + r.done.reduce((a, d) => a + d.xp, 0)); // the XP the server can vouch for; a level up releases rakeback
+      // trophies are earned from the same verified levels; their SOL is claimed separately (/api/trophies/claim)
+      const tr = TR.run(u.tro, verifiedLevels(run), { paid: payout > 0, total: run.total, hard: run.di === E.DIFFS.length - 1, nl: E.LEVELS }, Date.now());
+      u.tro = tr.s; run.trophies = tr.earned;
     }
     await review(t, u);
     if (payout) await bigWin(t, u, run, payout);
@@ -560,7 +591,8 @@ export async function createServer(CFG, log) {
       u.hoops += counted; u.swishes += r.outcomes.slice(0, counted).filter((o) => o === 'S').length;
       run.total = a.total; run.streak = a.streak; run.updatedAt = Date.now();
       run.levels.push({ level: run.level, taps: taps.length, outcomes: r.outcomes.join(''), result: r.result, ticks: r.ticks, counted, capped: a.capped,
-        mov: r.outcomes.slice(0, counted).map((o, k) => (def.hoops[k].amp ? '1' : '0')).join('') });
+        mov: r.outcomes.slice(0, counted).map((o, k) => (def.hoops[k].amp ? '1' : '0')).join(''),
+        tilt: r.outcomes.slice(0, counted).map((o, k) => (def.hoops[k].tilt ? '1' : '0')).join('') });
       // the special levels' skill rating learns from every verified level (src/special.cjs)
       u.skill = SP.addLevel(u.skill, run.di, run.level, counted, !a.capped && r.result !== 'clear');
       await botCheck(t, u, def, taps, run.id);
@@ -577,6 +609,7 @@ export async function createServer(CFG, log) {
         status, total: run.total, outcomes: r.outcomes.slice(0, counted), streak: run.streak, pot,
         potLamports: Math.floor(run.bet * run.total), payoutLamports: payout,
         missions: run.missions ? { ...run.missions, view: missionView(u) } : undefined,
+        trophies: status === 'checkpoint' ? undefined : trophyView(u),
         serverSeed: status === 'checkpoint' ? undefined : run.serverSeed, ...publicMe(u)
       };
     }).then((out) => { if (out.__refuse) throw bad(out.__refuse); return out; });
@@ -595,7 +628,7 @@ export async function createServer(CFG, log) {
     const run = await getRun(t, u, (req.body || {}).runId);
     if (run.status !== 'checkpoint') throw bad('You can only cash out at a checkpoint');
     const payout = await settle(t, u, run, 'cashout');
-    return { payoutLamports: payout, total: run.total, serverSeed: run.serverSeed, missions: { ...run.missions, view: missionView(u) }, ...publicMe(u) };
+    return { payoutLamports: payout, total: run.total, serverSeed: run.serverSeed, missions: { ...run.missions, view: missionView(u) }, trophies: trophyView(u), ...publicMe(u) };
   })));
 
   // ---------------------------------------------------------------- special levels (rules in src/special.cjs)

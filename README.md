@@ -165,6 +165,8 @@ None of this changes bets, ring layouts, physics or payouts; it lives in the cli
 - **Missions**: daily and weekly missions in rounds of three that also pay SOL (above), and a career of 6 chapters with 4 missions each that you play at your own pace, for XP. Each chapter ends in an item you can only get there.
 - **Locker:** three kinds of item, 35 in all, each marked common, rare, epic or legendary: 18 balls, 10 wings (feather, bat, butterfly and mech shapes) and 7 trails. Items unlock with levels, trophies or career chapters. The flame, the rings and the court are the game's own, in Solana's colours, and don't change.
 - **Player card:** a name, an emblem and a title (titles come from trophies, levels and the career); the emblem sits on Solana purple.
+- **Trophy SOL:** each of the fifteen trophies pays a little SOL (0.001 to 0.025), claimed with a button on the Trophies page once 0.2% of what you've bet covers it. Rules in `src/trophies.cjs`; the server judges trophies from the runs it verifies (`GET /api/trophies`, `POST /api/trophies/claim`).
+- **Stats at a glance:** the last runs as a strip of segments (green for the ones that came out ahead), how deep each mode has gone as a meter under its best score, and a mark on each recent run.
 - **Pages with character:** each trophy has its own glyph and its XP, and an earned one is lit green; a special's sample course is drawn like the game's rings; the Wallet opens on its balance; the odds table sits under a band; the arena's window is shaded at its edges.
 - **Light on the pages:** a very faint violet haze at the top of every page, panels with a lit top edge, and what's yours or picked lit like a key (the player card and its emblem, the picked mode, the worn item, the tab's segment). An empty Recent runs list says what will be there.
 - **Tidy pages:** the Challenges tab is three matching cards under bands (specials, the pot, the daily missions) and two tiles; the tab bar is solid with a short fade above it; Trophies opens with a count and a meter.
@@ -188,6 +190,7 @@ src/paytable.cjs   generated multiplier tables + average-player stats
 src/bot.cjs        human-like autopilot (simulation + lobby demo)
 src/pots.cjs       challenge pot rules (shared by client, server, demo)
 src/missions.cjs   daily and weekly missions in rounds, their SOL and what unlocks it (shared by client and server)
+src/trophies.cjs   the trophies, their XP and SOL, and the rule for claiming it (shared by client and server)
 src/special.cjs    the special levels: twists, generator, the day's three, players' levels, courses (client, server, sim)
 src/levels.cjs     the level curve and level-up rakeback (shared by client and server)
 src/game.js        browser client: rendering, audio, input, betting flow, wallet

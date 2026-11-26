@@ -1,7 +1,7 @@
 /* SOL DUNK — browser client. Rendering, input, audio, betting flow. */
 (() => {
   'use strict';
-  const E = window.DunkEngine, PAY = window.DunkPaytable, BOT = window.DunkBot, POTS = window.DunkPots, MS = window.DunkMissions, SP = window.DunkSpecial, LV = window.DunkLevels;
+  const E = window.DunkEngine, PAY = window.DunkPaytable, BOT = window.DunkBot, POTS = window.DunkPots, MS = window.DunkMissions, SP = window.DunkSpecial, LV = window.DunkLevels, TR = window.DunkTrophies;
   const CFG = Object.assign({ serverUrl: null, network: 'devnet', demoStart: 10, minBet: 0.001, maxBet: 100, solIconUrl: null }, window.SOL_DUNK_CONFIG || {});
   const W = E.WORLD, P = E.PHYS, DT = E.DT, NL = E.LEVELS, NH = E.HOOPS_PER_LEVEL, EV = E.EV;
   const $ = (id) => document.getElementById(id);
@@ -246,23 +246,9 @@
   }
 
   // r = what happened in the run (see runFacts)
-  const ACH = [
-    { id: 'swish1', name: 'Clean', desc: 'Swish a ring', xp: 10, test: (r) => r.swish >= 1 },
-    { id: 'cp1', name: 'Checkpoint', desc: 'Clear level 1', xp: 10, test: (r) => r.clears >= 1 },
-    { id: 'fire3', name: 'Heating up', desc: 'Swish 3 in a row', xp: 20, test: (r) => r.best >= 3 },
-    { id: 'moving', name: 'Moving target', desc: 'Swish a moving ring', xp: 15, test: (r) => r.mov >= 1 },
-    { id: 'nova5', name: 'Supernova', desc: 'Swish 5 in a row', xp: 40, test: (r) => r.best >= 5 },
-    { id: 'perfect', name: 'Perfect level', desc: 'Swish all 6 rings in a level', xp: 50, test: (r) => r.perfect >= 1 },
-    { id: 'tilted', name: 'Angles', desc: 'Swish a tilted ring', xp: 25, test: (r) => r.tilt >= 1 },
-    { id: 'deep4', name: 'Deep run', desc: 'Reach level 4', xp: 40, test: (r) => r.level >= 4 },
-    { id: 'score50', name: 'High flyer', desc: 'Score 50 in one run', xp: 40, test: (r) => r.score >= 50 },
-    { id: 'double', name: 'Double up', desc: 'Cash out at 2× or more', xp: 60, test: (r) => r.paid && r.total >= 2 },
-    { id: 'legend', name: 'Legendary', desc: 'Clear level 1 on Hard', xp: 60, test: (r) => r.di === NT - 1 && r.clears >= 1 },
-    { id: 'deep6', name: 'Into the deep', desc: 'Reach level 6', xp: 80, test: (r) => r.level >= 6 },
-    { id: 'streak10', name: 'Unstoppable', desc: 'Swish 10 in a row', xp: 100, test: (r) => r.best >= 10 },
-    { id: 'swish100', name: 'Swish collector', desc: 'Swish 100 rings in total', xp: 50, test: () => profile.tot.swish >= 100 },
-    { id: 'champion', name: 'Champion', desc: 'Clear all 8 levels', xp: 250, test: (r) => r.clears >= NL }
-  ];
+  // Trophies: the goals, their XP and their SOL live in src/trophies.cjs, shared with the server. r: a run's facts.
+  const ACH = TR.LIST.map((t) => ({ id: t.id, name: t.name, desc: t.desc, xp: t.xp, sol: TR.reward(t),
+    test: (r) => t.test(Object.assign({}, r, { hard: r.di === NT - 1, totalSwish: profile.tot.swish, nl: NL })) }));
   const ACH_BY = Object.fromEntries(ACH.map((a) => [a.id, a]));
   const unlockReq = (u) => (u.lvl ? 'Level ' + u.lvl : u.ach ? ACH_BY[u.ach].name : 'Chapter ' + (u.ch + 1));
   const unlockHow = (u) => (u.lvl ? 'Reach level ' + u.lvl : u.ach ? ACH_BY[u.ach].desc : 'Finish career chapter ' + (u.ch + 1) + ', ' + CAREER[u.ch].name);
@@ -281,6 +267,7 @@
   // Missions come in rounds of three: finishing all three opens the next round (three a day, three a week), each paying
   // more SOL once more has been bet in the window.
   const mview = () => bank.missions.view(); // MS.view: { daily, weekly (the open round), round, need, played, paid, waiting, due, next, all, .. }
+  const tview = () => bank.trophies.view(); // trophy SOL: { rate, played, claimed, open, list: [{ id, reward, earned, claimed, can, more }] }
   const dailySet = () => mview().daily;
   const dailyText = (c) => DTEXT[c.k](c.n);
   function leftOf(ms) {
@@ -586,11 +573,23 @@
       return x;
     }
   };
+  // Trophy SOL on demo SOL, by the server's rule (src/trophies.cjs): a trophy earned in a run pays a little SOL, which
+  // can be claimed once 0.2% of everything bet covers it. What's been claimed lives in the profile.
+  const DemoTrophies = {
+    state() { if (!profile.troc || typeof profile.troc !== 'object') profile.troc = {}; return { e: profile.ach, c: profile.troc, sw: profile.tot.swish }; },
+    view() { return TR.view(this.state(), stats.wagered, TR.UNIT); },
+    claim(id) {
+      const r = TR.claim(this.state(), id, stats.wagered, TR.UNIT);
+      if (r.error) throw new Error(r.error === 'more' ? 'Bet ' + fmtBet(Math.ceil(r.more * 100) / 100) + ' SOL more to claim this.' : r.error === 'claimed' ? 'Already claimed.' : 'Earn this trophy first.');
+      wallet.balance = round9(wallet.balance + r.amount); stats.trophySol = round9((stats.trophySol || 0) + r.amount); saveAll();
+      return { amount: r.amount, view: this.view() };
+    }
+  };
   // a level as the banks verify it, for missions and the pot: only the rings that counted (a max win stops at the
   // capped ring, which isn't a clear), and which of them were moving
   function verifiedLevel(def, r, capIndex) {
     const n = capIndex >= 0 ? capIndex + 1 : r.outcomes.length, o = r.outcomes.slice(0, n);
-    return { outcomes: o.join(''), clear: r.result === 'clear' && capIndex < 0, mov: o.map((x, k) => (def.hoops[k].amp ? '1' : '0')).join('') };
+    return { outcomes: o.join(''), clear: r.result === 'clear' && capIndex < 0, mov: o.map((x, k) => (def.hoops[k].amp ? '1' : '0')).join(''), tilt: o.map((x, k) => (def.hoops[k].tilt ? '1' : '0')).join('') };
   }
 
   // ---------------------------------------------------------------- special levels, demo (rules in src/special.cjs)
@@ -689,6 +688,7 @@
     },
     missions: { view: () => DemoMissions.view(), async state() { return DemoMissions.view(); } },
     rakeback: { view: () => DemoRake.view(), levelUp: () => DemoRake.levelUp(), claim: () => DemoRake.claim() },
+    trophies: { view: () => DemoTrophies.view(), async state() { return DemoTrophies.view(); }, async claim(id) { return DemoTrophies.claim(id); } },
     special: {
       async state() { return DemoSpecial.view(); },
       async start(slot) { return DemoSpecial.start(slot); },
@@ -711,6 +711,7 @@
       if (!res.ok) throw new Error(j.error || ('Server error ' + res.status));
       if (typeof j.balance === 'number') this.bal = j.balance / 1e9;
       if (j.rakeback) this.rb = { acc: j.rakeback.accLamports / 1e9, ready: j.rakeback.readyLamports / 1e9, paid: j.rakeback.paidLamports / 1e9 };
+      if (j.trophies && j.trophies.list) this.tv = this.tconv(j.trophies); // the server's word on trophy SOL, whenever it sends it
       return j;
     },
     provider() { return (window.phantom && window.phantom.solana) || (window.solana && window.solana.isPhantom ? window.solana : null) || window.solflare || null; },
@@ -758,6 +759,16 @@
     },
     // rakeback: the server sets it aside with every bet and releases it when its own count of your XP levels up
     rakeback: { view: () => ServerBank.rb, levelUp: () => 0, async claim() { return (await ServerBank.api('/api/rakeback/claim', {})).claimedLamports / 1e9; } },
+    tconv(v) {
+      const L = 1e9;
+      return { rate: v.rate, played: v.playedLamports / L, claimed: v.claimedLamports / L, open: v.open,
+        list: v.list.map((x) => ({ id: x.id, xp: x.xp, reward: x.rewardLamports / L, earned: x.earned, claimed: x.claimedLamports / L, can: x.can, more: x.moreLamports / L })) };
+    },
+    trophies: {
+      view() { return ServerBank.tv || TR.view(null, 0, TR.UNIT); },
+      async state() { await ServerBank.api('/api/trophies'); return this.view(); },
+      async claim(id) { const j = await ServerBank.api('/api/trophies/claim', { id }); return { amount: j.lamports / 1e9, view: this.view() }; }
+    },
     missions: {
       view() { return ServerBank.mv || MS.view(null, Date.now()); },
       async state() { ServerBank.mv = ServerBank.mconv(await ServerBank.api('/api/missions')); return ServerBank.mv; }
@@ -2248,7 +2259,7 @@
       if (pr.weeklies.length && mv.weekly.every((c) => c.done)) g.push(['daily', ICON.check, 'All of this week\'s missions done']);
     }
     pr.unlocks.forEach((u) => g.push(['unlock', '', 'New ' + itemName(u), u]));
-    pr.achs.forEach((x) => g.push(['ach', troIcon(x.id), x.name + ' · +' + x.xp + ' XP']));
+    pr.achs.forEach((x) => g.push(['ach', troIcon(x.id), x.name + ' · +' + x.xp + ' XP · ' + fmtBet(x.sol) + ' SOL to claim']));
     if (pr.chapter != null) g.push(['ach', ICON.flag, 'Chapter ' + (pr.chapter + 1) + ' done · ' + CAREER[pr.chapter].name]);
     pr.dailies.forEach((c) => g.push(['daily', ICON.check, dailyText(c) + ' · +' + c.xp + ' XP']));
     pr.weeklies.forEach((c) => g.push(['daily', ICON.check, weeklyText(c) + ' · +' + c.xp + ' XP']));
@@ -3648,6 +3659,7 @@
 
   // How to play: one quiet row per idea, each with a small original glyph, so it scans at a glance
   const HOW_ICON = {
+    medal: '<circle cx="12" cy="15" r="5.6"/><path d="M8.4 3.2 12 9.4l3.6-6.2"/><path d="M12 13v4M10.4 14.2 12 13" opacity=".7"/>',
     tap: '<circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="7" opacity=".55"/><circle cx="12" cy="12" r="10.3" opacity=".22"/>',
     rim: '<ellipse cx="11" cy="15.5" rx="8.5" ry="3"/><circle cx="18" cy="9" r="3.4" fill="currentColor" stroke="none"/>',
     swish: '<ellipse cx="12" cy="16" rx="8.5" ry="3"/><path d="M12 3v11M8.6 10.6 12 14l3.4-3.4"/>',
@@ -3671,6 +3683,7 @@
       row('practice', 'blue', 'Practice', `${KB ? 'Click' : 'Tap'} <b>Practice for free</b> under Play for a run with nothing at stake.`) +
       row('star', 'gold', 'Score and XP', `Rings score points, more for swishes and streaks. Points, missions and trophies earn XP, which unlocks balls, wings and trails. Neither changes what a run pays.`) +
       row('mission', 'purple', 'Missions', `Three at a time, new every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week. Finish all three to open the next round, which pays more.`) +
+      row('medal', 'gold', 'Trophies', `Fifteen one-time goals. Each adds XP and pays a little SOL: claim it on the Trophies page once your bets cover it.`) +
       row('back', 'green', 'Rakeback', `Every bet sets a little SOL aside for you: ${Math.round(LV.RATE * 100)}% of the house's cut. Level up to claim it.`) +
       row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. Clear one and a new one takes its place; some have walls to fly over. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
       `</div>`;
@@ -3789,10 +3802,38 @@
   }
   // trophies: the whole case, earned ones lit
   function trophiesHtml() {
-    const got = ACH.filter((a) => profile.ach[a.id]).length;
-    return `<p class="vsub">${got ? `${got} of ${ACH.length} earned. Each one adds XP, and some open titles for your player card.` : `None yet. Each one adds XP, and some open titles for your player card.`}</p>
+    const got = ACH.filter((a) => profile.ach[a.id]).length, tv = tview(), T = Object.fromEntries(tv.list.map((x) => [x.id, x]));
+    const total = ACH.reduce((n, a) => n + a.sol, 0), open = tv.list.filter((x) => x.can).reduce((n, x) => n + x.reward, 0);
+    const waits = tv.list.filter((x) => x.earned && !x.claimed && !x.can).map((x) => x.more), next = waits.length ? Math.min(...waits) : 0;
+    const more = (m) => fmtBet(Math.ceil(m * 100 - 1e-6) / 100);
+    // under each trophy: what it pays, a Claim key once its SOL can be claimed, how much more to bet until then, or what was claimed
+    const foot = (a) => {
+      const x = T[a.id] || { reward: a.sol };
+      if (x.claimed) return `<em class="tx paid">${ICON.check}${fmtBet(x.claimed)} SOL</em>`;
+      if (x.can) return `<button class="tro-claim" data-claim="${a.id}" aria-label="Claim ${fmtBet(x.reward)} SOL for ${a.name}">Claim ${fmtBet(x.reward)}</button>`;
+      if (!x.earned && profile.ach[a.id]) return `<em class="tx">${ICON.check}Earned</em>`; // earned on this device before the server kept trophies: no SOL
+      if (x.earned) return `<em class="tx wait"><b>${fmtBet(x.reward)} SOL</b>Bet ${more(x.more)} more</em>`;
+      return `<em class="tx two"><b>+${a.xp} XP</b>${fmtBet(x.reward)} SOL</em>`;
+    };
+    return `<p class="vsub">${got ? got + ' of ' + ACH.length + ' earned.' : 'None yet.'} Each one adds XP and pays a little SOL. Every 1 SOL you bet lets you claim ${fmtBet(tv.rate)} SOL of it.</p>
       <div class="tro-sum" aria-hidden="true"><b class="num">${got}<small> / ${ACH.length}</small></b><span class="tro-seg">${ACH.map((a) => `<i${profile.ach[a.id] ? ' class="on"' : ''}></i>`).join('')}</span></div>
-      <div class="trophies">${ACH.map((a) => `<div class="tro${profile.ach[a.id] ? ' got' : ''}"><span class="ti">${troIcon(a.id)}</span><b>${a.name}</b><span>${a.desc}</span><em class="tx">${profile.ach[a.id] ? ICON.check + 'Earned' : '+' + a.xp + ' XP'}</em></div>`).join('')}</div>`;
+      <p class="tro-sol"><span>${fmtBet(tv.claimed)} of ${fmtBet(total)} SOL claimed</span>${open > 0 ? `<b>${fmtBet(open)} SOL to claim</b>` : next > 0 ? `<span>Next: bet ${more(next)} SOL more</span>` : ''}</p>
+      <div class="trophies">${ACH.map((a) => { const on = profile.ach[a.id] || (T[a.id] && T[a.id].earned); return `<div class="tro${on ? ' got' : ''}"><span class="ti">${troIcon(a.id)}</span><b>${a.name}</b><span>${a.desc}</span>${foot(a)}</div>`; }).join('')}</div>`;
+  }
+  // claim one trophy's SOL (the bank checks it: earned, not claimed, and covered by what's been bet)
+  let claimingTrophy = false;
+  async function claimTrophy(id) {
+    if (claimingTrophy) return;
+    claimingTrophy = true;
+    try {
+      const r = await bank.trophies.claim(id);
+      setBalance(); Sound.unlockItem(); buzz(12);
+      toast('Claimed ' + fmtBet(r.amount) + ' SOL · ' + ACH_BY[id].name);
+    } catch (e) { toast(e.message || 'That can’t be claimed yet.'); }
+    claimingTrophy = false;
+    if (nav.page === 'trophies') renderPage(true);
+    if (nav.tab === 'profile') renderProfileView();
+    syncBadges();
   }
   // recent runs: what each one ended as, on which tier, and what it paid
   const agoText = (t) => {
@@ -3802,18 +3843,30 @@
     if (m < 60 * 24) return Math.round(m / 60) + ' h ago';
     return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
+
   function statsHtml() {
     const rtp = stats.wagered > 0 ? (stats.returned / stats.wagered * 100).toFixed(1) + '%' : '–', net = stats.returned - stats.wagered;
     return `<div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${rtp}</b><span>Return</span></div><div><b class="${Math.abs(net) < 0.00005 ? '' : net > 0 ? 'pos' : 'neg'}">${Math.abs(net) < 0.00005 ? '0' : (net > 0 ? '+' : '−') + fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
+      ${formHtml()}
       <div class="sec-h"><h3>Best scores</h3></div>
-      <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><em>${profile.deep[i] ? 'Level ' + profile.deep[i] : '&nbsp;'}</em></div>`).join('')}</div>
+      <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><span class="deep" aria-hidden="true">${Array.from({ length: NL }, (_, k) => `<i${k < (profile.deep[i] || 0) ? ' class="on"' : ''}></i>`).join('')}</span><em>${profile.deep[i] ? 'Reached level ' + profile.deep[i] : 'Not played yet'}</em></div>`).join('')}</div>
       <div class="sec-h"><h3>Recent runs</h3>${stats.history.length ? '<span>Newest first</span>' : ''}</div>
       ${runsHtml()}`;
+  }
+  // the last runs at a glance: one segment each, oldest first, lit green for a run that came out ahead
+  function formHtml() {
+    const hs = stats.history;
+    if (!hs.length) return '';
+    const up = hs.filter((h) => h.payout - h.bet > 1e-9).length, slots = Math.max(hs.length, 30);
+    const segs = Array.from({ length: slots }, (_, k) => { const h = hs[hs.length - 1 - k]; return `<i${h ? (h.payout - h.bet > 1e-9 ? ' class="on"' : ' class="loss"') : ''}></i>`; }).join('');
+    return `<div class="form"><div class="form-h"><span>${hs.length === 1 ? 'Your last run' : 'Your last ' + hs.length + ' runs'}</span><b>${up} came out ahead</b></div><span class="form-seg" aria-hidden="true">${segs}</span></div>`;
   }
   function settingsHtml() {
     const sw = (k, ic, name) => `<div class="mrow-sw"><span class="mi mi-${k}">${ic}</span><span class="mn" id="sw-${k}">${name}</span><button class="switch" role="switch" data-set="${k}" aria-checked="${!!settings[k]}" aria-labelledby="sw-${k}"></button></div>`;
     return `<div class="menu-list">${sw('sound', ICON.sound, 'Sound')}${sw('haptics', ICON.buzz, 'Vibration')}</div>`;
   }
+  const RUN_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M7 7l10 10M17 7 7 17"/></svg>';
+  const RUN_EVEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"><path d="M6.5 12h11"/></svg>';
   function runsHtml() {
     if (!stats.history.length) return `<div class="empty rich"><i>${ICON.chart}</i><span><b>No runs yet</b>Each run shows up here with how it ended and what it made.</span></div>`;
     const spName = (h) => (SP.BY[h.recipe] ? SP.BY[h.recipe].name : 'Special level');
@@ -3821,7 +3874,7 @@
       : h.result === 'bust' ? 'Out on level ' + h.level : h.result === 'maxwin' ? 'Max win · ' + fmtMult(h.mult) : h.result === 'final' ? 'All ' + NL + ' levels · ' + fmtMult(h.mult) : 'Cashed out at ' + fmtMult(h.mult));
     return `<div class="runs">${stats.history.map((h) => {
         const p = h.payout - h.bet;
-        return `<div class="rr"><span class="rr-t"><b>${what(h)}</b><span>${h.kind === 'special' ? 'Special level' : E.DIFFS[h.di].name} · ${fmtBet(h.bet)} SOL · ${agoText(h.t)}</span></span><span class="rr-v num ${p >= 0 ? 'pos' : 'neg'}">${p >= 0 ? '+' : '−'}${fmtSol(Math.abs(p))}<span class="unit">SOL</span></span></div>`;
+        return `<div class="rr"><i class="rr-i${p > 1e-9 ? ' win' : ''}" aria-hidden="true">${p > 1e-9 ? ICON.check : p < -1e-9 ? RUN_X : RUN_EVEN}</i><span class="rr-t"><b>${what(h)}</b><span>${h.kind === 'special' ? 'Special level' : E.DIFFS[h.di].name} · ${fmtBet(h.bet)} SOL · ${agoText(h.t)}</span></span><span class="rr-v num ${p > 1e-9 ? 'pos' : p < -1e-9 ? 'neg' : ''}">${p > 1e-9 ? '+' : p < -1e-9 ? '−' : ''}${fmtSol(Math.abs(p))}<span class="unit">SOL</span></span></div>`;
       }).join('')}</div>`;
   }
   function wirePanel(kind) {
@@ -3834,6 +3887,7 @@
       on('potEnter', enterPot);
       on('potClose', async () => { if (!bank.pot.closeNow) return; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
     }
+    if (kind === 'trophies') document.querySelectorAll('#pgBody [data-claim]').forEach((b) => b.addEventListener('click', () => claimTrophy(b.dataset.claim)));
     if (kind === 'how') on('howTour', () => { closePage(); setTimeout(() => showTour(0), 280); });
     if (kind === 'odds') document.querySelectorAll('#oddsSeg button').forEach((b) => b.addEventListener('click', () => { oddsTier = +b.dataset.t; Sound.click(); renderPage(true); }));
     on('fairVerify', () => {
@@ -3855,7 +3909,7 @@
       if (phase !== 'lobby' && phase !== 'over') { toast('Finish this run first.'); return; }
       wallet.balance = CFG.demoStart; saveAll(); refreshLobby(); renderPage(true); Sound.click(); toast('Demo balance reset to ' + CFG.demoStart + ' SOL');
     });
-    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; await bank.missions.state().catch(() => null); await bank.betLimits().catch(() => null); setBalance(); refreshLobby(); refreshPot(); refreshSpecial(); renderPage(true); } catch (e) { $('wErr').textContent = e.message; } });
+    on('wConnect', async () => { try { await ServerBank.connect(); bank = ServerBank; await bank.missions.state().catch(() => null); await bank.trophies.state().catch(() => null); await bank.betLimits().catch(() => null); setBalance(); refreshLobby(); refreshPot(); refreshSpecial(); renderPage(true); } catch (e) { $('wErr').textContent = e.message; } });
     // the server says what happened: credited, or waiting for the network; sent, queued or waiting for review
     on('wDeposit', async () => { try { const j = await ServerBank.deposit(parseFloat($('wAmt').value)); setBalance(); renderPage(true); toast(j.message || 'Deposit credited'); } catch (e) { $('wErr').textContent = e.message; } });
     on('wWithdraw', async () => { try { const j = await ServerBank.withdraw(parseFloat($('wAmt').value)); setBalance(); renderPage(true); toast(j.message || 'Withdrawal sent'); } catch (e) { $('wErr').textContent = e.message; } });
@@ -3886,6 +3940,7 @@
     nav.page = kind;
     $('pgBackT').textContent = phase === 'lobby' ? TAB_NAME[nav.tab] : 'Back';
     renderPage();
+    if (kind === 'trophies' && bank.real) bank.trophies.state().then(() => { if (nav.page === 'trophies') renderPage(true); }).catch(() => {}); // the server's word on what can be claimed
     $('pgBody').scrollTop = 0;
     show(vPg, true); document.body.classList.add('page-open');
     if (fresh) nav.cover = true;
@@ -3958,7 +4013,7 @@
   function syncBadges() {
     const newSpecial = !!specState && prefs.specSeen !== specState.day;
     $('badgeC').classList.toggle('on', (newSpecial || profile.mNew > 0) && nav.tab !== 'challenges');
-    $('badgeP').classList.toggle('on', (profile.fresh.length > 0 && nav.tab !== 'locker') || (bank.rakeback.view().ready > 0 && nav.tab !== 'profile'));
+    $('badgeP').classList.toggle('on', (profile.fresh.length > 0 && nav.tab !== 'locker') || (bank.rakeback.view().ready > 0 && nav.tab !== 'profile') || tview().open > 0); // new items, rakeback or trophy SOL to claim
   }
   $('lkBack').addEventListener('click', () => setTab('profile'));
   document.querySelectorAll('#tabbar [data-tab]').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
@@ -4116,7 +4171,7 @@
         <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span>
           <span class="plv"><span>Level ${v.l}</span><span class="num">${v.into} / ${v.need} XP</span></span><span class="pxp"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></span></span>
         <span class="chev">${ICON.chev}</span></button>${rakeHtml(v)}
-      <div class="menu-list"><button id="pfLocker"><span class="mi mi-locker">${ICON.shirt}</span><span class="mn">Locker</span><span class="mv">${fresh ? '<i class="dot" aria-label="New items"></i>' : ''}</span><span class="chev">${ICON.chev}</span></button>${row('trophies', ICON.medal, 'Trophies', got + ' of ' + ACH.length)}${row('stats', ICON.chart, 'Stats', stats.runs === 1 ? '1 run' : stats.runs + ' runs')}</div>
+      <div class="menu-list"><button id="pfLocker"><span class="mi mi-locker">${ICON.shirt}</span><span class="mn">Locker</span><span class="mv">${fresh ? '<i class="dot" aria-label="New items"></i>' : ''}</span><span class="chev">${ICON.chev}</span></button>${row('trophies', ICON.medal, 'Trophies', (tview().open > 0 ? '<i class="dot gap" aria-label="SOL to claim"></i>' : '') + got + ' of ' + ACH.length)}${row('stats', ICON.chart, 'Stats', stats.runs === 1 ? '1 run' : stats.runs + ' runs')}</div>
       </div><div class="dk-col"><div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${row('settings', ICON.gear, 'Settings')}</div>
       <div class="menu-list">${row('how', ICON.book, 'How to play')}${row('odds', ICON.shield, 'Odds &amp; fairness')}</div></div></div></div>`;
     $('pfCard').addEventListener('click', () => openPanel('card'));
@@ -4200,6 +4255,7 @@
     missions: () => mview(), // daily and weekly missions, with SOL and the play that unlocks it
     rakeback: () => bank.rakeback.view(), // { acc: building up, ready: released by a level up, paid: claimed }
     level: () => lvlOf(profile.xp),
+    trophies: () => tview(), // trophy SOL: what each pays, what can be claimed and what's been claimed
     mode: () => run.mode, // 'run', 'special' or 'practice'
     bal: () => bank.balance(),
     sfx: (name, args, secs) => Sound.render(name, args, secs), // a sound's samples, rendered offline

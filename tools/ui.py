@@ -5,7 +5,7 @@ try-on, its back button clears the try-on), the missions (daily on Challenges, w
 run), the player card editor, the settings, the pause card, and that items already earned under the newer unlock
 list are handed out on load. It also checks the free practice run (nothing is bet, recorded or earned), that
 Settings holds only Sound and Vibration (the owner had the play limits removed) and the quick tour a new player
-sees (it ends in a practice run; How to play reopens it)."""
+sees (it ends in a practice run; How to play reopens it), and trophy SOL (what can be claimed, the Claim key, once)."""
 import asyncio, json
 from playwright.async_api import async_playwright
 from _paths import URL, PAGE, SHOTS, CHROME
@@ -217,6 +217,41 @@ async def main():
         await pg2.click('#tourSkip'); await pg2.wait_for_timeout(300)
         check(not await tv() and await pg2.evaluate('__solDunk.phase()') == 'lobby', 'Skip closes it')
         check(not errs2, 'no page errors with the tour ' + json.dumps(errs2))
+        # trophy SOL: each trophy pays a little SOL, claimed on the Trophies page once 0.2% of what's been bet covers it
+        ctx3 = await b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
+        pg3 = await ctx3.new_page(); errs3 = []
+        pg3.on('pageerror', lambda e: errs3.append(str(e)))
+        await pg3.goto(URL); await pg3.wait_for_timeout(1200)
+        tv3 = lambda: pg3.evaluate("(() => { const v = __solDunk.trophies(); return { open: v.open, claimed: v.claimed, can: v.list.filter((x) => x.can).map((x) => x.id), wait: v.list.filter((x) => x.earned && !x.claimed && !x.can).map((x) => x.id) }; })()")
+        v = await tv3()
+        check(v['open'] == 0 and v['claimed'] == 0 and not await pg3.evaluate("document.getElementById('badgeP').classList.contains('on')"), 'a new player has no trophy SOL to claim')
+        # three trophies earned (0.001, 0.001 and 0.004 SOL) and 1 SOL bet: 0.002 SOL can be claimed, so the two small ones
+        await pg3.evaluate("""(() => { const p = JSON.parse(localStorage.getItem('soldunk.profile') || '{}'), s = JSON.parse(localStorage.getItem('soldunk.stats') || '{}');
+          p.ach = { swish1: 1, cp1: 1, nova5: 1 }; s.wagered = 1; localStorage.setItem('soldunk.profile', JSON.stringify(p)); localStorage.setItem('soldunk.stats', JSON.stringify(s)); })()""")
+        await pg3.goto(URL); await pg3.wait_for_timeout(1200)
+        v = await tv3()
+        check(v['can'] == ['swish1', 'cp1'] and v['wait'] == ['nova5'], 'what has been bet opens the smallest rewards first ' + json.dumps(v))
+        check(await pg3.evaluate("document.getElementById('badgeP').classList.contains('on')"), 'a dot on Profile says there is SOL to claim')
+        await pg3.click('#tabProfile'); await pg3.wait_for_timeout(400)
+        check(await pg3.evaluate("!!document.querySelector('#pBody [data-page=\"trophies\"] .dot')"), 'and one on the Trophies row')
+        await pg3.click('#pBody [data-page="trophies"]'); await pg3.wait_for_timeout(500)
+        keys = await pg3.evaluate("[...document.querySelectorAll('#pgBody [data-claim]')].map((b) => b.dataset.claim + ':' + b.textContent)")
+        check(keys == ['swish1:Claim 0.001', 'cp1:Claim 0.001'], 'the Trophies page has a Claim key on each trophy that can be claimed ' + json.dumps(keys))
+        txt = await pg3.evaluate("document.getElementById('pgBody').innerText")
+        check('0.002 SOL to claim' in txt and 'Bet 2 more' in txt and '+250 XP' in txt and '0.025 SOL' in txt, 'and says what waits and what each trophy pays')
+        await pg3.screenshot(path=SHOTS + '/ui_trophies.png')
+        b0 = await pg3.evaluate('__solDunk.bal()')
+        await pg3.click('#pgBody [data-claim="swish1"]'); await pg3.wait_for_timeout(400)
+        b1 = await pg3.evaluate('__solDunk.bal()'); v = await tv3()
+        check(abs(b1 - b0 - 0.001) < 1e-9 and v['can'] == ['cp1'] and abs(v['claimed'] - 0.001) < 1e-9, f'Claim pays the trophy\'s SOL once ({b0} -> {b1})')
+        check(await pg3.evaluate("!document.querySelector('#pgBody [data-claim=\"swish1\"]')") and 'Claimed 0.001 SOL' in await pg3.evaluate("document.getElementById('toast').textContent"), 'its key turns into what was claimed')
+        await pg3.click('#pgBody [data-claim="cp1"]'); await pg3.wait_for_timeout(400)
+        v = await tv3()
+        check(v['open'] == 0 and v['wait'] == ['nova5'] and abs(await pg3.evaluate('__solDunk.bal()') - b0 - 0.002) < 1e-9 and await pg3.evaluate("document.querySelectorAll('#pgBody [data-claim]').length") == 0, 'the next trophy waits until more has been bet')
+        await pg3.reload(); await pg3.wait_for_timeout(1200)
+        v = await tv3()
+        check(abs(v['claimed'] - 0.002) < 1e-9 and v['open'] == 0 and abs(await pg3.evaluate('__solDunk.bal()') - b0 - 0.002) < 1e-9, 'claims are kept, and nothing can be claimed twice')
+        check(not errs3, 'no page errors with trophy SOL ' + json.dumps(errs3))
         await b.close()
     print('FAILS', fails if fails else 'none')
 asyncio.run(main())

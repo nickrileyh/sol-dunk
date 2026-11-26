@@ -171,6 +171,9 @@ function playTaps(seed, di, L, skill, salt) {
   // missions: every run counts; a window's SOL pays once its need has been played; the server agrees with a local replay
   const MS = require(path.join(root, 'src/missions.cjs'));
   const SP = require(path.join(root, 'src/special.cjs'));
+  const TR = require(path.join(root, 'src/trophies.cjs'));
+  const TRU = Math.round(TR.UNIT * 1e9);
+  let tro = null, troSeen = 0;
   const NEED = { day: 50_000_000, week: 200_000_000 };
   const srv4 = await boot(8802, { MISSION_DAY_LAMPORTS: String(NEED.day), MISSION_WEEK_LAMPORTS: String(NEED.week), SPECIAL_RECIPE: 'gauntlet', SPECIAL_ENTRY_LAMPORTS: '50000000' });
   const M = client_(8802); await M.signIn(); await M.api('/api/dev/faucet', { lamports: 3e9 });
@@ -196,7 +199,7 @@ function playTaps(seed, di, L, skill, salt) {
       const def = E.generateLevel(seed, di, L), pl = playTaps(seed, di, L, i % 2 ? 'perfect' : 'good', 'm' + i + ':' + L);
       const a = E.applyLevel(PAY.PAYTABLE[di][L - 1], pl.outcomes, total, E.DIFFS[di].maxWin, streak);
       const cnt = a.capped ? a.capIndex + 1 : pl.outcomes.length;
-      levels.push({ outcomes: pl.outcomes.slice(0, cnt).join(''), clear: pl.result === 'clear' && !a.capped, mov: pl.outcomes.slice(0, cnt).map((o, k) => (def.hoops[k].amp ? '1' : '0')).join('') });
+      levels.push({ outcomes: pl.outcomes.slice(0, cnt).join(''), clear: pl.result === 'clear' && !a.capped, mov: pl.outcomes.slice(0, cnt).map((o, k) => (def.hoops[k].amp ? '1' : '0')).join(''), tilt: pl.outcomes.slice(0, cnt).map((o, k) => (def.hoops[k].tilt ? '1' : '0')).join('') });
       total = a.total; streak = a.streak;
       const r = await M.api('/api/run/level', { runId: s.runId, level: L, taps: pl.taps });
       if (r.status === 'checkpoint' && L < 3) { const n = await M.api('/api/run/continue', { runId: s.runId }); L = n.level; seed = n.levelSeed; continue; }
@@ -216,6 +219,20 @@ function playTaps(seed, di, L, skill, salt) {
     check(end.balance === mbal, `missions run ${i}: balance ${end.balance} vs ${mbal} (rewards ${paidTotal})`);
     xpUp(LV.runXp(local.facts) + local.done.reduce((a, d) => a + d.xp, 0));
     check(end.rakeback.readyLamports === rbReady && end.rakeback.accLamports === Math.floor(rbAcc) && end.rakeback.level === LV.lvlOf(myXp).l, `rakeback run ${i}: a level up (the server's own XP) releases it ` + JSON.stringify([end.rakeback, rbReady, rbAcc, LV.lvlOf(myXp).l]));
+    // trophies: the server earns them from the same verified levels as a local replay does, and pays nothing for earning
+    tro = TR.run(tro, levels, { paid: end.payoutLamports > 0, total, hard: di === E.DIFFS.length - 1, nl: E.LEVELS }, 1).s;
+    const tv = end.trophies, mineT = TR.view(tro, tv ? tv.playedLamports : 0, TRU);
+    check(tv && tv.list.length === TR.LIST.length && tv.list.every((x, k) => x.earned === mineT.list[k].earned && x.rewardLamports === mineT.list[k].reward && x.can === mineT.list[k].can && x.claimedLamports === 0),
+      `trophies run ${i}: the server's trophies match a local replay ` + JSON.stringify(tv && tv.list.filter((x) => x.earned).map((x) => x.id)));
+    troSeen = Math.max(troSeen, tv ? tv.list.filter((x) => x.earned).length : 0);
+  }
+  // trophy SOL: nothing can be claimed until TR.RATE of what's been bet covers it
+  check(troSeen >= 3, 'trophies were earned in the runs: ' + troSeen);
+  {
+    const t0 = (await M.api('/api/trophies')).trophies, first = t0.list.find((x) => x.earned);
+    check(t0.playedLamports === 8 * 10_000_000 && t0.open === 0 && t0.list.every((x) => !x.can) && first.moreLamports === first.rewardLamports / TR.RATE - t0.playedLamports, 'trophy SOL waits until the bets cover it: ' + JSON.stringify([first.id, first.moreLamports]));
+    const early = await M.api('/api/trophies/claim', { id: first.id });
+    check(early.status === 400 && /more to claim/.test(early.error || '') && (await M.api('/api/me')).balance === mbal, 'a claim before then is refused and pays nothing: ' + early.error);
   }
   check(sawLocked, 'a mission done before the need was played waited for it');
   check(sawRound, 'finishing a round of daily missions opened the next');
@@ -300,6 +317,25 @@ function playTaps(seed, di, L, skill, salt) {
   check(sp1.specials.every((x) => x.course.chance * x.x <= SP.TARGET + 1e-9 || hardest(x)), 'special: courses still set at 90% or less for their level, or the hardest one ' + JSON.stringify(sp1.specials.map((x) => x.course)));
   const mv = await M.api('/api/missions');
   check(mv.playedLamports.day >= 8 * 10_000_000 + tries * 50_000_000, 'special entries count as play for missions');
+  // trophy SOL once the bets cover it: claimed once, credited, and never more than TR.RATE of what's been bet
+  {
+    const t1 = (await M.api('/api/trophies')).trophies, can = t1.list.filter((x) => x.can), b0 = (await M.api('/api/me')).balance;
+    const again = TR.view({ e: Object.fromEntries(t1.list.filter((x) => x.earned).map((x) => [x.id, 1])), c: {} }, t1.playedLamports, TRU);
+    check(can.length >= 1 && t1.open === can.length && t1.list.every((x, k) => x.can === again.list[k].can) && can.reduce((n, x) => n + x.rewardLamports, 0) <= TR.RATE * t1.playedLamports,
+      'trophy SOL opens with the bets (regular runs and special entries), the smallest first: ' + JSON.stringify([t1.playedLamports, can.map((x) => x.id)]));
+    let got = 0;
+    for (const x of can) {
+      const c = await M.api('/api/trophies/claim', { id: x.id });
+      got += x.rewardLamports;
+      check(c.status === 200 && c.lamports === x.rewardLamports && c.balance === b0 + got && c.trophies.list.find((y) => y.id === x.id).claimedLamports === x.rewardLamports, 'claiming a trophy credits its SOL: ' + x.id);
+    }
+    const t2 = (await M.api('/api/trophies')).trophies;
+    check(t2.claimedLamports === got && t2.open === 0 && got <= TR.RATE * t2.playedLamports, 'claims stay within their share of the bets: ' + JSON.stringify([got, t2.playedLamports]));
+    const twice = await M.api('/api/trophies/claim', { id: can[0].id }), unknown = await M.api('/api/trophies/claim', { id: 'nope' }), locked = await M.api('/api/trophies/claim', { id: 'champion' });
+    check(twice.status === 400 && /Already/.test(twice.error) && unknown.status === 404 && locked.status === 400 && /Earn/.test(locked.error) && (await M.api('/api/me')).balance === b0 + got, 'a second claim, an unknown trophy and an unearned one are refused');
+    const waiting = t2.list.find((x) => x.earned && !x.claimedLamports);
+    if (waiting) check((await M.api('/api/trophies/claim', { id: waiting.id })).status === 400, 'the next trophy waits for more bets: ' + waiting.id);
+  }
   // a new day: new missions, nothing played, a new special tally
   await M.api('/api/dev/pot/advance', {});
   const m2 = await M.api('/api/missions'), sp2 = await M.api('/api/special');
@@ -372,6 +408,11 @@ function playTaps(seed, di, L, skill, salt) {
   // the newer pot challenges, judged from ring outcomes alone, and the special levels' rotation
   {
     const lv = (outcomes, clear = true) => ({ outcomes, clear });
+    const TRr = require(path.join(root, 'src/trophies.cjs'));
+    const r1 = TRr.run(null, [{ outcomes: 'SSSSSS', clear: true, mov: '010000', tilt: '000100' }, { outcomes: 'SSSS', clear: false }], { paid: false, total: 0, hard: false, nl: 8 }, 7);
+    check(r1.earned.join() === 'swish1,cp1,fire3,moving,nova5,perfect,tilted,score50,streak10' && r1.s.sw === 10, 'trophies: judged from ring outcomes ' + r1.earned.join());
+    check(TRr.run(null, [{ outcomes: 'RRRRRR', clear: true }], { paid: true, total: 2.2, hard: true, nl: 8 }, 7).earned.join() === 'cp1,double,legend', 'trophies: a 2x cash-out and a Hard clear');
+    check(TRr.LIST.reduce((n, t) => n + TRr.reward(t), 0) < 0.1 && TRr.RATE + require(path.join(root, 'src/missions.cjs')).RATE + require(path.join(root, 'src/levels.cjs')).BACK.run < 0.01, 'trophies: rewards are small, and with mission SOL and rakeback they stay under the 1% edge against a good player');
     const f1 = POTS.facts([lv('SSRSSS'), lv('SSSSSS'), lv('RSSSSR'), lv('SSS', false)]);
     check(f1.greens === 2 && f1.hot === 2 && f1.comeback === 9 && f1.early === 11 && f1.perfect === 1, 'pots: green rings, checkpoints on fire, a streak after a rim hit and the first twelve rings ' + JSON.stringify(f1));
     const f2 = POTS.facts([lv('SSSSSS'), lv('SSSS', false)]);
