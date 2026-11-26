@@ -11,6 +11,7 @@ pg.types.setTypeParser(20, (v) => { // int8 as a JS number; refuse anything a do
 });
 
 export const OPEN = ['playing', 'checkpoint'];
+const HELD = [...OPEN, 'waiting', 'matched']; // and a duel mark waiting for its rival: its entry is still owed
 
 const MIGRATIONS = [
   // 1: everything the server keeps
@@ -127,6 +128,12 @@ const MIGRATIONS = [
   );
   create index reviews_open on reviews(status) where status = 'open';
   create table audit (id bigserial primary key, actor text, action text not null, target text, details jsonb, created_at timestamptz not null default now());
+  `,
+  // 2: duels. A flight that set the mark waits for a rival ('waiting', then 'matched' while one is flying); its
+  // entry is still the player's until the duel settles, so it counts as owed (see owed()).
+  `
+  create index runs_held on runs(status) where status in ('waiting', 'matched');
+  create index runs_duel_marks on runs(created_at) where kind = 'duel' and status = 'waiting';
   `
 ];
 
@@ -313,7 +320,7 @@ export class Tx {
   async owed() {
     const r = await this.q(`select
       (select coalesce(sum(balance), 0) from users)::bigint as balances,
-      (select coalesce(sum(exposure), 0) from runs where status in ('playing', 'checkpoint'))::bigint as runs,
+      (select coalesce(sum(exposure), 0) from runs where status in ('playing', 'checkpoint', 'waiting', 'matched'))::bigint as runs,
       (select coalesce(sum(coalesce((doc->>'carryIn')::bigint, 0) + coalesce((doc->>'paidIn')::bigint, 0)), 0) from pots where not settled)::bigint as pots,
       (select coalesce(sum(lamports), 0) from withdrawals where status in ('review', 'queued', 'sending'))::bigint as withdrawals,
       (select coalesce(ceil(sum(coalesce((doc->'rb'->>'acc')::numeric, 0) + coalesce((doc->'rb'->>'ready')::numeric, 0))), 0) from users)::bigint as rakeback`);
@@ -362,7 +369,7 @@ export class Tx {
     }
     for (const run of this.runs.values()) {
       await this.q(`update runs set status = $2, exposure = $3, doc = $4::jsonb, updated_at = now() where id = $1`,
-        [run.id, run.status, OPEN.includes(run.status) ? run.exposure || 0 : 0, j(run)]);
+        [run.id, run.status, HELD.includes(run.status) ? run.exposure || 0 : 0, j(run)]);
     }
   }
 }

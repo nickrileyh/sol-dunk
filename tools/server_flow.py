@@ -105,6 +105,19 @@ async def main():
             w = me2.get('withdrawals') or []
             if not (w and w[0]['lamports'] == 500_000_000 and w[0]['status'] == 'sent'): fails.append('the withdrawal did not go out: ' + json.dumps(w[:1]) + ' ' + await page.evaluate("(document.getElementById('wErr') || {}).textContent || ''"))
             if abs(me2['balance'] - (me['balance'] - 500_000_000)) > 0: fails.append('the withdrawal did not come off the balance')
+            # a duel with nobody to race: the flight sets the mark and waits, its entry held
+            await page.click('#pgBack'); await page.wait_for_timeout(400); await page.click('#tabChallenges'); await page.wait_for_timeout(900)
+            d0 = await page.evaluate("__solDunk.duel()")
+            if not (d0 and d0['demo'] is False and abs(d0['fee'] - 0.05) < 1e-9 and abs(d0['prize'] - 0.09) < 1e-9): fails.append('the duel did not come from the server: ' + json.dumps(d0))
+            await page.evaluate("document.getElementById('chDuel').click()"); await page.wait_for_timeout(1500)
+            await page.evaluate("__solDunk.autoplay('novice'); __solDunk.tap()")
+            for _ in range(400):
+                if await page.evaluate("__solDunk.phase()") == 'over': break
+                await page.wait_for_timeout(250)
+            await page.wait_for_timeout(1800); await page.screenshot(path=OUT + 'duel.png')
+            d1 = await page.evaluate("__solDunk.duel()"); me3 = call(base, '/api/me', None, token)
+            title = await page.evaluate("document.getElementById('resTitle').textContent")
+            if not (title == 'Mark set' and d1 and len(d1['waiting']) == 1 and me3['balance'] == me2['balance'] - 50_000_000): fails.append(f"the duel mark was not set: {title} {json.dumps(d1)} {me3['balance'] - me2['balance']}")
             if csp: fails.append('content security policy violations: ' + ' | '.join(csp[:3]))
             if errs: fails.append('page errors: ' + ' | '.join(errs[:3]))
             await b.close()
@@ -112,6 +125,6 @@ async def main():
         os.killpg(srv.pid, signal.SIGTERM)
         try: srv.wait(timeout=15)
         except Exception: os.killpg(srv.pid, signal.SIGKILL)
-    print('server flow:', 'FAIL ' + '; '.join(fails) if fails else 'ok (wallet sign-in, a verified run, cash-out and withdrawal under the page\'s security policy)')
+    print('server flow:', 'FAIL ' + '; '.join(fails) if fails else 'ok (wallet sign-in, a verified run, cash-out, withdrawal and a duel mark under the page\'s security policy)')
     sys.exit(1 if fails else 0)
 asyncio.run(main())

@@ -541,6 +541,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .pot-demo { margin-top: 14px; padding: 12px 14px 8px; border-radius: 18px; background: var(--surface); }
 .pot-demo p { margin: 0 0 10px; font-size: 12.5px; line-height: 1.4; color: var(--label-2); }
 .pot-demo .btn { width: 100%; height: 44px; font-size: 15px; }
+/* the duel's page: you and your rival on the same line of rings */
+.du-vs { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; padding: 13px 16px; border-radius: 18px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--hair); }
+.du-b { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #d6c8f5; background: rgba(214,200,245,0.14); }
+.du-b.you { border-color: var(--accent); background: var(--accent); }
+.du-n { font-family: var(--font-round); font-size: 14px; font-weight: 700; color: var(--label); }
+.du-line { flex: 1; height: 2px; border-radius: 1px; background: repeating-linear-gradient(90deg, var(--track) 0 7px, transparent 7px 12px); }
+.pot-demo p:last-child { margin-bottom: 4px; }
 .gain.pot svg { color: var(--gold); }
 
 
@@ -1323,3 +1330,9 @@ body.desk.kb #tabbar button[aria-selected="true"] .kc { color: var(--label-2); }
 body:not([data-tab="play"]) #keys .k-play, body:not(.fs-ok) #keys .k-fs { display: none; }
 body.nocursor, body.nocursor * { cursor: none !important; }
 body.desk.kb.hud-play #keys { left: 14px; bottom: 12px; padding: 12px 14px 12px 12px; border-radius: 14px; background: rgba(6, 4, 11, 0.62); }   /* over the hall, on a quiet plate */
+/* A readability pass (the owner asked for an easy-to-read layout): nothing on a page is set smaller than 12px (only the
+   tab bar's own labels are), and the quiet labels on the tab bar, the trophies and the best scores are a step brighter. */
+#tabbar button { color: #8b90a4; }
+.tro span, .tro .tx, .tro .tx.two b, .tro .tx.wait b { font-size: 12px; }
+.tro span { color: var(--label-2); }
+.bests span, .bests em, .lk-grid .item .nm, .rd span { font-size: 12px; }

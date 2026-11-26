@@ -100,6 +100,16 @@ Alongside regular play, each UTC day has a challenge pot (`src/pots.cjs`, `serve
 - The demo runs the same pot with demo SOL. It has no other players, so it simulates the other entrants (from each challenge's simulated success rate by skill) and says so, and it has a "Close this pot now" button to see a payout. `python3 tools/pot_flow.py` plays it end to end.
 - The pot has its own page: its card on the **Challenges** tab (the goal, the pot and an Enter button) opens it.
 
+## Duels
+
+Race another player over the same rings (`src/duel.cjs`, `server/server.mjs`):
+
+- Both pay the entry (0.05 SOL, `DUEL_ENTRY_LAMPORTS`) and fly one course from one provably fair seed, `HMAC-SHA256(serverSeed, clientSeed:nonce:duel)`. It starts wide and still and gets harder every ring (tighter rims, then moving and leaning rings, bigger steps) with the ball's speed fixed, so someone always falls: in the simulator an average player passes about 13 of its 30 rings and a pro about 24.
+- More rings wins; level on rings, the higher score; level on both, the pot is split. The winner takes 0.09 SOL: the house keeps 10% of each entry whoever wins.
+- A player with nobody to race sets the mark: their flight waits, its entry held. The next player from another wallet races it and sees it beside their ball as a pale ghost. Once past a rival who's out, the flight stops there and wins. A mark nobody takes on within 24 hours (`DUEL_WAIT_MS`) is refunded in full.
+- API: `GET /api/duel`, `POST /api/duel/start` (`{ clientSeed }`: returns the seed, and the rival's taps if there is one), `POST /api/duel/finish` (`{ runId, taps, stop? }`). `npm test` covers the mark, the race, the stop, the split, the refund and the house's cut.
+- The demo has no other players, so the rival is the game's autopilot near your level, and the page says so. `python3 tools/duel_flow.py` plays three duels in it.
+
 ## The special levels
 
 Three special levels at a time (`src/special.cjs`), with prizes of 2×, 3× and 5× the entry, from fifteen twists. Twelve change the rings and take turns opening a day, each once every four days and never two days running: The gauntlet (every ring moves), Tilt alley (every rim leans, left then right), Zigzag (high ring, low ring), Needle (tight rims, nothing moves), The wave (rings ride a rolling line), Express (a quicker ball, rings spread to match), and six more the owner asked for as more fun and unique challenges: Stairway (three steps up, then the drop), The ripple (every ring bobs in one rhythm, each a beat behind the last, so a wave runs along the course), The squeeze (each ring tighter than the last), Big and little (a wide ring, then a tight one), Elevators (every ring rides a long, slow lift) and Slow motion (a slower ball through tight rings, with the rings closer to match). A twist may only depend on a ring's place in the course, never on the course's length.
@@ -192,6 +202,7 @@ src/pots.cjs       challenge pot rules (shared by client, server, demo)
 src/missions.cjs   daily and weekly missions in rounds, their SOL and what unlocks it (shared by client and server)
 src/trophies.cjs   the trophies, their XP and SOL, and the rule for claiming it (shared by client and server)
 src/special.cjs    the special levels: twists, generator, the day's three, players' levels, courses (client, server, sim)
+src/duel.cjs       duels: the shared course, how flights are scored and compared, the pot (client, server)
 src/levels.cjs     the level curve and level-up rakeback (shared by client and server)
 src/game.js        browser client: rendering, audio, input, betting flow, wallet
 src/index.html, src/style.css

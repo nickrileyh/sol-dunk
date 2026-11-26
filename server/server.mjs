@@ -35,6 +35,7 @@ const POTS = require('../src/pots.cjs');
 const MS = require('../src/missions.cjs');
 const TR = require('../src/trophies.cjs');
 const SP = require('../src/special.cjs');
+const DU = require('../src/duel.cjs');
 const LV = require('../src/levels.cjs');
 
 export class HttpError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
@@ -503,7 +504,7 @@ export async function createServer(CFG, log) {
   // ---------------------------------------------------------------- runs
   async function getRun(t, u, runId) {
     const r = await t.run(String(runId || ''));
-    if (!r || r.address !== u.address || r.kind === 'special') throw new HttpError(404, 'Run not found');
+    if (!r || r.address !== u.address || (r.kind && r.kind !== 'run')) throw new HttpError(404, 'Run not found'); // specials and duels have their own routes
     return r;
   }
   async function settle(t, u, run, status) {
@@ -741,11 +742,139 @@ export async function createServer(CFG, log) {
     }).then((out) => { if (out.__refuse) throw bad(out.__refuse); return out; });
   }));
 
+  // ---------------------------------------------------------------- duels (rules in src/duel.cjs)
+  // Two players fly the same course; whoever gets further takes the pot, and the house keeps DU.RAKE of each entry
+  // whoever wins: it never takes a side. A player with nobody to race sets the mark (the flight waits, its entry
+  // held and counted as owed); the next player to enter races it, with the mark's taps to draw as a ghost, and the
+  // duel settles when they finish. Both flights are judged only from the server's replay of the taps. A mark nobody
+  // takes on within CFG.duelWaitMs is refunded in full. The entry counts as play (missions, rakeback, trophy SOL)
+  // only once a duel settles, so parking marks that get refunded earns nothing.
+  const DUEL_MARKS = 3; // marks one player can have waiting at once
+  const duelDef = (run) => DU.generate(levelSeed(run, 'duel'));
+  const duelDay = (u) => { const day = SP.dayKey(potNow()); if (!u.duel || u.duel.day !== day) u.duel = { day, w: 0, l: 0, d: 0, last: u.duel ? u.duel.last : null }; return u.duel; };
+  async function duelView(t, u) {
+    const fee = CFG.duelEntry, out = { feeLamports: fee, prizeLamports: DU.pot(fee), rake: DU.RAKE, rings: DU.RINGS, today: { w: 0, l: 0, d: 0 }, last: null, waiting: [] };
+    if (!u) return out;
+    const d = u.duel && u.duel.day === SP.dayKey(potNow()) ? u.duel : null;
+    if (d) out.today = { w: d.w, l: d.l, d: d.d };
+    out.last = (u.duel && u.duel.last) || null; out.blocked = !!u.flagged;
+    const r = await t.q(`select doc from runs where address = $1 and kind = 'duel' and status in ('waiting', 'matched') order by created_at limit 5`, [u.address]);
+    out.waiting = r.rows.map((x) => ({ rings: x.doc.flight.rings, score: x.doc.flight.score, at: x.doc.endedAt }));
+    return out;
+  }
+  // both flights are in: pay the pot, close both, count the entries as play and note the result for both players
+  async function duelSettle(t, a, ua, b, ub) {
+    const cmp = DU.compare(a.flight, b.flight), pay = DU.payouts(a.bet, cmp);
+    await t.incSetting('houseRake', 2 * a.bet - pay.a - pay.b); // the house's cut of both entries (and the odd lamport of a split pot)
+    for (const [run, u, amount, other, c] of [[a, ua, pay.a, b, cmp], [b, ub, pay.b, a, -cmp]]) {
+      run.status = c > 0 ? 'won' : c < 0 ? 'lost' : 'draw'; run.exposure = 0; run.payout = amount; run.total = amount / run.bet; run.settledAt = Date.now(); run.rival = other.id;
+      if (amount) await t.credit(u, amount, 'duel_prize', run.id);
+      u.returned += amount; u.wagered += run.bet;
+      rakeAdd(u, 'pot', run.bet);
+      await missionPlay(t, u, run.bet);
+      if (c > 0) xpAdd(u, LV.specialXp(0, true)); // the win bonus, as for a cleared special
+      const d = duelDay(u); d[c > 0 ? 'w' : c < 0 ? 'l' : 'd']++;
+      d.last = { status: run.status, you: { rings: run.flight.rings, score: run.flight.score }, rival: { rings: other.flight.rings, score: other.flight.score }, payoutLamports: amount, t: Date.now() };
+      if (amount) await bigWin(t, u, run, amount);
+    }
+  }
+  // one flight is over: a mark waits for a rival, a rival's flight settles the duel
+  async function duelFinish(t, u, run, f, taps) {
+    run.flight = { rings: f.rings, score: f.score, cleared: f.cleared }; run.taps = taps; run.endedAt = Date.now();
+    run.levels.push({ level: 1, taps: taps.length, outcomes: f.outcomes.join(''), result: f.result, ticks: f.ticks });
+    u.runs++;
+    if (run.mark) {
+      const a = await t.run(run.mark), ua = await t.user(a.address);
+      await duelSettle(t, a, ua, run, u);
+      await review(t, ua);
+    } else { run.status = 'waiting'; duelDay(u); }
+    await review(t, u);
+  }
+  app.get('/api/duel', wrap(async (req) => tx(async (t) => duelView(t, await maybeAuth(t, req)))));
+  app.post('/api/duel/start', geo, limit('runs', 120, 60_000, who), wrap(async (req) => {
+    const { clientSeed } = req.body || {};
+    if (typeof clientSeed !== 'string' || !/^[0-9a-zA-Z]{4,64}$/.test(clientSeed)) throw bad('Invalid client seed');
+    await pausedPlay();
+    return tx(async (t) => {
+      const u = await auth(t, req);
+      if (await t.openRun(u.address)) throw bad('Finish your current run first');
+      if (u.flagged) throw bad('Duels aren’t available on this account');
+      // the oldest mark from another wallet, if there is one (skipping any that another player is taking right now)
+      const m = await t.q(`select id from runs where kind = 'duel' and status = 'waiting' and address <> $1 order by created_at limit 1 for update skip locked`, [u.address]);
+      const mark = m.rows.length ? await t.run(m.rows[0].id) : null;
+      const fee = mark ? mark.bet : CFG.duelEntry;
+      if (u.balance < fee) throw bad('Not enough balance for the entry');
+      if (!mark) {
+        const w = await t.q(`select count(*)::int as n from runs where address = $1 and kind = 'duel' and status in ('waiting', 'matched')`, [u.address]);
+        if (w.rows[0].n >= DUEL_MARKS) throw bad(`You have ${DUEL_MARKS} marks waiting for a rival. Come back when one has been taken on.`);
+      }
+      await t.credit(u, -fee, 'duel_entry', null);
+      const run = {
+        id: crypto.randomUUID(), address: u.address, kind: 'duel', di: 0, bet: fee, exposure: fee, mark: mark ? mark.id : null,
+        // a rival flies the mark's own course, so the seeds are the mark's
+        serverSeed: mark ? mark.serverSeed : crypto.randomBytes(32).toString('hex'), clientSeed: mark ? mark.clientSeed : clientSeed, nonce: mark ? mark.nonce : u.nonce++,
+        level: 1, total: 1, status: 'playing', levels: [], createdAt: Date.now(), levelStartedAt: Date.now(), updatedAt: Date.now()
+      };
+      if (mark) { mark.status = 'matched'; mark.takenBy = run.id; }
+      await t.insertRun(run);
+      await t.flush(); // the view below reads the runs table
+      return {
+        runId: run.id, serverSeedHash: sha256Hex(run.serverSeed), clientSeed: run.clientSeed, nonce: run.nonce, seed: levelSeed(run, 'duel'), feeLamports: fee, prizeLamports: DU.pot(fee),
+        rival: mark ? { name: 'Rival', taps: mark.taps, rings: mark.flight.rings, score: mark.flight.score, cleared: mark.flight.cleared } : null,
+        missions: { paid: [], view: missionView(u) }, duel: await duelView(t, u), ...publicMe(u)
+      };
+    });
+  }));
+  app.post('/api/duel/finish', limit('runs', 120, 60_000, who), wrap(async (req) => {
+    const { runId, taps, stop } = req.body || {};
+    return tx(async (t) => {
+      const u = await auth(t, req);
+      const run = await t.run(String(runId || ''));
+      if (!run || run.address !== u.address || run.kind !== 'duel') throw new HttpError(404, 'Run not found');
+      if (run.status !== 'playing') throw bad('This duel is already over');
+      const def = duelDef(run);
+      if (!E.validTaps(taps, def.maxTicks)) throw bad('Invalid tap data');
+      if (stop != null && !(Number.isInteger(stop) && stop > 0 && stop <= def.maxTicks)) throw bad('Invalid tap data');
+      // a player already past a rival who's out stops there; a mark is always flown to its end
+      let f = DU.fly(def, taps, run.mark && stop != null ? stop : null);
+      const gameMs = f.ticks * E.DT * 1000, elapsed = Date.now() - run.levelStartedAt;
+      if (elapsed < gameMs * CFG.minRealtime - 250) { // faster than real time: the flight counts for nothing
+        run.flag = 'too fast'; await t.addReview('void', u.address, run.id, { gameMs, elapsed });
+        f = { rings: 0, score: 0, cleared: false, outcomes: [], result: 'void', ticks: f.ticks };
+      } else {
+        u.hoops += f.rings; u.swishes += f.outcomes.filter((o) => o === 'S').length;
+        await botCheck(t, u, def, taps, run.id);
+        xpAdd(u, LV.specialXp(f.score, false));
+      }
+      await duelFinish(t, u, run, f, taps);
+      await t.flush(); // the view below reads the runs table
+      const a = run.mark ? await t.run(run.mark) : null;
+      return {
+        status: run.status, you: run.flight, rival: a ? { rings: a.flight.rings, score: a.flight.score } : null, payoutLamports: run.payout || 0,
+        serverSeed: run.serverSeed, missions: { view: missionView(u) }, duel: await duelView(t, u), ...publicMe(u)
+      };
+    });
+  }));
+  if (CFG.devEndpoints) app.post('/api/dev/duel/sweep', wrap(async () => { await sweepDuels(); return { ok: true }; })); // tests: refund old marks now
+  // marks nobody took on: the entry goes back in full
+  async function sweepDuels() {
+    const r = await db.pool.query(`select id, address from runs where kind = 'duel' and status = 'waiting' and (doc->>'endedAt')::bigint < $1 limit 200`, [Date.now() - CFG.duelWaitMs]);
+    for (const row of r.rows) {
+      await tx(async (t) => {
+        const u = await t.user(row.address), run = await t.run(row.id);
+        if (!run || run.status !== 'waiting') return;
+        await t.credit(u, run.bet, 'duel_refund', run.id);
+        run.status = 'refunded'; run.exposure = 0; run.payout = run.bet; run.settledAt = Date.now();
+        duelDay(u).last = { status: 'refunded', you: { rings: run.flight.rings, score: run.flight.score }, rival: null, payoutLamports: run.bet, t: Date.now() };
+      }).catch((e) => log.error('duel refund failed', { err: e, run: row.id }));
+    }
+  }
+
   // provably fair: anyone can check a finished run
   app.get('/api/run/:id', wrap(async (req) => tx(async (t) => {
     const run = await t.run(req.params.id, { lock: false });
     if (!run) throw new HttpError(404, 'Run not found');
-    const done = !OPEN.includes(run.status);
+    const done = !OPEN.includes(run.status) && run.status !== 'waiting' && run.status !== 'matched'; // a duel mark's seed stays shut until its rival has flown
     return {
       id: run.id, kind: run.kind || 'run', recipe: run.recipe, grade: run.grade, rings: run.rings, difficulty: run.di, betLamports: run.bet, status: run.status, total: run.total, payoutLamports: run.payout || 0,
       serverSeedHash: sha256Hex(run.serverSeed), serverSeed: done ? run.serverSeed : undefined, clientSeed: run.clientSeed, nonce: run.nonce, levels: run.levels
@@ -764,6 +893,7 @@ export async function createServer(CFG, log) {
       await tx(async (t) => {
         const u = await t.user(row.address), run = await t.run(row.id);
         if (!run) return;
+        if (run.kind === 'duel') { if (run.status === 'playing' && Date.now() - run.levelStartedAt > CFG.playingTimeoutMs) await duelFinish(t, u, run, DU.fly(duelDef(run), [], 0), []); return; } // never came back: a flight of no rings
         if (run.status === 'checkpoint' && Date.now() - run.updatedAt > CFG.checkpointTimeoutMs) await settle(t, u, run, 'cashout');
         else if (run.status === 'playing' && Date.now() - run.levelStartedAt > CFG.playingTimeoutMs) await settle(t, u, run, 'abandoned');
       }).catch((e) => log.error('abandoned run sweep failed', { err: e, run: row.id }));
@@ -804,6 +934,7 @@ export async function createServer(CFG, log) {
   };
   function startBackground() {
     every(15_000, 'run sweep', sweepRuns);
+    every(60_000, 'duel sweep', sweepDuels);
     every(60_000, 'pot settlement', settlePots);
     payments.start();
   }
@@ -813,7 +944,7 @@ export async function createServer(CFG, log) {
     await db.close();
     if (devPg) await devPg.stop();
   }
-  return { app, db, chain, payments, close, startBackground, settlePots, sweepRuns };
+  return { app, db, chain, payments, close, startBackground, settlePots, sweepRuns, sweepDuels };
 }
 
 // ---------------------------------------------------------------- start

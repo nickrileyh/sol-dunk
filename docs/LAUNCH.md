@@ -104,6 +104,7 @@ Set `NETWORK=mainnet-beta` and the closed-beta values from `.env.example`:
 | `WITHDRAW_DAY_TOTAL_LAMPORTS` | 20 SOL | the circuit breaker: past it, withdrawals wait for you |
 | `BIG_WIN_LAMPORTS` | 2 SOL | a payout this big holds that player's withdrawals until you've looked |
 | `SPECIAL_DAY_TRIES` | 20 | limits how fast a strong newcomer can farm the special levels |
+| `DUEL_ENTRY_LAMPORTS` | 50000000 (0.05 SOL) | each player's entry into a duel; the winner takes 90% of both |
 
 **How max bets follow the bankroll.** Free bankroll = hot + cold balances − everything owed (player balances, open
 runs at their biggest possible payout, open pots, unsent withdrawals). A mode's max bet is

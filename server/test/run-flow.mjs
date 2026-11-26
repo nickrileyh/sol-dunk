@@ -456,6 +456,74 @@ function playTaps(seed, di, L, skill, salt) {
     }
   }
 
+  // ---- duels (src/duel.cjs): one course, two flights, further wins; the house keeps 10% of each entry
+  {
+    const DU = require(path.join(root, 'src/duel.cjs'));
+    const srvD = await boot(8812, { ADMIN_TOKEN: 'duel-test-admin-token-0123456789' });
+    const X = client_(8812), Y = client_(8812), Z = client_(8812);
+    for (const p of [X, Y, Z]) { await p.signIn(); await p.api('/api/dev/faucet', { lamports: 1e9 }); }
+    const fee = 50_000_000, pot = DU.pot(fee);
+    const flyBot = (seed, skill, salt) => { const st = E.createState(DU.generate(seed)), bot = B.createBot(skill, E.makeRng(salt)), taps = [0]; let tap = true; while (!st.done) { E.step(st, tap); tap = B.decide(bot, st); if (tap && !st.done) taps.push(st.tick); } return { taps, rings: st.outcomes.length, score: DU.score(st.outcomes) }; };
+    const bal = async (p) => (await p.api('/api/me')).balance;
+    const v0 = await X.api('/api/duel');
+    check(v0.feeLamports === fee && v0.prizeLamports === pot && pot === 90_000_000 && v0.waiting.length === 0 && v0.rings === DU.RINGS, 'duel: the view gives the entry and what the winner takes ' + JSON.stringify(v0));
+    const c1 = DU.generate('t'), c2 = DU.generate('t', 12);
+    check(c1.hoops.length === DU.RINGS && c2.hoops.every((h, i) => h.x === c1.hoops[i].x && h.y0 === c1.hoops[i].y0 && h.w === c1.hoops[i].w) && c1.hoops.every((h) => h.y0 - h.amp >= E.Y_MIN - 1e-6 && h.y0 + h.amp <= E.Y_MAX + 1e-6 && h.w >= DU.W_MIN) && c1.hoops[0].w > c1.hoops[DU.RINGS - 1].w, 'duel: the course stays in the ring band and tightens ring by ring');
+    check(DU.compare({ rings: 5, score: 3 }, { rings: 4, score: 30 }) === 1 && DU.compare({ rings: 5, score: 3 }, { rings: 5, score: 4 }) === -1 && DU.compare({ rings: 5, score: 3 }, { rings: 5, score: 3 }) === 0 && DU.payouts(fee, 0).a === pot / 2 && DU.payouts(fee, 1).b === 0, 'duel: more rings wins, then the score, then the pot is split');
+    // X has nobody to race: the flight sets the mark, and the entry is held
+    const a = await X.api('/api/duel/start', { clientSeed: 'duelA1' });
+    check(a.status === 200 && a.rival === null && a.balance === 1e9 - fee, 'duel: with nobody to race, the entry is taken and there is no ghost ' + JSON.stringify([a.status, a.error]));
+    check((await X.api('/api/run/level', { runId: a.runId, level: 1, taps: [0] })).status === 404, 'duel: a duel can\'t be played as a run');
+    check((await X.api('/api/duel/start', { clientSeed: 'duelA2' })).status === 400 && (await X.api('/api/run/start', { difficulty: 0, lamports: 10_000_000, clientSeed: 'during' })).status === 400, 'duel: nothing else starts while a duel is open');
+    const fa = flyBot(a.seed, 'average', 'da');
+    const ra = await X.api('/api/duel/finish', { runId: a.runId, taps: fa.taps });
+    check(ra.status === 'waiting' && ra.you.rings === fa.rings && ra.you.score === fa.score && ra.payoutLamports === 0 && ra.duel.waiting.length === 1 && ra.duel.waiting[0].rings === fa.rings, 'duel: the flight is replayed and waits as the mark ' + JSON.stringify([ra.status, ra.you, fa.rings, fa.score]));
+    check(client.deriveLevelSeed(ra.serverSeed, a.clientSeed, a.nonce, 'duel') === a.seed && client.hex(client.sha256(client.utf8(ra.serverSeed))) === a.serverSeedHash, 'duel: the course comes from the committed seed');
+    check((await X.api('/api/duel/finish', { runId: a.runId, taps: fa.taps })).status === 400, 'duel: a second finish is refused');
+    const pub = await (await fetch(servers.get(8812).url + '/api/run/' + a.runId)).json();
+    check(pub.status === 'waiting' && pub.serverSeed === undefined, 'duel: a waiting mark\'s seed stays shut to everyone else');
+    // X can't race their own mark: a second entry sets another mark
+    const a2 = await X.api('/api/duel/start', { clientSeed: 'duelA3' });
+    check(a2.status === 200 && a2.rival === null && a2.seed !== a.seed, 'duel: a player never races their own mark');
+    await X.api('/api/duel/finish', { runId: a2.runId, taps: [0] });
+    // Y races the oldest mark: the same course, the mark's taps for the ghost, and the duel settles at the finish
+    const xb = await bal(X), b = await Y.api('/api/duel/start', { clientSeed: 'duelB1' });
+    check(b.status === 200 && b.seed === a.seed && b.rival && b.rival.rings === fa.rings && b.rival.score === fa.score && JSON.stringify(b.rival.taps) === JSON.stringify(fa.taps) && b.balance === 1e9 - fee, 'duel: the next player gets the mark\'s course and its flight ' + JSON.stringify([b.status, b.error]));
+    const fb = flyBot(b.seed, fa.rings > 8 ? 'novice' : 'perfect', 'db');
+    const cmp = DU.compare(fb, fa), rb = await Y.api('/api/duel/finish', { runId: b.runId, taps: fb.taps });
+    const exp = cmp > 0 ? 'won' : cmp < 0 ? 'lost' : 'draw', pay = DU.payouts(fee, cmp);
+    check(rb.status === exp && rb.payoutLamports === pay.a && rb.you.rings === fb.rings && rb.rival.rings === fa.rings && rb.balance === 1e9 - fee + pay.a, `duel: settled from the two replays (${fb.rings} v ${fa.rings}: ${rb.status}, paid ${rb.payoutLamports})`);
+    const xa = await bal(X), vx = await X.api('/api/duel');
+    check(xa - xb === pay.b && vx.last && vx.last.status === (cmp > 0 ? 'lost' : cmp < 0 ? 'won' : 'draw') && vx.last.payoutLamports === pay.b && vx.waiting.length === 1, 'duel: the mark\'s player is paid and told ' + JSON.stringify([xa - xb, vx.last && vx.last.status]));
+    check(pay.a + pay.b === pot && 2 * fee - pot === 2 * Math.round(fee * DU.RAKE), 'duel: the house keeps its cut of both entries and nothing else');
+    const pub2 = await (await fetch(servers.get(8812).url + '/api/run/' + a.runId)).json();
+    check(pub2.serverSeed === ra.serverSeed, 'duel: a settled duel can be checked by anyone');
+    // Z races X's other mark (one tap, hardly a ring) and stops as soon as the duel is won
+    const z = await Z.api('/api/duel/start', { clientSeed: 'duelZ1' });
+    const m2 = DU.fly(DU.generate(z.seed), [0]), st = E.createState(DU.generate(z.seed)), bot = B.createBot('perfect', E.makeRng('dz')), zt = [0];
+    let tap = true;
+    while (!st.done && st.outcomes.length <= m2.rings) { E.step(st, tap); tap = B.decide(bot, st); if (tap && !st.done) zt.push(st.tick); }
+    const rz = await Z.api('/api/duel/finish', { runId: z.runId, taps: zt.filter((t) => t < st.tick), stop: st.tick });
+    check(z.rival && z.rival.rings === m2.rings && st.outcomes.length === m2.rings + 1 && rz.status === 'won' && rz.you.rings === m2.rings + 1 && rz.payoutLamports === pot, 'duel: past a rival who\'s out, the flight stops there and wins ' + JSON.stringify([m2.rings, st.outcomes.length, rz.status, rz.you]));
+    // a mark nobody takes on is refunded in full
+    const t0 = await bal(Z), w = await Z.api('/api/duel/start', { clientSeed: 'duelZ2' });
+    await Z.api('/api/duel/finish', { runId: w.runId, taps: [0] });
+    const ov = await (await fetch(servers.get(8812).url + '/api/admin/overview', { headers: { authorization: 'Bearer duel-test-admin-token-0123456789' } })).json();
+    check((await bal(Z)) === t0 - fee && ov.bankroll && Number(ov.bankroll.owed.runs) === fee, 'duel: a waiting mark holds its entry, and it counts as owed ' + JSON.stringify(ov.bankroll && ov.bankroll.owed));
+    const srvW = await boot(8813, { DUEL_WAIT_MS: '1' }), W = client_(8813);
+    await W.signIn(); await W.api('/api/dev/faucet', { lamports: 1e9 });
+    const wm = await W.api('/api/duel/start', { clientSeed: 'duelW1' });
+    await W.api('/api/duel/finish', { runId: wm.runId, taps: [0] });
+    await new Promise((r) => setTimeout(r, 30));
+    await W.api('/api/dev/duel/sweep', {});
+    const vw = await W.api('/api/duel');
+    check((await bal(W)) === 1e9 && vw.waiting.length === 0 && vw.last && vw.last.status === 'refunded', 'duel: a mark nobody takes on comes back in full ' + JSON.stringify(vw.last));
+    srvW.kill();
+    const poor = client_(8812); await poor.signIn();
+    check((await poor.api('/api/duel/start', { clientSeed: 'poor1' })).status === 400, 'duel: no entry without the balance');
+    srvD.kill();
+  }
+
   await stopAll();
   console.log(failed() ? `${failed()} check(s) failed` : 'game flow: all checks passed');
   process.exitCode = failed() ? 1 : 0;

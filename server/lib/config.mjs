@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url);
 const POTS = require('../../src/pots.cjs');
 const MS = require('../../src/missions.cjs');
 const SP = require('../../src/special.cjs');
+const DU = require('../../src/duel.cjs');
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 export const LAMPORTS = 1_000_000_000;
@@ -108,6 +109,8 @@ export function loadConfig(env = process.env) {
     specialEntry,
     specialUnlock: num('SPECIAL_UNLOCK_LAMPORTS', Math.round(SP.UNLOCK * specialEntry)),
     specialRecipe: mock ? env.SPECIAL_RECIPE || '' : '',   // tests only: force every slot's twist
+    duelEntry: num('DUEL_ENTRY_LAMPORTS', sol(DU.ENTRY)),   // what each player pays into a duel
+    duelWaitMs: num('DUEL_WAIT_MS', DU.WAIT_MS),           // a mark nobody takes on is refunded after this long
     specialDayTries: num('SPECIAL_DAY_TRIES', 0),          // attempts at each special per player per day (0 = no limit)
     missionNeed: { day: num('MISSION_DAY_LAMPORTS', sol(MS.NEED.day)), week: num('MISSION_WEEK_LAMPORTS', sol(MS.NEED.week)) },
     checkpointTimeoutMs: num('CHECKPOINT_TIMEOUT_MS', 10 * 60 * 1000),

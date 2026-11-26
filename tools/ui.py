@@ -28,7 +28,7 @@ async def main():
         await page.click('#tabChallenges'); await page.wait_for_timeout(500)
         check(await tab() == 'challenges' and await vis('#vChallenges') and not await vis('#lobby'), 'Challenges tab shows the challenges page')
         check(await page.evaluate("!!document.querySelector('#cBody [data-page=\"special\"]') && !!document.querySelector('#cBody [data-page=\"pot\"]')"), 'Challenges has a card for today\'s special and one for the pot')
-        check(await page.evaluate("document.querySelectorAll('#cBody .mrow').length") == 0 and await page.evaluate("document.querySelectorAll('#cBody .cc').length") == 2, 'and nothing else: the missions have their own tab')
+        check(await page.evaluate("document.querySelectorAll('#cBody .mrow').length") == 0 and await page.evaluate("document.querySelectorAll('#cBody .cc').length") == 3 and await page.evaluate("!!document.querySelector('#cBody .cc.du [data-page=\"duel\"]')"), 'and the duel, nothing else: the missions have their own tab')
         check(await page.evaluate("[...document.querySelectorAll('#cBody .spr-dots')].map((e) => e.children.length).join()") == '5,5,5', 'each special shows its five for the day as segments')
         await page.click('#tabMissions'); await page.wait_for_timeout(500)
         check(await tab() == 'missions' and await vis('#vMissions') and not await vis('#vChallenges'), 'Missions tab shows the missions page')

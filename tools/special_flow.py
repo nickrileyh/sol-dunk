@@ -61,7 +61,7 @@ async def main():
         h0 = await page.evaluate('__solDunk.stats.history[0]')
         cleared = h0['level'] - (0 if h0['result'] in ('cashout', 'final', 'maxwin') else 1)
         check(all(s['course']['level'] >= 1.8 - 1e-9 for s in L) and (cleared < 2 or all(s['course']['level'] > 1.8 + 1e-9 for s in L)), f'the run\'s rings ({cleared} levels cleared) raise where each special starts: ' + json.dumps([s['course']['level'] for s in L]))
-        check(await page.evaluate("document.body.dataset.tab") == 'challenges' and await page.evaluate("document.querySelectorAll('#cBody .spr').length") == 3 and await page.evaluate("[0,1,2].every((k) => !!document.getElementById('chSpPlay' + k)) && !document.querySelector('#cBody .sp-unlock')"), 'the Challenges tab shows the three specials, each with a Play button')
+        check(await page.evaluate("document.body.dataset.tab") == 'challenges' and await page.evaluate("document.querySelectorAll('#cBody .sp-cc .spr').length") == 3 and await page.evaluate("[0,1,2].every((k) => !!document.getElementById('chSpPlay' + k)) && !document.querySelector('#cBody .sp-unlock')"), 'the Challenges tab shows the three specials, each with a Play button')
         txt = await page.evaluate("document.querySelector('#cBody .sp-cc').innerText")
         check(all(s['recipe']['name'] in txt and f"{s['course']['rings']} rings" in txt for s in L), 'each row shows its twist and length: ' + txt.replace('\n', ' | ')[:160])
         await page.screenshot(path=OUT + 'tab.png')
@@ -166,7 +166,7 @@ async def main():
         await page.click('#pgBack'); await page.wait_for_timeout(300)
         await page.click('#tabPlay'); await page.wait_for_timeout(300); await page.click('#tabChallenges'); await page.wait_for_timeout(600)
         spd = (await spec())['specials'][1]
-        row = await page.evaluate("document.querySelectorAll('#cBody .spr')[1].innerText")
+        row = await page.evaluate("document.querySelectorAll('#cBody .sp-cc .spr')[1].innerText")
         check(spd['done'] and 'All 5 cleared today' in row and 'Cleared' in row and not await page.evaluate("!!document.getElementById('chSpPlay1')") and await page.evaluate("!!document.getElementById('chSpPlay0')"), 'a prize with all five cleared is done for the day: ' + row.replace('\n', ' | '))
         await openSpecial(1)
         dtxt = await page.evaluate("document.getElementById('pgBody').innerText")
