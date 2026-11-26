@@ -85,7 +85,7 @@ async def main():
             n = before['course']['rings']
             check(await page.evaluate('__solDunk.mode()') == 'special' and abs((b0 - await bal()) - sp['fee']) < 1e-9, f'{skill}: the entry is debited ({b0} -> {await bal()})')
             hud = await page.evaluate("[document.getElementById('hudLevel').textContent, document.querySelectorAll('#pips .seg-i').length, document.getElementById('hudMult').textContent, document.getElementById('hudPot').textContent, document.getElementById('potCap').classList.contains('prize')]")
-            check(hud[0] == R['recipe']['name'] and hud[1] == n and hud[2] == '0/' + str(n) and abs(float(hud[3]) - R['prize']) < 1e-4 and hud[4], f'HUD shows the course offered ({n} rings): ' + json.dumps(hud))
+            check(hud[0] == before['recipe']['name'] and hud[1] == n and hud[2] == '0/' + str(n) and abs(float(hud[3]) - R['prize']) < 1e-4 and hud[4], f'HUD shows the course offered ({n} rings): ' + json.dumps(hud))
             await page.evaluate(f"__solDunk.autoplay('{skill}'); __solDunk.tap()")
             await page.wait_for_timeout(2500)
             await page.screenshot(path=OUT + shot + '_play.png')
@@ -105,23 +105,27 @@ async def main():
         check(won, 'the perfect autopilot clears the special: ' + json.dumps(t))
         if won:
             check(abs(await bal() - (b0 - sp['fee'] + R['prize'])) < 1e-9, f"the prize is paid ({b0} -> {await bal()})")
-            check(t[2] == 'Try again' and t[3] == 'Back', 'the result card offers Try again and Back: ' + json.dumps(t))
+            check(t[2] == 'Play next' and t[3] == 'Back', 'after a clear the result card offers Play next and Back: ' + json.dumps(t))
+            # clearing a special brings up the next one at that prize
+            check(after['at'] == before['at'] + 1 and after['recipe']['id'] != before['recipe']['id'] and before['next'] and after['recipe']['id'] == before['next']['id'] and not after['done'], 'clearing it brings up a new special: ' + json.dumps([before['recipe']['name'], after['recipe']['name'], after['at'], after['of']]))
+            chip = await page.evaluate("document.getElementById('result').innerText")
+            check('Next up: ' + after['recipe']['name'] in chip, 'the result card says what is next: ' + chip.replace('\n', ' | ')[:200])
             lv0, lv1 = before['course']['level'], after['course']['level']
             up = await page.evaluate(f"window.DunkSpecial.up({R['x']})")
             check(abs(lv1 - min(5, lv0 + up)) < 0.01, f'clearing it raises its level by {up:.2f} ({lv0} -> {lv1})')
-            harder = await page.evaluate(f"(() => {{ const S = window.DunkSpecial; return S.clearP('{R['recipe']['id']}', {after['course']['grade']}, {after['course']['rings']}, 2) < S.clearP('{R['recipe']['id']}', {before['course']['grade']}, {before['course']['rings']}, 2); }})()")
-            check(harder, 'the next course is harder: ' + json.dumps([before['course'], after['course']]))
-        # Try again: the same special, then a missed attempt
-        lost = False
+        # Play next, then a missed attempt on the new special; Try again keeps it
+        lost = False; cleared_name = before['recipe']['name'] if won else None
         for k in range(3):
             b0, t, before, after = await attempt('novice', 'loss' if k == 0 else f'loss{k}', 'again')
             if t[0] != 'Special cleared': lost = True; break
-        check(lost and 'out at ring' in t[1], 'a missed attempt says where it ended: ' + json.dumps(t))
+        check(lost and ('out at ring' in t[1]) and t[2] == 'Try again', 'a missed attempt says where it ended and offers Try again: ' + json.dumps(t))
+        missed_name = before['recipe']['name']
+        if lost: check(after['recipe']['id'] == before['recipe']['id'] and after['at'] == before['at'], 'a missed special stays up: ' + json.dumps([before['recipe']['name'], after['recipe']['name']]))
         if lost:
             check(abs(await bal() - (b0 - sp['fee'])) < 1e-9, 'a missed attempt pays nothing')
             check(abs(after['course']['level'] - max(-1, before['course']['level'] - 0.3)) < 0.01, f"missing lowers its level by 0.3 ({before['course']['level']} -> {after['course']['level']})")
         h = await page.evaluate('__solDunk.stats.history[0]')
-        check(h['kind'] == 'special' and h['slot'] == slot and h['recipe'] == R['recipe']['id'] and h['n'] >= 6 and h['serverSeed'], 'the attempt is in the history with its course and seed')
+        check(h['kind'] == 'special' and h['slot'] == slot and h['recipe'] == before['recipe']['id'] and h['n'] >= 6 and h['serverSeed'], 'the attempt is in the history with its course and seed')
         await page.click('#lobbyBtn'); await page.wait_for_timeout(800)
         check(await page.evaluate("document.body.dataset.tab") == 'challenges' and await page.evaluate("__solDunk.phase()") == 'lobby', 'Back returns to Challenges')
         # Play straight from the tab's row (the 2x special)
@@ -140,7 +144,9 @@ async def main():
         check(me['tries'] >= 2 and me['wins'] >= 1 and sp2['specials'][0]['me']['tries'] == 1 and sp2['specials'][1]['me']['tries'] == 0, 'tries and wins today, by special: ' + json.dumps([o['me'] for o in sp2['specials']]))
         await openSpecial(slot)
         tiles = await page.evaluate("document.querySelector('#pgBody .tiles').innerText")
-        check(str(me['tries']) in tiles and str(me['wins']) in tiles, 'the special\'s page shows the tally: ' + tiles.replace('\n', ' | '))
+        check(str(me['tries']) in tiles and f"{me['wins']} / {sp2['specials'][slot]['of']}" in tiles.replace('\n', ' ') and 'Cleared today' in tiles, 'the special\'s page shows the tally: ' + tiles.replace('\n', ' | '))
+        ptxt2 = await page.evaluate("document.getElementById('pgBody').innerText")
+        check('a new special takes its place' in ptxt2 and '5 a day for each prize' in ptxt2, 'the page says a cleared special makes way for a new one')
         await page.screenshot(path=OUT + 'after.png', full_page=True)
         await page.click('#pgBack'); await page.wait_for_timeout(400)
         # fairness: the special's seed and course verify
@@ -154,7 +160,21 @@ async def main():
         await page.click('#tabProfile'); await page.wait_for_timeout(400)
         await page.click('#pBody [data-page="stats"]'); await page.wait_for_timeout(400)
         runs = await page.evaluate("document.getElementById('pgBody').innerText")
-        check('Cleared ' + R['recipe']['name'] in runs and 'Missed ' + R['recipe']['name'] in runs and 'Special level' in runs, 'Recent runs lists the special attempts')
+        check((not cleared_name or 'Cleared ' + cleared_name in runs) and 'Missed ' + missed_name in runs and 'Special level' in runs, 'Recent runs lists the special attempts')
+        # a prize is done for the day once all its specials are cleared: the row and the page say so, and Play is gone
+        await page.evaluate("(() => { const t = JSON.parse(localStorage.getItem('soldunk.special')); t.wins[1] = 5; localStorage.setItem('soldunk.special', JSON.stringify(t)); })()")
+        await page.click('#pgBack'); await page.wait_for_timeout(300)
+        await page.click('#tabPlay'); await page.wait_for_timeout(300); await page.click('#tabChallenges'); await page.wait_for_timeout(600)
+        spd = (await spec())['specials'][1]
+        row = await page.evaluate("document.querySelectorAll('#cBody .spr')[1].innerText")
+        check(spd['done'] and 'All 5 cleared today' in row and 'Cleared' in row and not await page.evaluate("!!document.getElementById('chSpPlay1')") and await page.evaluate("!!document.getElementById('chSpPlay0')"), 'a prize with all five cleared is done for the day: ' + row.replace('\n', ' | '))
+        await openSpecial(1)
+        dtxt = await page.evaluate("document.getElementById('pgBody').innerText")
+        check('All 5 cleared today' in dtxt and not await page.evaluate("!!document.getElementById('spPlay')"), 'its page says so and has no Play')
+        await page.screenshot(path=OUT + 'done.png', full_page=True)
+        await page.click('#pgBack'); await page.wait_for_timeout(400)
+        await page.click('#tabProfile'); await page.wait_for_timeout(300)
+        await page.click('#pBody [data-page="stats"]'); await page.wait_for_timeout(300)
         await page.click('#pgBack'); await page.wait_for_timeout(400)
         # the daily pot has its own page
         await page.click('#tabChallenges'); await page.wait_for_timeout(500)

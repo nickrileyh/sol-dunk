@@ -498,6 +498,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .sp-unlock + .spr { box-shadow: inset 0 1px 0 var(--sep); }
 .sp-lock { margin-top: 16px; }
 .sp-lock p { margin: 0; padding: 0 16px 13px; font-size: 13px; line-height: 1.4; color: var(--label-2); }
+/* every special at this prize is cleared for today */
+.sp-done b { display: block; padding: 14px 16px 4px; font-family: var(--font-round); font-weight: 700; font-size: 17px; color: var(--green); }
+.tiles b i { font-style: normal; font-size: 0.62em; color: var(--label-2); }
 .sp-card { border-radius: 22px; background: var(--surface); overflow: hidden; }
 .sp-head { padding: 14px 16px 4px; }
 .sp-k { font-size: 13px; color: var(--label-2); }

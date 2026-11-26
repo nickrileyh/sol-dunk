@@ -507,6 +507,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .sp-unlock + .spr { box-shadow: inset 0 1px 0 var(--sep); }
 .sp-lock { margin-top: 16px; }
 .sp-lock p { margin: 0; padding: 0 16px 13px; font-size: 13px; line-height: 1.4; color: var(--label-2); }
+/* every special at this prize is cleared for today */
+.sp-done b { display: block; padding: 14px 16px 4px; font-family: var(--font-round); font-weight: 700; font-size: 17px; color: var(--green); }
+.tiles b i { font-style: normal; font-size: 0.62em; color: var(--label-2); }
 .sp-card { border-radius: 22px; background: var(--surface); overflow: hidden; }
 .sp-head { padding: 14px 16px 4px; }
 .sp-k { font-size: 13px; color: var(--label-2); }
@@ -1421,7 +1424,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 15; // v15: a ball that lands with its centre on the outer half of the near rim falls off instead of being carried in; v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
+  const VERSION = 16; // v16: walls (special courses only: a level may carry slabs that end the attempt on touch; levels without any play exactly as on v15); v15: a ball that lands with its centre on the outer half of the near rim falls off instead of being carried in; v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -1630,8 +1633,12 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       const h = level.hoops[i];
       hs[i] = { i: h.i, x: h.x, y0: h.y0, w: h.w, amp: h.amp, period: h.period, phase: h.phase, tilt: h.tilt, c: h.c, s: h.s, cp: h.cp, st: 0, touched: false, off: false };
     }
+    // Walls (v16; only special courses have any): solid slabs, each a rectangle from x0 to x1 and from its top y0
+    // down to y1 (past the floor). Touching one ends the attempt, like the floor. They're kept in order of x, and
+    // wi is the first one the ball hasn't passed.
+    const ws = (level.walls || []).map((w) => ({ x0: w.x0, x1: w.x1, y0: w.y0, y1: w.y1, hit: false }));
     return {
-      level, hoops: hs, speed: level.speed,
+      level, hoops: hs, walls: ws, wi: 0, speed: level.speed,
       ball: { x: 0, y: level.startY, vx: level.speed, vy: 0 },
       tick: 0, next: 0, prevLy: NaN, contact: false, knockTick: -100000, maxTicks: level.maxTicks || MAX_TICKS,
       done: false, result: null, missKind: null,
@@ -1737,6 +1744,16 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     if (b.y < WORLD.CEIL + P.R) { b.y = WORLD.CEIL + P.R; if (b.vy < 0) b.vy = 0; ev |= EV.CEIL; }
     const h = st.hoops[st.next];
     if (h) ev |= hoopInteract(st, h, t);
+    if (!st.done && st.wi < st.walls.length) {
+      // the ball (a circle) against the next wall (a rectangle): the nearest point of the wall to the ball's centre
+      let w = st.walls[st.wi];
+      while (w && b.x - P.R > w.x1) w = st.walls[++st.wi];
+      if (w && b.x + P.R > w.x0) {
+        const nx = b.x < w.x0 ? w.x0 : b.x > w.x1 ? w.x1 : b.x, ny = b.y < w.y0 ? w.y0 : b.y > w.y1 ? w.y1 : b.y;
+        const dx = b.x - nx, dy = b.y - ny;
+        if (dx * dx + dy * dy < P.R * P.R) { w.hit = true; st.done = true; st.result = 'wall'; ev |= EV.BLOCK; }
+      }
+    }
     if (!st.done && b.y > WORLD.FLOOR - P.R) { st.done = true; st.result = 'floor'; ev |= EV.FLOOR; }
     if (!st.done && st.tick >= st.maxTicks) { st.done = true; st.result = 'miss'; st.missKind = 'timeout'; ev |= EV.MISS; }
     st.ev = ev;
@@ -1856,7 +1873,40 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
 
   function createBot(skill, rng) {
     const p = typeof skill === 'string' ? SKILLS[skill] : skill;
-    return { p, rng, sched: -1, lastTap: -1000, key: -1, aimDX: 0, aimDY: 0, phaseErr: 0, cruise: 36, lapse: false, lapseShift: 0, h: null, fine: p.timing === 0 };
+    return { p, rng, sched: -1, lastTap: -1000, key: -1, aimDX: 0, aimDY: 0, phaseErr: 0, cruise: 36, lapse: false, lapseShift: 0, h: null, fine: p.timing === 0, wall: null, wm: 0, schedWall: null };
+  }
+
+  // Walls (special courses): the wall between the ball and the ring it's heading for, as the height the ball's
+  // centre has to stay above (hi) while it overlaps it. How much room the player leaves (WALL_ROOM, give or take) is
+  // judged afresh for each wall, worse for weaker players, so they clip one now and then. A level without walls
+  // never gets here, and draws no random numbers for it.
+  const WALL_ROOM = 12, WALL_SD = 0.6, WALL_DT = 1.2;
+  function wallGuard(bot, st, h) {
+    const ws = st.walls;
+    if (!ws || st.wi >= ws.length) return null;
+    const w = ws[st.wi];
+    if (w.x0 >= h.x || st.ball.x - P.R > w.x1) return null; // it's past the ring ahead (or behind the ball)
+    if (bot.wall !== w) { bot.wall = w; bot.wm = WALL_ROOM + (bot.p.cruiseSd ? gauss(bot.rng) * bot.p.cruiseSd * WALL_SD : 0); }
+    return { xa: w.x0 - P.R, xb: w.x1 + P.R, hi: w.y0 - P.R - bot.wm, dt: bot.p.timing * WALL_DT };
+  }
+  // a free fall from (x, y, vy): is it clear of the wall between the times t0 and t1 from now?
+  function fallClear(g, x, y, vy, vx, t0, t1) {
+    const ta = Math.max(t0, (g.xa - x) / vx), tb = Math.min(t1, (g.xb - x) / vx);
+    if (tb <= ta) return true;
+    const ya = y + vy * ta + 0.5 * P.G * ta * ta, yb = y + vy * tb + 0.5 * P.G * tb * tb;
+    return ya <= g.hi && yb <= g.hi; // a fall curves downward, so it's lowest at one end or the other
+  }
+  // tap in tk seconds, then fall: clear of the wall all the way? A player knows their taps land a little early or
+  // late (g.dt, from their timing), and only takes a line that clears either way.
+  function tapClear(g, b, vx, tk) {
+    if (!g) return true;
+    for (let j = -1; j <= 1; j++) {
+      const t = Math.max(0, tk + j * g.dt);
+      if (!fallClear(g, b.x, b.y, b.vy, vx, 0, t)) return false;
+      if (!fallClear(g, b.x + vx * t, b.y + b.vy * t + 0.5 * P.G * t * t, -P.FLAP, vx, 0, 1e9)) return false;
+      if (!g.dt) break;
+    }
+    return true;
   }
 
   function perceivedY(bot, t) { return E.hoopY(bot.h, t + bot.phaseErr) + bot.aimDY; }
@@ -1880,7 +1930,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   }
 
   // Best single "final" tap: tap in k ticks, then free-fall through the rim.
-  function planFinal(bot, st, vx) {
+  function planFinal(bot, st, vx, guard) {
     const b = st.ball, h = bot.h, t0 = st.tick * DT;
     const aimX = h.x + bot.aimDX * h.c;
     const tn = bot.tiltSeen ? h.s / h.c : 0;
@@ -1896,6 +1946,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       const xk = b.x + vx * tk;
       if (xk > aimX - 8) break;
       if (yk - (P.FLAP * P.FLAP) / (2 * P.G) < P.R + 2) continue; // would bonk the ceiling
+      if (guard && !tapClear(guard, b, vx, tk)) continue;           // would clip the wall on the way
       let hy = perceivedY(bot, t0 + tk + 0.35) + (aimX - h.x) * tn, s = NaN, xc = aimX;
       const iters = (h.amp || tn) ? 4 : 1;
       for (let it = 0; it < iters; it++) {
@@ -1944,8 +1995,10 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     if (st.done) return false;
     const p = bot.p;
     if (bot.sched >= 0 && bot.key !== st.next) bot.sched = -1; // target scored: drop the stale tap
+    // a tap planned to hold the ball over a wall isn't needed once the wall is behind it
+    if (bot.sched >= 0 && bot.schedWall) { if (st.ball.x - P.R > bot.schedWall.x1) bot.sched = -1; if (bot.sched < 0) bot.schedWall = null; }
     if (bot.sched >= 0) {
-      if (st.tick >= bot.sched) { bot.sched = -1; bot.lastTap = st.tick; return true; }
+      if (st.tick >= bot.sched) { bot.sched = -1; bot.schedWall = null; bot.lastTap = st.tick; return true; }
       return false;
     }
     if ((st.tick - bot.lastTap) * DT < p.minGap) return false;
@@ -1959,9 +2012,10 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     const horizon = Math.round(p.commit / DT);
 
     // already on a line into the rim? then just wait
+    const guard = st.walls && st.walls.length ? wallGuard(bot, st, h) : null;
     const nt = crossNoTap(bot, st, vx);
-    const fin = planFinal(bot, st, vx);
-    if (nt && nt.vc > 150) {
+    const fin = planFinal(bot, st, vx, guard);
+    if (nt && nt.vc > 150 && (!guard || fallClear(guard, b.x, b.y, b.vy, vx, 0, 1e9))) {
       const e = Math.abs(nt.xc - aimX);
       if (e <= 10 || (fin && e <= fin.err + 3)) return false;
       if (nt.xc > aimX && (!fin || fin.xc > aimX)) return false; // too high: taps only make it later
@@ -1976,6 +2030,8 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     if (b.x > aimX - 60 && b.y < hyNow - P.R) return false;
     if (b.x > h.x - 6 && b.y < hyNow + P.R) return false;
     let yc = hyNow - bot.cruise;
+    let forWall = null;
+    if (guard && guard.hi - 6 < yc) { yc = guard.hi - 6; forWall = bot.wall; } // a wall first: hold the line above its top
     if (yc < P.R + 30) yc = P.R + 30;
     if (b.vy < 0 && b.y < yc + 40) return false; // still rising
     let tau;
@@ -1985,7 +2041,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       tau = (-b.vy + Math.sqrt(disc)) / P.G;
     }
     const k = Math.round(tau / DT);
-    if (k <= horizon) return schedule(bot, st, k, false);
+    if (k <= horizon) { const now = schedule(bot, st, k, false); bot.schedWall = now ? null : forWall; return now; }
     return false;
   }
 
@@ -2435,10 +2491,22 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     { id: 'squeeze', name: 'The squeeze', blurb: 'Each ring tighter than the last', t: { moveScale: 0.5 }, width: 'squeeze' },
     { id: 'biglittle', name: 'Big and little', blurb: 'A wide ring, then a tight one', t: {}, width: 'alt' },
     { id: 'lifts', name: 'Elevators', blurb: 'Every ring rides a long, slow lift', t: { moveP: 1, moveAmpMin: 62, moveAmpAdd: 8, slow: 1.7 } },
-    { id: 'slowmo', name: 'Slow motion', blurb: 'A slower ball through tight rings', t: { fast: 0.78, narrow: 9, moveScale: 0.5 } }
+    { id: 'slowmo', name: 'Slow motion', blurb: 'A slower ball through tight rings', t: { fast: 0.78, narrow: 9, moveScale: 0.5 } },
+    // Three with something the regular game doesn't have (the owner asked for extra features like a wall, but not too
+    // much): walls to fly over between the rings. Touching one ends the attempt, like the floor. ob picks the
+    // layout from WALLS; see walls() below for where they stand.
+    { id: 'walls', name: 'The wall', blurb: 'Fly over a wall between rings', t: { moveScale: 0.5 }, ob: 'wall' },
+    { id: 'hurdles', name: 'Hurdles', blurb: 'A quicker ball and low walls', t: { fast: 1.2, moveScale: 0.5 }, ob: 'low' },
+    { id: 'fortress', name: 'The fortress', blurb: 'Walls, and every ring moves', t: { moveP: 1, moveAmpMin: 30 }, ob: 'wall' }
   ];
   const PER_DAY = 3;
+  const PER_SLOT = 5;        // a prize has this many specials a day: clear one and the next takes its place
   const BY = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
+  const PLAIN = RECIPES.filter((r) => !r.ob), OBST = RECIPES.filter((r) => r.ob);
+  // Walls: how thick; and for each layout, where in the gap between two rings each wall stands (a range, as a share
+  // of the gap) and how far above the line from one ring to the next its top is (a range; below the line if negative)
+  const WALL_W = 18, WALL_PAD = 8, WALL_TOP = 120, WALL_REACT = 0.2, WALL_DIVE = 90;
+  const WALLS = { wall: { at: [[0.52, 0.6]], up: [6, 38] }, low: { at: [[0.5, 0.58]], up: [-6, 24] } };
 
   // the skill scale, the regular-run rating and the staircase
   const ANCHORS = ['novice', 'casual', 'average', 'good', 'pro'];
@@ -2603,9 +2671,45 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
         [[-0.0463, -0.42065, -0.004446], [0.0232, -0.37677, 0.003135], [-0.0254, -0.24464, 0.000359], [-0.027, -0.14143, 0.000195], [-0.0273, -0.07149, 0.0001]],
         [[-0.074, -0.51712, -0.011098], [0.0151, -0.464, -0.000012], [-0.0467, -0.32819, -0.003855], [-0.002, -0.23723, 0.000769], [-0.0278, -0.11841, -0.000659]],
         [[-0.0298, -0.70153, -0.000464], [0.0324, -0.66213, 0.008932], [-0.023, -0.4837, -0.00362], [0.0513, -0.39333, 0.005265], [-0.0267, -0.21988, 0.000521]]
+      ],
+      walls: [
+        [[0.0717, -0.16316, 0.000253], [0.0561, -0.08711, -0.000173], [0.0373, -0.05082, -0.000146], [0.0254, -0.02697, 0.000101], [0.0151, -0.0119, 0.000116]],
+        [[0.0713, -0.19841, 0.000494], [0.0563, -0.11629, -0.000051], [0.0422, -0.06788, 0.000171], [0.0276, -0.03487, 0.000187], [0.0104, -0.01089, -0.000063]],
+        [[0.0563, -0.26177, -0.000156], [0.0357, -0.15949, -0.000576], [0.0452, -0.10164, -0.000078], [0.0201, -0.04379, 0.000028], [0.0129, -0.01877, 0.000125]],
+        [[0.0464, -0.302, 0.002105], [0.0323, -0.18395, 0.000657], [0.0141, -0.1087, -0.000072], [0.0016, -0.04903, 0.000188], [0.0011, -0.01513, 0.000032]],
+        [[0.0281, -0.32809, -0.000016], [0.029, -0.20477, -0.000124], [-0.0073, -0.13074, -0.000395], [0.0043, -0.06531, 0.000161], [-0.0011, -0.02079, -0.000009]],
+        [[0.0162, -0.36452, -0.003331], [0.0157, -0.26046, -0.00018], [-0.0109, -0.17113, 0.000229], [-0.0055, -0.07725, -0.000148], [-0.0073, -0.02846, -0.000074]],
+        [[0.0171, -0.4261, -0.002548], [0.0252, -0.31967, 0.000021], [0.0078, -0.2162, 0.000381], [0.0045, -0.11615, 0.000111], [-0.0219, -0.0483, 0.000088]],
+        [[-0.0431, -0.55835, -0.007409], [0.0087, -0.4275, -0.002755], [-0.0322, -0.2932, -0.003134], [-0.0179, -0.19107, 0.000038], [-0.0266, -0.10292, 0.000421]],
+        [[0.0181, -0.6994, -0.003618], [0.0464, -0.58033, -0.00199], [-0.0332, -0.40301, -0.00126], [0.0156, -0.29966, 0.000748], [-0.0368, -0.1595, 0.000143]],
+        [[0.0451, -0.90642, 0.015525], [0.0345, -0.70913, -0.006993], [0.022, -0.5692, -0.000322], [0.0043, -0.41651, 0.003382], [-0.0449, -0.24495, -0.000681]]
+      ],
+      hurdles: [
+        [[0.0431, -0.19686, -0.000236], [0.0511, -0.12161, -0.000071], [0.0387, -0.07326, 0.00001], [0.0255, -0.03072, -0.00007], [0.0118, -0.01277, 0.000064]],
+        [[0.0342, -0.25339, 0.001038], [0.0502, -0.15684, 0.000298], [0.03, -0.0931, 0.000036], [0.0243, -0.04316, 0.000184], [0.0077, -0.01356, -0.000022]],
+        [[-0.0243, -0.31034, -0.001848], [0.0195, -0.22652, 0.000685], [0.0239, -0.14848, 0.000433], [0.0199, -0.06831, -0.000028], [0.007, -0.02429, 0.000012]],
+        [[0.0144, -0.32788, -0.005324], [0.029, -0.24187, -0.000028], [0.0177, -0.16028, 0.000062], [-0.0049, -0.07158, -0.000073], [0.0009, -0.02553, -0.000014]],
+        [[0.039, -0.41408, 0.000002], [0.0421, -0.29366, -0.000256], [0.0162, -0.19778, 0.000471], [0.0123, -0.1029, 0.000054], [-0.0175, -0.04083, 0.000034]],
+        [[0.0062, -0.44416, -0.009178], [0.0195, -0.34082, 0.000227], [0.0006, -0.23621, -0.000887], [-0.0208, -0.12326, -0.000382], [-0.0268, -0.05216, -0.000324]],
+        [[-0.0114, -0.52819, 0.000267], [-0.022, -0.38557, -0.004521], [0.0258, -0.32184, 0.000501], [-0.0379, -0.15988, -0.000645], [-0.028, -0.08342, -0.00021]],
+        [[0.0662, -0.73944, 0.002499], [0.0139, -0.5129, -0.011668], [-0.0028, -0.40602, -0.000454], [-0.0072, -0.27567, -0.000232], [-0.031, -0.16258, 0.000269]],
+        [[0.1384, -0.9396, 0.015988], [0.047, -0.63795, -0.013096], [0.0139, -0.54792, -0.000513], [0.0206, -0.39648, 0.001427], [-0.0704, -0.21395, -0.001827]],
+        [[0.097, -1.03665, 0], [0.0661, -0.85754, -0.003427], [-0.0509, -0.62062, -0.016666], [-0.0316, -0.5155, -0.000011], [-0.1075, -0.32396, -0.006322]]
+      ],
+      fortress: [
+        [[0.0564, -0.20218, 0.000102], [0.0656, -0.12611, 0.000152], [0.049, -0.07555, 0.000102], [0.0205, -0.03393, 0.000036], [0.0066, -0.01342, -0.000042]],
+        [[0.0521, -0.24104, -0.000624], [0.0674, -0.15652, 0.000474], [0.0332, -0.08811, -0.000108], [0.0217, -0.04098, -0.000049], [0.0054, -0.01804, 0.000051]],
+        [[0.0264, -0.33932, -0.000132], [0.0614, -0.22467, -0.000192], [0.0189, -0.14241, -0.000539], [0.0207, -0.06633, -0.000113], [0.0083, -0.02538, -0.000001]],
+        [[0.0138, -0.38416, 0.000286], [0.0224, -0.24159, -0.000157], [-0.0011, -0.16086, -0.000092], [-0.0065, -0.07455, -0.000053], [-0.0094, -0.02509, -0.000058]],
+        [[0.005, -0.42708, -0.003085], [-0.0054, -0.29167, -0.000082], [-0.0116, -0.19608, 0.000026], [-0.0201, -0.09261, -0.000088], [-0.0135, -0.03499, -0.000199]],
+        [[-0.0203, -0.47055, -0.00558], [0.0303, -0.36674, -0.000681], [-0.0238, -0.23429, -0.00091], [-0.0243, -0.12743, -0.000049], [-0.0244, -0.05484, -0.000213]],
+        [[0.0006, -0.5765, 0.000535], [-0.0282, -0.39057, -0.003633], [0.0203, -0.33299, 0.003537], [-0.0199, -0.17302, 0.000158], [-0.0328, -0.07428, -0.00022]],
+        [[-0.03, -0.72197, -0.004865], [0.0371, -0.66971, 0.01075], [-0.0243, -0.46063, 0.000596], [-0.0319, -0.28034, 0.001102], [-0.0556, -0.15658, 0.000014]],
+        [[0.0016, -0.94403, 0.008109], [-0.0471, -0.71323, -0.003463], [-0.0486, -0.5504, -0.007142], [-0.0353, -0.41656, 0.001549], [-0.0589, -0.24002, -0.001218]],
+        [[-0.0324, -1.05132, -0.001951], [0.0974, -1.01266, 0.016769], [-0.0973, -0.6979, -0.006772], [-0.1028, -0.46205, -0.01016], [-0.0539, -0.38518, 0.00033]]
       ]
     }
-  }; // engine v15, 2000 attempts per cell, 2026-11-26
+  }; // engine v16, 2000 attempts per cell, 2026-11-26
   // @@END@@
 
   // ---------------------------------------------------------------- courses
@@ -2670,8 +2774,36 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       hoops.push({ i, x, y0: y, w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 });
       prevY = y;
     }
+    const ws = R.ob ? walls(R, C, hoops, E.makeRng('specialwalls|' + seed + '|' + R.id + '|' + g)) : null;
     // the time limit grows with the course: a slow player needs up to about 2.4 s a ring (rim knocks hold the ball back)
-    return { seed: String(seed), di: GRADES[g][0], L: 0, special: R.id, grade: g, speed: C.speed, startY: START_Y, hoops, endX: x + C.spacing, maxTicks: E.TICK_HZ * Math.max(45, 20 + 3 * n) };
+    const def = { seed: String(seed), di: GRADES[g][0], L: 0, special: R.id, grade: g, speed: C.speed, startY: START_Y, hoops, endX: x + C.spacing, maxTicks: E.TICK_HZ * Math.max(45, 20 + 3 * n) };
+    if (ws) def.walls = ws;
+    return def;
+  }
+
+  // The walls of a course, in order: the same ones between every two rings (so the first n rings of a longer course
+  // have the same walls before and between them). Each is a slab for the engine, { x0, x1, y0, y1 }: it stands on
+  // the floor and its top is y0. A wall's top is UP above the line from one ring to the next, so the ball has to
+  // come up sooner than the next ring alone would ask. It's never higher than a ball can climb to after dropping
+  // through the ring before (at its lowest point if it bobs), nor so high that the next ring can't be dropped
+  // into from over it. Walls have their own stream of random numbers (two draws each), so the rings are the ones
+  // the course would have without them.
+  function walls(R, C, hoops, rng) {
+    const out = [], L = WALLS[R.ob], clear = E.PHYS.R + WALL_PAD;
+    for (let i = 0; i + 1 < hoops.length; i++) {
+      const a = hoops[i], b = hoops[i + 1], gap = b.x - a.x;
+      for (const at of L.at) {
+        const r1 = rng(), r2 = rng(), f = at[0] + (at[1] - at[0]) * r1;
+        const xm = Math.round(a.x + gap * f), x0 = xm - WALL_W / 2, x1 = xm + WALL_W / 2;
+        const t1 = (x0 - E.PHYS.R - a.x) / C.speed, t2 = (b.x - x1 - E.PHYS.R) / C.speed; // the time before it and after it
+        let y = a.y0 + (b.y0 - a.y0) * f - (L.up[0] + (L.up[1] - L.up[0]) * r2);
+        // before it: the ball drops WALL_DIVE below the ring while the player reacts, then climbs; after it: a free fall
+        const climb = CLIMB_RATE * Math.max(0, t1 - WALL_REACT) - WALL_DIVE, fall = Math.min(260, 0.8 * 0.5 * E.PHYS.G * t2 * t2);
+        y = Math.max(y, (a.y0 + a.amp) - climb + clear, (b.y0 + b.amp) - fall + clear, WALL_TOP);
+        out.push({ x0, x1, y0: Math.round(y), y1: E.WORLD.FLOOR + 400 });
+      }
+    }
+    return out;
   }
 
   // what a grade's rings are, in words ("Hard level 4 rings", "Hard level 8 rings, tighter and quicker")
@@ -2689,9 +2821,9 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   const dayStart = (day) => Date.parse(String(day).slice(0, 10) + 'T00:00:00Z');
   const closesAt = (day) => dayStart(day) + DAY_MS;
   const EPOCH = Date.UTC(2026, 0, 5);
-  const CYCLE = Math.floor(RECIPES.length / PER_DAY); // days
+  const CYCLE = Math.floor(PLAIN.length / PER_DAY); // days
   function shuffled(cycle) {
-    const a = RECIPES.slice(), r = E.makeRng('specialcycle|' + cycle);
+    const a = PLAIN.slice(), r = E.makeRng('specialcycle|' + cycle);
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
     return a;
   }
@@ -2703,10 +2835,35 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     }
     return a;
   }
-  function specialsFor(day) {
+  // Each prize's specials for a day, in order: PER_SLOT of them, the same for everyone. A player sees the first;
+  // clearing it brings up the next (the owner asked for a cleared special to lock or make way for a new one), and
+  // after the last that prize is done until tomorrow. The first of each is the day's twist from the cycle above,
+  // except that one prize a day (they take turns) opens with a course with walls, also in turn, and has the twist
+  // it replaced next in line. The rest are every other twist, shuffled for the day and dealt round, so all of them
+  // come up somewhere each day and no two prizes ever show the same one.
+  function queuesFor(day) {
     const k = Math.floor((dayStart(day) - EPOCH) / DAY_MS), pos = ((k % CYCLE) + CYCLE) % CYCLE;
-    const a = order(Math.floor(k / CYCLE));
-    return SLOTS.map((x, slot) => ({ slot, x, recipe: a[pos * PER_DAY + slot] }));
+    const a = order(Math.floor(k / CYCLE)), mod = (v, m) => ((v % m) + m) % m;
+    const q = SLOTS.map((x, slot) => [a[pos * PER_DAY + slot]]);
+    if (OBST.length) { const s = mod(k + Math.floor(k / OBST.length), SLOTS.length); q[s].unshift(OBST[mod(k, OBST.length)]); }
+    const used = new Set([].concat(...q)), rest = RECIPES.filter((r) => !used.has(r)), r = E.makeRng('specialnext|' + k);
+    for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = rest[i]; rest[i] = rest[j]; rest[j] = t; }
+    let s = 0;
+    for (const R of rest) {
+      for (let n = 0; n < SLOTS.length && q[s].length >= PER_SLOT; n++) s = (s + 1) % SLOTS.length;
+      if (q[s].length >= PER_SLOT) break;
+      q[s].push(R); s = (s + 1) % SLOTS.length;
+    }
+    return q;
+  }
+  // The day's three as a player sees them. wins: how many of each prize's specials they've cleared today (by slot;
+  // none for someone new). at: which of the day's it is (from 0), of: how many there are, done: all cleared, in
+  // which case the recipe is the last one.
+  function specialsFor(day, wins) {
+    return queuesFor(day).map((q, slot) => {
+      const w = Math.max(0, Math.floor((wins && wins[slot]) || 0)), at = Math.min(w, q.length - 1);
+      return { slot, x: SLOTS[slot], recipe: q[at], at, of: q.length, done: w >= q.length, next: q[at + 1] || null };
+    });
   }
 
   // ---------------------------------------------------------------- skill
@@ -2797,17 +2954,17 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   }
   // the day's three for a player (or for someone new): each course set for the player's level in that special; chance
   // is how often a player at that level clears it
-  function todayFor(Rt, day) {
-    return specialsFor(day).map(({ slot, x, recipe }) => {
+  function todayFor(Rt, day, wins) {
+    return specialsFor(day, wins).map(({ slot, x, recipe, at, of, done, next }) => {
       const d = levelOf(Rt, slot), c = courseFor(d, recipe.id, x);
-      return { slot, x, recipe: recipe.id, g: c.g, n: c.n, chance: c.chance, rtp: c.rtp, level: Math.round(d * 100) / 100, levelName: levelName(d) };
+      return { slot, x, recipe: recipe.id, g: c.g, n: c.n, chance: c.chance, rtp: c.rtp, level: Math.round(d * 100) / 100, levelName: levelName(d), at, of, done, next: next ? next.id : null };
     });
   }
 
   return {
     ENTRY, DAY_MS, START_Y, SLOTS, TARGET, N_MIN, N_MAX, N_IDEAL, GRADES, RECIPES, BY, ANCHORS, LEVEL_NAMES, GRID,
     D_MIN, D_MAX, PRIOR_MU, PRIOR_SD, START, DOWN, SLOT_MARGIN, UNLOCK, TABLES,
-    config, generate, gradeText, dayKey, dayStart, closesAt, specialsFor, CYCLE, PER_DAY, W_MIN,
+    config, generate, gradeText, dayKey, dayStart, closesAt, specialsFor, queuesFor, CYCLE, PER_DAY, PER_SLOT, W_MIN, PLAIN, OBST, WALLS, WALL_W,
     blank, addLevel, regular, startFor, levelOf, addSpecial, up, levelName, rating, courseFor, todayFor, missReg, clearP
   };
 });
@@ -3491,9 +3648,11 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       const unlock = { need: round9(SP.UNLOCK * this.fee), played: stats.runPlayed || 0 };
       return {
         day, fee: this.fee, closesAt: SP.closesAt(day), target: SP.TARGET, unlock,
-        specials: SP.todayFor(profile.skill, day).map((c) => {
-          const R = SP.BY[c.recipe];
-          return { slot: c.slot, x: c.x, prize: round9(this.fee * c.x), recipe: { id: R.id, name: R.name, blurb: R.blurb }, course: { grade: c.g, rings: c.n, chance: c.chance, level: c.level, levelName: c.levelName }, me: { tries: t.tries[c.slot] || 0, wins: t.wins[c.slot] || 0 } };
+        // each prize is on the special after the ones cleared today; all cleared, it's done until tomorrow
+        specials: SP.todayFor(profile.skill, day, t.wins).map((c) => {
+          const R = SP.BY[c.recipe], N = c.next && !c.done ? SP.BY[c.next] : null;
+          return { slot: c.slot, x: c.x, prize: round9(this.fee * c.x), recipe: { id: R.id, name: R.name, blurb: R.blurb }, at: c.at, of: c.of, done: c.done, next: N ? { id: N.id, name: N.name } : null,
+            course: { grade: c.g, rings: c.n, chance: c.chance, level: c.level, levelName: c.levelName }, me: { tries: t.tries[c.slot] || 0, wins: t.wins[c.slot] || 0 } };
         }),
         me: { blocked: false, skill: SP.rating(profile.skill), locked: unlock.played + 1e-9 < unlock.need }
       };
@@ -3502,6 +3661,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       const v = this.view(), sp = v.specials[slot];
       if (!sp) throw new Error('There’s no such special level today');
       if (v.me.locked) throw new Error('Bet ' + fmtBet(v.unlock.need) + ' SOL in regular runs to unlock the special levels.');
+      if (sp.done) throw new Error(`You’ve cleared all ${sp.of} of today’s ${sp.x}× specials. New ones come at midnight UTC.`);
       if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
       wallet.balance = round9(wallet.balance - v.fee);
       DemoRake.add('special', v.fee);
@@ -4503,6 +4663,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     if (!c) return '<div class="empty">The special levels aren’t available right now. Try again in a moment.</div>';
     const left = s.closesAt - Date.now(), pct = Math.round((s.target || SP.TARGET) * 100);
     const play = s.me && s.me.blocked ? '<div class="empty">The special levels aren’t available on this account.</div>'
+      : c.done ? `<div class="group sp-lock sp-done"><b>All ${c.of} cleared today</b><p>You’ve cleared every ${c.x}× special for today. New ones come in ${left > 0 ? leftText(left) : 'a moment'}.</p></div>`
       : s.me && s.me.locked ? `<div class="group sp-lock">${unlockRow(s)}<p>Your regular runs also set the level you start at.</p></div>`
       : `<button class="btn btn-primary" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
     return `<div class="sp-card">
@@ -4512,14 +4673,14 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       </div>
       <div class="sp-prize"><span class="k">Clear every ring to win</span><div class="big"><span class="num">${fmtAmt(c.prize)}</span><span class="unit">SOL</span></div><span class="x">${c.x}× your ${fmtBet(s.fee)} SOL entry</span></div>
       ${play}
-      <div class="tiles"><div><b>${c.me.tries}</b><span>Tries today</span></div><div><b>${c.me.wins}</b><span>Wins today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>New specials</span></div></div>
+      <div class="tiles"><div><b>${c.me.tries}</b><span>Tries today</span></div><div><b>${Math.min(c.me.wins, c.of || c.me.wins)}<i> / ${c.of || 1}</i></b><span>Cleared today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>New specials</span></div></div>
       <div class="sec-h"><h3>Set for you</h3></div>
       <div class="group sp-odds">
         <div class="row"><span>Your level</span><b>${c.course.levelName || SP.levelName(c.course.level)}</b></div>
         <div class="row"><span>Players at your level clear it</span><b>${oneIn(c.course.chance)}</b></div>
       </div>
       <p class="foot">Clear it and the next course is harder. Miss and it gets a little easier.</p>
-      <p class="pot-rules">Clear every ring to win the prize. Miss one and the entry is gone. Your level settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries, whatever your level: the house keeps about ${100 - pct}%. They open once you’ve bet ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs. New specials come every day at midnight UTC. Special rings don’t count toward missions or the pot.</p>`;
+      <p class="pot-rules">Clear every ring to win the prize. Miss one and the entry is gone.${SP.BY[c.recipe.id] && SP.BY[c.recipe.id].ob ? ' Touch a wall and the attempt ends.' : ''} Clear it and a new special takes its place${c.next ? ` (next: ${c.next.name})` : ''}: ${c.of || SP.PER_SLOT} a day for each prize. Your level settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries, whatever your level: the house keeps about ${100 - pct}%. They open once you’ve bet ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs. New specials come every day at midnight UTC. Special rings don’t count toward missions or the pot.</p>`;
   }
   // a sketch of a course: the rings in order, how wide each is, how far it bobs, and the green finish
   function drawCourse(el, def) {
@@ -4532,6 +4693,13 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     // the way through: a dotted line from the ball to each ring in turn
     g.strokeStyle = 'rgba(185,140,255,0.3)'; g.lineWidth = 1.4; g.setLineDash([1.5, 5]);
     g.beginPath(); g.moveTo(sx(0), sy(def.startY)); for (const h of hs) g.lineTo(sx(h.x), sy(h.y0)); g.stroke(); g.setLineDash([]);
+    if (def.walls) { // walls: slabs from their top down to the floor of the sketch, with the game's purple cap
+      for (const wl of def.walls) {
+        const wx = sx((wl.x0 + wl.x1) / 2), wy = Math.max(6, sy(wl.y0));
+        g.fillStyle = 'rgba(90,69,160,0.55)'; g.fillRect(wx - 1.8, wy, 3.6, ht - 4 - wy);
+        g.fillStyle = '#9945ff'; g.fillRect(wx - 3, wy, 6, 2);
+      }
+    }
     const half0 = Math.max(5.5, Math.min(10, (w - pad * 2) / hs.length * 0.34)), wMax = Math.max(...hs.map((h) => h.w));
     for (const h of hs) { // how far each ring bobs: a soft track behind it
       if (!h.amp) continue;
@@ -4557,10 +4725,10 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     const s = specState;
     if (!s || !s.specials) return '';
     const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked, locked = !blocked && s.me && s.me.locked;
-    const act = (c) => (blocked ? '<span class="pill off">Not available</span>' : locked ? '<span class="pill off">Locked</span>'
+    const act = (c) => (blocked ? '<span class="pill off">Not available</span>' : locked ? '<span class="pill off">Locked</span>' : c.done ? '<span class="pill ok">Cleared</span>'
       : `<button class="pill go" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`);
     const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><span class="spr-x">${c.x}×</span><span class="spr-t"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></span></button>
-      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(c.prize)}</b> SOL</span>${act(c)}</div></div>`).join('');
+      <div class="spr-act"><span class="spr-win">${c.done ? `All ${c.of} cleared today` : `Win <b class="num">${fmtAmt(c.prize)}</b> SOL${c.at ? ` · ${c.at + 1} of ${c.of}` : ''}`}</span>${act(c)}</div></div>`).join('');
     return `<div class="cc sp sp-cc"><div class="cc-h"><span class="cc-k">${ICON.star}Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftOf(left) : 'New soon'}</span></div>${locked ? unlockRow(s) : ''}${rows}</div>`;
   }
   // the specials open once the player has bet SP.UNLOCK entries in regular runs: how far along they are
@@ -4745,7 +4913,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       if (onScore(o, h, st)) return;
     }
     if (ev & EV.CLEAR) { onClear(); return; }
-    if (ev & (EV.MISS | EV.FLOOR)) onBust(st.result === 'floor' ? 'floor' : st.missKind, h);
+    if (ev & (EV.MISS | EV.FLOOR | EV.BLOCK)) onBust(st.result === 'floor' || st.result === 'wall' ? st.result : st.missKind, h);
   }
 
   function onScore(o, h, st) {
@@ -4818,7 +4986,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     }).catch(netFail);
   }
 
-  const BUST_TITLES = { rimout: 'Rimmed out', over: 'Over the rim', under: 'Under the rim', floor: 'Hit the floor', timeout: 'Out of time' };
+  const BUST_TITLES = { rimout: 'Rimmed out', over: 'Over the rim', under: 'Under the rim', floor: 'Hit the floor', wall: 'Hit a wall', timeout: 'Out of time' };
   function onBust(kind, h) {
     phase = 'over';
     run.lost = true; setHeat(0); // the flame goes out with the run
@@ -4826,7 +4994,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     if (run.log && run.log.length) run.log[run.log.length - 1].push('X');
     if (run.streak > 1) setStreakHud('broke');
     const lostPot = run.bet * run.total;
-    if (h) hoopVis(h).flash = -1;
+    if (h && kind !== 'wall') hoopVis(h).flash = -1;
     ball.fall = { vx: run.st.ball.vx * 0.6, vy: Math.min(run.st.ball.vy, 200), hover: false, t: 0 };
     if (!REDUCED) {
       view.shake = 7;
@@ -5036,7 +5204,9 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     run.share = prac ? '' : shareText(sp ? (cls === 'win' ? 'Cleared it' : title + ' at ring ' + Math.min(run.st ? run.st.hoops.length : 0, run.hoops + 1)) : cls !== 'loss' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
     $('resStats').innerHTML = [[run.score, nb ? 'New best' : 'Score', nb], [run.hoops, 'Rings'], [run.best, 'Best streak']]
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
-    $('againT').textContent = prac ? 'Practice again' : sp ? 'Try again' : 'Play again';
+    const spNow = sp && specState && specState.specials ? specState.specials[run.slot] : null;
+    $('againT').textContent = prac ? 'Practice again' : sp ? (cls === 'win' ? 'Play next' : 'Try again') : 'Play again';
+    $('againBtn').hidden = !!(spNow && spNow.done); // every special at that prize is cleared: it's back tomorrow
     $('againAmt').textContent = prac ? '' : fmtBet(sp ? run.bet : prefs.bet) + ' SOL';
     $('lobbyBtn').textContent = sp || prac ? 'Back' : 'Change bet';
     showProgress(pr);
@@ -5124,7 +5294,9 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     pr.weeklies.forEach((c) => g.push(['daily', ICON.check, weeklyText(c) + ' · +' + c.xp + ' XP']));
     pr.careers.forEach((m) => g.push(['daily', ICON.flag, careerText(m) + ' · +' + m[2] + ' XP']));
     const sNow = run.mode === 'special' && specState && specState.specials ? specState.specials[run.slot] : null;
-    if (!g.length && sNow) g.push(['', ICON.trophy, `${sNow.recipe.name} today: ${sNow.me.wins} of ${sNow.me.tries} cleared`]);
+    // after a special: what's next at that prize (clearing one brings up a new one), or how many are cleared today
+    if (sNow && !run.lost) g.unshift(['', ICON.trophy, sNow.done ? `All ${sNow.of} of today’s ${sNow.x}× specials cleared` : `Next up: ${sNow.recipe.name} · ${sNow.at + 1} of ${sNow.of} today`]);
+    else if (!g.length && sNow) g.push(['', ICON.trophy, `${sNow.at} of ${sNow.of} cleared today at ${sNow.x}×`]);
     // the mission to go for next, with where it stands and what it pays: there's always a goal for the next run
     const nm = run.mode === 'run' && !(vh < 720 && rbReady > 0) ? nearestMission(runFacts0()) : null, nx = $('resNext'); // a short screen shows the claim instead
     nx.innerHTML = nm ? `<div class="rn-h">${ICON.target}<span>${nm.text}</span><b>${nm.p}/${nm.n}${nm.sol ? ' · ' + fmtBet(nm.sol) + ' SOL' : ' · ' + nm.xp + ' XP'}</b></div><div class="rn-bar"><i style="width:${(nm.p / nm.n * 100).toFixed(1)}%"></i></div>` : '';
@@ -5150,6 +5322,23 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
   // ---------------------------------------------------------------- guidance for new players
   const newPlayer = () => stats.runs <= 2;
   // a dotted path from the ball to the first ring, shown before the first few runs start
+  // Walls (special courses): a slab standing on the court, drawn at exactly its collision size. A dark purple body
+  // with its near side catching the light, a bright cap, and a soft light over its top so it reads against the dark
+  // hall; the one the ball hit flashes white.
+  function drawWalls(c, st, left, width) {
+    for (const w of st.walls) {
+      const x = view.offset + w.x0, wd = w.x1 - w.x0, hgt = W.FLOOR - w.y0;
+      if (x + wd < left - 60 || x > left + width + 60) continue;
+      c.globalCompositeOperation = 'lighter';
+      softGlow(c, x + wd / 2, w.y0, 44, 30, w.hit ? '255,255,255' : RING_GLOW.ring, w.hit ? 0.5 : 0.15, 0.3);
+      c.globalCompositeOperation = 'source-over';
+      c.fillStyle = '#31245a'; c.fillRect(x, w.y0, wd, hgt);
+      c.fillStyle = '#5a45a0'; c.fillRect(x, w.y0, 3, hgt);
+      c.fillStyle = 'rgba(0,0,0,0.32)'; c.fillRect(x + wd - 4, w.y0, 4, hgt);
+      c.fillStyle = w.hit ? '#ffffff' : '#9945ff'; c.fillRect(x, w.y0, wd, 5);
+      c.fillStyle = 'rgba(255,255,255,0.4)'; c.fillRect(x, w.y0, wd, 1.2);
+    }
+  }
   function drawGuide(c, bx, by) {
     if (phase !== 'ready' || run.level !== 1 || !newPlayer() || !run.st || ball.glide) return;
     const h = run.st.hoops[0], hx = view.offset + h.x, hy = E.hoopY(h, 0);
@@ -5586,6 +5775,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
     const vis = hoops.filter((o) => { const x = o.off + o.h.x; return x > worldLeft - 80 && x < worldLeft + worldW + 80; });
     drawFar(c, worldLeft, worldW);
     drawCourt(c, worldLeft, worldW, S, bx, by, vis);
+    if (st && st.walls && st.walls.length) drawWalls(c, st, worldLeft, worldW);
     if (ball.fire > 0.05 && !ball.hidden && !REDUCED) fireLight(c, bx, by);
     if (ball.fire > 0.25 && !REDUCED && phase !== 'lobby') drawStreaks(c, worldLeft, worldW);
     view.nextRing = st && phase !== 'over' && phase !== 'clearing' ? st.hoops[st.next] || null : null;
@@ -6522,7 +6712,7 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
       row('star', 'gold', 'Score and XP', `Rings score points, more for swishes and streaks. Points, missions and trophies earn XP, which unlocks balls, wings and trails. Neither changes what a run pays.`) +
       row('mission', 'purple', 'Missions', `Three at a time, new every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week. Finish all three to open the next round, which pays more.`) +
       row('back', 'green', 'Rakeback', `Every bet sets a little SOL aside for you: ${Math.round(LV.RATE * 100)}% of the house's cut. Level up to claim it.`) +
-      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
+      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. Clear one and a new one takes its place; some have walls to fly over. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
       `</div>`;
   }
   // ---------------------------------------------------------------- the quick tour

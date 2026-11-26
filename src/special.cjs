@@ -68,10 +68,22 @@
     { id: 'squeeze', name: 'The squeeze', blurb: 'Each ring tighter than the last', t: { moveScale: 0.5 }, width: 'squeeze' },
     { id: 'biglittle', name: 'Big and little', blurb: 'A wide ring, then a tight one', t: {}, width: 'alt' },
     { id: 'lifts', name: 'Elevators', blurb: 'Every ring rides a long, slow lift', t: { moveP: 1, moveAmpMin: 62, moveAmpAdd: 8, slow: 1.7 } },
-    { id: 'slowmo', name: 'Slow motion', blurb: 'A slower ball through tight rings', t: { fast: 0.78, narrow: 9, moveScale: 0.5 } }
+    { id: 'slowmo', name: 'Slow motion', blurb: 'A slower ball through tight rings', t: { fast: 0.78, narrow: 9, moveScale: 0.5 } },
+    // Three with something the regular game doesn't have (the owner asked for extra features like a wall, but not too
+    // much): walls to fly over between the rings. Touching one ends the attempt, like the floor. ob picks the
+    // layout from WALLS; see walls() below for where they stand.
+    { id: 'walls', name: 'The wall', blurb: 'Fly over a wall between rings', t: { moveScale: 0.5 }, ob: 'wall' },
+    { id: 'hurdles', name: 'Hurdles', blurb: 'A quicker ball and low walls', t: { fast: 1.2, moveScale: 0.5 }, ob: 'low' },
+    { id: 'fortress', name: 'The fortress', blurb: 'Walls, and every ring moves', t: { moveP: 1, moveAmpMin: 30 }, ob: 'wall' }
   ];
   const PER_DAY = 3;
+  const PER_SLOT = 5;        // a prize has this many specials a day: clear one and the next takes its place
   const BY = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
+  const PLAIN = RECIPES.filter((r) => !r.ob), OBST = RECIPES.filter((r) => r.ob);
+  // Walls: how thick; and for each layout, where in the gap between two rings each wall stands (a range, as a share
+  // of the gap) and how far above the line from one ring to the next its top is (a range; below the line if negative)
+  const WALL_W = 18, WALL_PAD = 8, WALL_TOP = 120, WALL_REACT = 0.2, WALL_DIVE = 90;
+  const WALLS = { wall: { at: [[0.52, 0.6]], up: [6, 38] }, low: { at: [[0.5, 0.58]], up: [-6, 24] } };
 
   // the skill scale, the regular-run rating and the staircase
   const ANCHORS = ['novice', 'casual', 'average', 'good', 'pro'];
@@ -236,9 +248,45 @@
         [[-0.0463, -0.42065, -0.004446], [0.0232, -0.37677, 0.003135], [-0.0254, -0.24464, 0.000359], [-0.027, -0.14143, 0.000195], [-0.0273, -0.07149, 0.0001]],
         [[-0.074, -0.51712, -0.011098], [0.0151, -0.464, -0.000012], [-0.0467, -0.32819, -0.003855], [-0.002, -0.23723, 0.000769], [-0.0278, -0.11841, -0.000659]],
         [[-0.0298, -0.70153, -0.000464], [0.0324, -0.66213, 0.008932], [-0.023, -0.4837, -0.00362], [0.0513, -0.39333, 0.005265], [-0.0267, -0.21988, 0.000521]]
+      ],
+      walls: [
+        [[0.0717, -0.16316, 0.000253], [0.0561, -0.08711, -0.000173], [0.0373, -0.05082, -0.000146], [0.0254, -0.02697, 0.000101], [0.0151, -0.0119, 0.000116]],
+        [[0.0713, -0.19841, 0.000494], [0.0563, -0.11629, -0.000051], [0.0422, -0.06788, 0.000171], [0.0276, -0.03487, 0.000187], [0.0104, -0.01089, -0.000063]],
+        [[0.0563, -0.26177, -0.000156], [0.0357, -0.15949, -0.000576], [0.0452, -0.10164, -0.000078], [0.0201, -0.04379, 0.000028], [0.0129, -0.01877, 0.000125]],
+        [[0.0464, -0.302, 0.002105], [0.0323, -0.18395, 0.000657], [0.0141, -0.1087, -0.000072], [0.0016, -0.04903, 0.000188], [0.0011, -0.01513, 0.000032]],
+        [[0.0281, -0.32809, -0.000016], [0.029, -0.20477, -0.000124], [-0.0073, -0.13074, -0.000395], [0.0043, -0.06531, 0.000161], [-0.0011, -0.02079, -0.000009]],
+        [[0.0162, -0.36452, -0.003331], [0.0157, -0.26046, -0.00018], [-0.0109, -0.17113, 0.000229], [-0.0055, -0.07725, -0.000148], [-0.0073, -0.02846, -0.000074]],
+        [[0.0171, -0.4261, -0.002548], [0.0252, -0.31967, 0.000021], [0.0078, -0.2162, 0.000381], [0.0045, -0.11615, 0.000111], [-0.0219, -0.0483, 0.000088]],
+        [[-0.0431, -0.55835, -0.007409], [0.0087, -0.4275, -0.002755], [-0.0322, -0.2932, -0.003134], [-0.0179, -0.19107, 0.000038], [-0.0266, -0.10292, 0.000421]],
+        [[0.0181, -0.6994, -0.003618], [0.0464, -0.58033, -0.00199], [-0.0332, -0.40301, -0.00126], [0.0156, -0.29966, 0.000748], [-0.0368, -0.1595, 0.000143]],
+        [[0.0451, -0.90642, 0.015525], [0.0345, -0.70913, -0.006993], [0.022, -0.5692, -0.000322], [0.0043, -0.41651, 0.003382], [-0.0449, -0.24495, -0.000681]]
+      ],
+      hurdles: [
+        [[0.0431, -0.19686, -0.000236], [0.0511, -0.12161, -0.000071], [0.0387, -0.07326, 0.00001], [0.0255, -0.03072, -0.00007], [0.0118, -0.01277, 0.000064]],
+        [[0.0342, -0.25339, 0.001038], [0.0502, -0.15684, 0.000298], [0.03, -0.0931, 0.000036], [0.0243, -0.04316, 0.000184], [0.0077, -0.01356, -0.000022]],
+        [[-0.0243, -0.31034, -0.001848], [0.0195, -0.22652, 0.000685], [0.0239, -0.14848, 0.000433], [0.0199, -0.06831, -0.000028], [0.007, -0.02429, 0.000012]],
+        [[0.0144, -0.32788, -0.005324], [0.029, -0.24187, -0.000028], [0.0177, -0.16028, 0.000062], [-0.0049, -0.07158, -0.000073], [0.0009, -0.02553, -0.000014]],
+        [[0.039, -0.41408, 0.000002], [0.0421, -0.29366, -0.000256], [0.0162, -0.19778, 0.000471], [0.0123, -0.1029, 0.000054], [-0.0175, -0.04083, 0.000034]],
+        [[0.0062, -0.44416, -0.009178], [0.0195, -0.34082, 0.000227], [0.0006, -0.23621, -0.000887], [-0.0208, -0.12326, -0.000382], [-0.0268, -0.05216, -0.000324]],
+        [[-0.0114, -0.52819, 0.000267], [-0.022, -0.38557, -0.004521], [0.0258, -0.32184, 0.000501], [-0.0379, -0.15988, -0.000645], [-0.028, -0.08342, -0.00021]],
+        [[0.0662, -0.73944, 0.002499], [0.0139, -0.5129, -0.011668], [-0.0028, -0.40602, -0.000454], [-0.0072, -0.27567, -0.000232], [-0.031, -0.16258, 0.000269]],
+        [[0.1384, -0.9396, 0.015988], [0.047, -0.63795, -0.013096], [0.0139, -0.54792, -0.000513], [0.0206, -0.39648, 0.001427], [-0.0704, -0.21395, -0.001827]],
+        [[0.097, -1.03665, 0], [0.0661, -0.85754, -0.003427], [-0.0509, -0.62062, -0.016666], [-0.0316, -0.5155, -0.000011], [-0.1075, -0.32396, -0.006322]]
+      ],
+      fortress: [
+        [[0.0564, -0.20218, 0.000102], [0.0656, -0.12611, 0.000152], [0.049, -0.07555, 0.000102], [0.0205, -0.03393, 0.000036], [0.0066, -0.01342, -0.000042]],
+        [[0.0521, -0.24104, -0.000624], [0.0674, -0.15652, 0.000474], [0.0332, -0.08811, -0.000108], [0.0217, -0.04098, -0.000049], [0.0054, -0.01804, 0.000051]],
+        [[0.0264, -0.33932, -0.000132], [0.0614, -0.22467, -0.000192], [0.0189, -0.14241, -0.000539], [0.0207, -0.06633, -0.000113], [0.0083, -0.02538, -0.000001]],
+        [[0.0138, -0.38416, 0.000286], [0.0224, -0.24159, -0.000157], [-0.0011, -0.16086, -0.000092], [-0.0065, -0.07455, -0.000053], [-0.0094, -0.02509, -0.000058]],
+        [[0.005, -0.42708, -0.003085], [-0.0054, -0.29167, -0.000082], [-0.0116, -0.19608, 0.000026], [-0.0201, -0.09261, -0.000088], [-0.0135, -0.03499, -0.000199]],
+        [[-0.0203, -0.47055, -0.00558], [0.0303, -0.36674, -0.000681], [-0.0238, -0.23429, -0.00091], [-0.0243, -0.12743, -0.000049], [-0.0244, -0.05484, -0.000213]],
+        [[0.0006, -0.5765, 0.000535], [-0.0282, -0.39057, -0.003633], [0.0203, -0.33299, 0.003537], [-0.0199, -0.17302, 0.000158], [-0.0328, -0.07428, -0.00022]],
+        [[-0.03, -0.72197, -0.004865], [0.0371, -0.66971, 0.01075], [-0.0243, -0.46063, 0.000596], [-0.0319, -0.28034, 0.001102], [-0.0556, -0.15658, 0.000014]],
+        [[0.0016, -0.94403, 0.008109], [-0.0471, -0.71323, -0.003463], [-0.0486, -0.5504, -0.007142], [-0.0353, -0.41656, 0.001549], [-0.0589, -0.24002, -0.001218]],
+        [[-0.0324, -1.05132, -0.001951], [0.0974, -1.01266, 0.016769], [-0.0973, -0.6979, -0.006772], [-0.1028, -0.46205, -0.01016], [-0.0539, -0.38518, 0.00033]]
       ]
     }
-  }; // engine v15, 2000 attempts per cell, 2026-11-26
+  }; // engine v16, 2000 attempts per cell, 2026-11-26
   // @@END@@
 
   // ---------------------------------------------------------------- courses
@@ -303,8 +351,36 @@
       hoops.push({ i, x, y0: y, w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 });
       prevY = y;
     }
+    const ws = R.ob ? walls(R, C, hoops, E.makeRng('specialwalls|' + seed + '|' + R.id + '|' + g)) : null;
     // the time limit grows with the course: a slow player needs up to about 2.4 s a ring (rim knocks hold the ball back)
-    return { seed: String(seed), di: GRADES[g][0], L: 0, special: R.id, grade: g, speed: C.speed, startY: START_Y, hoops, endX: x + C.spacing, maxTicks: E.TICK_HZ * Math.max(45, 20 + 3 * n) };
+    const def = { seed: String(seed), di: GRADES[g][0], L: 0, special: R.id, grade: g, speed: C.speed, startY: START_Y, hoops, endX: x + C.spacing, maxTicks: E.TICK_HZ * Math.max(45, 20 + 3 * n) };
+    if (ws) def.walls = ws;
+    return def;
+  }
+
+  // The walls of a course, in order: the same ones between every two rings (so the first n rings of a longer course
+  // have the same walls before and between them). Each is a slab for the engine, { x0, x1, y0, y1 }: it stands on
+  // the floor and its top is y0. A wall's top is UP above the line from one ring to the next, so the ball has to
+  // come up sooner than the next ring alone would ask. It's never higher than a ball can climb to after dropping
+  // through the ring before (at its lowest point if it bobs), nor so high that the next ring can't be dropped
+  // into from over it. Walls have their own stream of random numbers (two draws each), so the rings are the ones
+  // the course would have without them.
+  function walls(R, C, hoops, rng) {
+    const out = [], L = WALLS[R.ob], clear = E.PHYS.R + WALL_PAD;
+    for (let i = 0; i + 1 < hoops.length; i++) {
+      const a = hoops[i], b = hoops[i + 1], gap = b.x - a.x;
+      for (const at of L.at) {
+        const r1 = rng(), r2 = rng(), f = at[0] + (at[1] - at[0]) * r1;
+        const xm = Math.round(a.x + gap * f), x0 = xm - WALL_W / 2, x1 = xm + WALL_W / 2;
+        const t1 = (x0 - E.PHYS.R - a.x) / C.speed, t2 = (b.x - x1 - E.PHYS.R) / C.speed; // the time before it and after it
+        let y = a.y0 + (b.y0 - a.y0) * f - (L.up[0] + (L.up[1] - L.up[0]) * r2);
+        // before it: the ball drops WALL_DIVE below the ring while the player reacts, then climbs; after it: a free fall
+        const climb = CLIMB_RATE * Math.max(0, t1 - WALL_REACT) - WALL_DIVE, fall = Math.min(260, 0.8 * 0.5 * E.PHYS.G * t2 * t2);
+        y = Math.max(y, (a.y0 + a.amp) - climb + clear, (b.y0 + b.amp) - fall + clear, WALL_TOP);
+        out.push({ x0, x1, y0: Math.round(y), y1: E.WORLD.FLOOR + 400 });
+      }
+    }
+    return out;
   }
 
   // what a grade's rings are, in words ("Hard level 4 rings", "Hard level 8 rings, tighter and quicker")
@@ -322,9 +398,9 @@
   const dayStart = (day) => Date.parse(String(day).slice(0, 10) + 'T00:00:00Z');
   const closesAt = (day) => dayStart(day) + DAY_MS;
   const EPOCH = Date.UTC(2026, 0, 5);
-  const CYCLE = Math.floor(RECIPES.length / PER_DAY); // days
+  const CYCLE = Math.floor(PLAIN.length / PER_DAY); // days
   function shuffled(cycle) {
-    const a = RECIPES.slice(), r = E.makeRng('specialcycle|' + cycle);
+    const a = PLAIN.slice(), r = E.makeRng('specialcycle|' + cycle);
     for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = a[i]; a[i] = a[j]; a[j] = t; }
     return a;
   }
@@ -336,10 +412,35 @@
     }
     return a;
   }
-  function specialsFor(day) {
+  // Each prize's specials for a day, in order: PER_SLOT of them, the same for everyone. A player sees the first;
+  // clearing it brings up the next (the owner asked for a cleared special to lock or make way for a new one), and
+  // after the last that prize is done until tomorrow. The first of each is the day's twist from the cycle above,
+  // except that one prize a day (they take turns) opens with a course with walls, also in turn, and has the twist
+  // it replaced next in line. The rest are every other twist, shuffled for the day and dealt round, so all of them
+  // come up somewhere each day and no two prizes ever show the same one.
+  function queuesFor(day) {
     const k = Math.floor((dayStart(day) - EPOCH) / DAY_MS), pos = ((k % CYCLE) + CYCLE) % CYCLE;
-    const a = order(Math.floor(k / CYCLE));
-    return SLOTS.map((x, slot) => ({ slot, x, recipe: a[pos * PER_DAY + slot] }));
+    const a = order(Math.floor(k / CYCLE)), mod = (v, m) => ((v % m) + m) % m;
+    const q = SLOTS.map((x, slot) => [a[pos * PER_DAY + slot]]);
+    if (OBST.length) { const s = mod(k + Math.floor(k / OBST.length), SLOTS.length); q[s].unshift(OBST[mod(k, OBST.length)]); }
+    const used = new Set([].concat(...q)), rest = RECIPES.filter((r) => !used.has(r)), r = E.makeRng('specialnext|' + k);
+    for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = rest[i]; rest[i] = rest[j]; rest[j] = t; }
+    let s = 0;
+    for (const R of rest) {
+      for (let n = 0; n < SLOTS.length && q[s].length >= PER_SLOT; n++) s = (s + 1) % SLOTS.length;
+      if (q[s].length >= PER_SLOT) break;
+      q[s].push(R); s = (s + 1) % SLOTS.length;
+    }
+    return q;
+  }
+  // The day's three as a player sees them. wins: how many of each prize's specials they've cleared today (by slot;
+  // none for someone new). at: which of the day's it is (from 0), of: how many there are, done: all cleared, in
+  // which case the recipe is the last one.
+  function specialsFor(day, wins) {
+    return queuesFor(day).map((q, slot) => {
+      const w = Math.max(0, Math.floor((wins && wins[slot]) || 0)), at = Math.min(w, q.length - 1);
+      return { slot, x: SLOTS[slot], recipe: q[at], at, of: q.length, done: w >= q.length, next: q[at + 1] || null };
+    });
   }
 
   // ---------------------------------------------------------------- skill
@@ -430,17 +531,17 @@
   }
   // the day's three for a player (or for someone new): each course set for the player's level in that special; chance
   // is how often a player at that level clears it
-  function todayFor(Rt, day) {
-    return specialsFor(day).map(({ slot, x, recipe }) => {
+  function todayFor(Rt, day, wins) {
+    return specialsFor(day, wins).map(({ slot, x, recipe, at, of, done, next }) => {
       const d = levelOf(Rt, slot), c = courseFor(d, recipe.id, x);
-      return { slot, x, recipe: recipe.id, g: c.g, n: c.n, chance: c.chance, rtp: c.rtp, level: Math.round(d * 100) / 100, levelName: levelName(d) };
+      return { slot, x, recipe: recipe.id, g: c.g, n: c.n, chance: c.chance, rtp: c.rtp, level: Math.round(d * 100) / 100, levelName: levelName(d), at, of, done, next: next ? next.id : null };
     });
   }
 
   return {
     ENTRY, DAY_MS, START_Y, SLOTS, TARGET, N_MIN, N_MAX, N_IDEAL, GRADES, RECIPES, BY, ANCHORS, LEVEL_NAMES, GRID,
     D_MIN, D_MAX, PRIOR_MU, PRIOR_SD, START, DOWN, SLOT_MARGIN, UNLOCK, TABLES,
-    config, generate, gradeText, dayKey, dayStart, closesAt, specialsFor, CYCLE, PER_DAY, W_MIN,
+    config, generate, gradeText, dayKey, dayStart, closesAt, specialsFor, queuesFor, CYCLE, PER_DAY, PER_SLOT, W_MIN, PLAIN, OBST, WALLS, WALL_W,
     blank, addLevel, regular, startFor, levelOf, addSpecial, up, levelName, rating, courseFor, todayFor, missReg, clearP
   };
 });

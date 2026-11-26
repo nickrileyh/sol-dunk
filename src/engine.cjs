@@ -18,7 +18,7 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const VERSION = 15; // v15: a ball that lands with its centre on the outer half of the near rim falls off instead of being carried in; v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
+  const VERSION = 16; // v16: walls (special courses only: a level may carry slabs that end the attempt on touch; levels without any play exactly as on v15); v15: a ball that lands with its centre on the outer half of the near rim falls off instead of being carried in; v14: two modes, Easy (v13's Pro) and Hard (v13's Legend); v13: rings spread out 1:1 with v12's faster ball
   const TICK_HZ = 120;
   const DT = 1 / TICK_HZ;
 
@@ -227,8 +227,12 @@
       const h = level.hoops[i];
       hs[i] = { i: h.i, x: h.x, y0: h.y0, w: h.w, amp: h.amp, period: h.period, phase: h.phase, tilt: h.tilt, c: h.c, s: h.s, cp: h.cp, st: 0, touched: false, off: false };
     }
+    // Walls (v16; only special courses have any): solid slabs, each a rectangle from x0 to x1 and from its top y0
+    // down to y1 (past the floor). Touching one ends the attempt, like the floor. They're kept in order of x, and
+    // wi is the first one the ball hasn't passed.
+    const ws = (level.walls || []).map((w) => ({ x0: w.x0, x1: w.x1, y0: w.y0, y1: w.y1, hit: false }));
     return {
-      level, hoops: hs, speed: level.speed,
+      level, hoops: hs, walls: ws, wi: 0, speed: level.speed,
       ball: { x: 0, y: level.startY, vx: level.speed, vy: 0 },
       tick: 0, next: 0, prevLy: NaN, contact: false, knockTick: -100000, maxTicks: level.maxTicks || MAX_TICKS,
       done: false, result: null, missKind: null,
@@ -334,6 +338,16 @@
     if (b.y < WORLD.CEIL + P.R) { b.y = WORLD.CEIL + P.R; if (b.vy < 0) b.vy = 0; ev |= EV.CEIL; }
     const h = st.hoops[st.next];
     if (h) ev |= hoopInteract(st, h, t);
+    if (!st.done && st.wi < st.walls.length) {
+      // the ball (a circle) against the next wall (a rectangle): the nearest point of the wall to the ball's centre
+      let w = st.walls[st.wi];
+      while (w && b.x - P.R > w.x1) w = st.walls[++st.wi];
+      if (w && b.x + P.R > w.x0) {
+        const nx = b.x < w.x0 ? w.x0 : b.x > w.x1 ? w.x1 : b.x, ny = b.y < w.y0 ? w.y0 : b.y > w.y1 ? w.y1 : b.y;
+        const dx = b.x - nx, dy = b.y - ny;
+        if (dx * dx + dy * dy < P.R * P.R) { w.hit = true; st.done = true; st.result = 'wall'; ev |= EV.BLOCK; }
+      }
+    }
     if (!st.done && b.y > WORLD.FLOOR - P.R) { st.done = true; st.result = 'floor'; ev |= EV.FLOOR; }
     if (!st.done && st.tick >= st.maxTicks) { st.done = true; st.result = 'miss'; st.missKind = 'timeout'; ev |= EV.MISS; }
     st.ev = ev;

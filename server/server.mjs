@@ -603,13 +603,16 @@ export async function createServer(CFG, log) {
   // which moves like a weighted staircase (up after a clear, down after a miss) and settles where they clear it often
   // enough to get back 90%: the house expects 10% from everyone. Each attempt gets a fresh course from its own provably
   // fair seed, HMAC-SHA256(serverSeed, clientSeed:nonce:special). Accounts limited for beating the house can't enter.
+  // Each prize has SP.PER_SLOT specials a day, in an order that's the same for everyone: a player is on the one after
+  // those they've cleared today (their wins), and once they've cleared them all that prize is done until tomorrow.
   function specialsToday(u) {
     const day = SP.dayKey(potNow()), fee = CFG.specialEntry, forced = CFG.specialRecipe && SP.BY[CFG.specialRecipe];
+    const wins = u && u.special && u.special.day === day && Array.isArray(u.special.wins) ? u.special.wins : null;
     return {
       day, fee,
-      list: SP.specialsFor(day).map(({ slot, x, recipe }) => {
+      list: SP.specialsFor(day, wins).map(({ slot, x, recipe, at, of, done, next }) => {
         const R = forced || recipe, d = SP.levelOf(u && u.skill, slot), c = SP.courseFor(d, R.id, x);
-        return { slot, x, recipe: R, g: c.g, n: c.n, chance: c.chance, level: Math.round(d * 100) / 100, prize: Math.floor(fee * x) };
+        return { slot, x, recipe: R, g: c.g, n: c.n, chance: c.chance, level: Math.round(d * 100) / 100, prize: Math.floor(fee * x), at, of, done, next: done ? null : forced && next ? forced : next };
       })
     };
   }
@@ -621,6 +624,7 @@ export async function createServer(CFG, log) {
       day, feeLamports: fee, closesAt: SP.closesAt(day) - potClock, target: SP.TARGET, unlockLamports: CFG.specialUnlock,
       specials: list.map((s) => ({
         slot: s.slot, x: s.x, prizeLamports: s.prize, recipe: { id: s.recipe.id, name: s.recipe.name, blurb: s.recipe.blurb },
+        at: s.at, of: s.of, done: s.done, next: s.next ? { id: s.next.id, name: s.next.name } : null,
         course: { grade: s.g, rings: s.n, chance: s.chance, level: s.level, levelName: SP.levelName(s.level) }, me: tl ? { tries: tl.tries[s.slot] || 0, wins: tl.wins[s.slot] || 0 } : { tries: 0, wins: 0 }
       }))
     };
@@ -640,6 +644,7 @@ export async function createServer(CFG, log) {
       if (u.flagged) throw bad('The special levels aren’t available on this account');
       if ((await runPlayed(t, u)) < CFG.specialUnlock) throw bad(unlockText());
       const { day, fee, list } = specialsToday(u), s = list[slot];
+      if (s.done) throw bad(`You’ve cleared all ${s.of} of today’s ${s.x}× specials. New ones come at midnight UTC.`);
       if (u.balance < fee) throw bad('Not enough balance for the entry');
       await t.bankrollLock();
       const owed = await t.owed();

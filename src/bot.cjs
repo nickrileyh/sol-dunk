@@ -37,7 +37,40 @@
 
   function createBot(skill, rng) {
     const p = typeof skill === 'string' ? SKILLS[skill] : skill;
-    return { p, rng, sched: -1, lastTap: -1000, key: -1, aimDX: 0, aimDY: 0, phaseErr: 0, cruise: 36, lapse: false, lapseShift: 0, h: null, fine: p.timing === 0 };
+    return { p, rng, sched: -1, lastTap: -1000, key: -1, aimDX: 0, aimDY: 0, phaseErr: 0, cruise: 36, lapse: false, lapseShift: 0, h: null, fine: p.timing === 0, wall: null, wm: 0, schedWall: null };
+  }
+
+  // Walls (special courses): the wall between the ball and the ring it's heading for, as the height the ball's
+  // centre has to stay above (hi) while it overlaps it. How much room the player leaves (WALL_ROOM, give or take) is
+  // judged afresh for each wall, worse for weaker players, so they clip one now and then. A level without walls
+  // never gets here, and draws no random numbers for it.
+  const WALL_ROOM = 12, WALL_SD = 0.6, WALL_DT = 1.2;
+  function wallGuard(bot, st, h) {
+    const ws = st.walls;
+    if (!ws || st.wi >= ws.length) return null;
+    const w = ws[st.wi];
+    if (w.x0 >= h.x || st.ball.x - P.R > w.x1) return null; // it's past the ring ahead (or behind the ball)
+    if (bot.wall !== w) { bot.wall = w; bot.wm = WALL_ROOM + (bot.p.cruiseSd ? gauss(bot.rng) * bot.p.cruiseSd * WALL_SD : 0); }
+    return { xa: w.x0 - P.R, xb: w.x1 + P.R, hi: w.y0 - P.R - bot.wm, dt: bot.p.timing * WALL_DT };
+  }
+  // a free fall from (x, y, vy): is it clear of the wall between the times t0 and t1 from now?
+  function fallClear(g, x, y, vy, vx, t0, t1) {
+    const ta = Math.max(t0, (g.xa - x) / vx), tb = Math.min(t1, (g.xb - x) / vx);
+    if (tb <= ta) return true;
+    const ya = y + vy * ta + 0.5 * P.G * ta * ta, yb = y + vy * tb + 0.5 * P.G * tb * tb;
+    return ya <= g.hi && yb <= g.hi; // a fall curves downward, so it's lowest at one end or the other
+  }
+  // tap in tk seconds, then fall: clear of the wall all the way? A player knows their taps land a little early or
+  // late (g.dt, from their timing), and only takes a line that clears either way.
+  function tapClear(g, b, vx, tk) {
+    if (!g) return true;
+    for (let j = -1; j <= 1; j++) {
+      const t = Math.max(0, tk + j * g.dt);
+      if (!fallClear(g, b.x, b.y, b.vy, vx, 0, t)) return false;
+      if (!fallClear(g, b.x + vx * t, b.y + b.vy * t + 0.5 * P.G * t * t, -P.FLAP, vx, 0, 1e9)) return false;
+      if (!g.dt) break;
+    }
+    return true;
   }
 
   function perceivedY(bot, t) { return E.hoopY(bot.h, t + bot.phaseErr) + bot.aimDY; }
@@ -61,7 +94,7 @@
   }
 
   // Best single "final" tap: tap in k ticks, then free-fall through the rim.
-  function planFinal(bot, st, vx) {
+  function planFinal(bot, st, vx, guard) {
     const b = st.ball, h = bot.h, t0 = st.tick * DT;
     const aimX = h.x + bot.aimDX * h.c;
     const tn = bot.tiltSeen ? h.s / h.c : 0;
@@ -77,6 +110,7 @@
       const xk = b.x + vx * tk;
       if (xk > aimX - 8) break;
       if (yk - (P.FLAP * P.FLAP) / (2 * P.G) < P.R + 2) continue; // would bonk the ceiling
+      if (guard && !tapClear(guard, b, vx, tk)) continue;           // would clip the wall on the way
       let hy = perceivedY(bot, t0 + tk + 0.35) + (aimX - h.x) * tn, s = NaN, xc = aimX;
       const iters = (h.amp || tn) ? 4 : 1;
       for (let it = 0; it < iters; it++) {
@@ -125,8 +159,10 @@
     if (st.done) return false;
     const p = bot.p;
     if (bot.sched >= 0 && bot.key !== st.next) bot.sched = -1; // target scored: drop the stale tap
+    // a tap planned to hold the ball over a wall isn't needed once the wall is behind it
+    if (bot.sched >= 0 && bot.schedWall) { if (st.ball.x - P.R > bot.schedWall.x1) bot.sched = -1; if (bot.sched < 0) bot.schedWall = null; }
     if (bot.sched >= 0) {
-      if (st.tick >= bot.sched) { bot.sched = -1; bot.lastTap = st.tick; return true; }
+      if (st.tick >= bot.sched) { bot.sched = -1; bot.schedWall = null; bot.lastTap = st.tick; return true; }
       return false;
     }
     if ((st.tick - bot.lastTap) * DT < p.minGap) return false;
@@ -140,9 +176,10 @@
     const horizon = Math.round(p.commit / DT);
 
     // already on a line into the rim? then just wait
+    const guard = st.walls && st.walls.length ? wallGuard(bot, st, h) : null;
     const nt = crossNoTap(bot, st, vx);
-    const fin = planFinal(bot, st, vx);
-    if (nt && nt.vc > 150) {
+    const fin = planFinal(bot, st, vx, guard);
+    if (nt && nt.vc > 150 && (!guard || fallClear(guard, b.x, b.y, b.vy, vx, 0, 1e9))) {
       const e = Math.abs(nt.xc - aimX);
       if (e <= 10 || (fin && e <= fin.err + 3)) return false;
       if (nt.xc > aimX && (!fin || fin.xc > aimX)) return false; // too high: taps only make it later
@@ -157,6 +194,8 @@
     if (b.x > aimX - 60 && b.y < hyNow - P.R) return false;
     if (b.x > h.x - 6 && b.y < hyNow + P.R) return false;
     let yc = hyNow - bot.cruise;
+    let forWall = null;
+    if (guard && guard.hi - 6 < yc) { yc = guard.hi - 6; forWall = bot.wall; } // a wall first: hold the line above its top
     if (yc < P.R + 30) yc = P.R + 30;
     if (b.vy < 0 && b.y < yc + 40) return false; // still rising
     let tau;
@@ -166,7 +205,7 @@
       tau = (-b.vy + Math.sqrt(disc)) / P.G;
     }
     const k = Math.round(tau / DT);
-    if (k <= horizon) return schedule(bot, st, k, false);
+    if (k <= horizon) { const now = schedule(bot, st, k, false); bot.schedWall = now ? null : forWall; return now; }
     return false;
   }
 

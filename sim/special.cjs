@@ -10,10 +10,13 @@
 //    players and pros who lose their first attempts on purpose to bring the level down.
 //
 //   node sim/special.cjs [attempts per twist, grade and skill = 2000] [--write] [--refit] [--curves] [--twists=a,b,c]
+//                        [--only=a,b,c]
 //
 // --twists picks the twist steps 4 and 5 play in the 2x, 3x and 5x slots (by default the first, third and fifth).
 // --refit skips step 1's play and fits the saved curves; --curves stops after step 3. Re-run it in full whenever the
-// physics (src/engine.cjs), the bot or a twist changes.
+// physics (src/engine.cjs), the bot or a twist changes. --only plays just those twists in step 1 and keeps the saved
+// curves of the rest: for a new twist, or one whose settings changed, when nothing else did (same attempts as the
+// saved ones; check first that the other twists still play tap for tap as they did).
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 const os = require('os');
 const fs = require('fs');
@@ -127,12 +130,18 @@ function fit(hist, total) {
   const t0 = Date.now(), K = SP.ANCHORS.length;
   // 1. the curves
   let agg;
+  const only = (args.find((x) => x.startsWith('--only=')) || '').slice(7).split(',').filter((id) => SP.BY[id]);
   if (refit) agg = JSON.parse(fs.readFileSync(CURVES, 'utf8')).agg;
   else {
     const jobs = [];
-    for (const R of SP.RECIPES) for (let g = 0; g < SP.GRADES.length; g++) for (const skill of SP.ANCHORS)
+    for (const R of SP.RECIPES) if (!only.length || only.includes(R.id)) for (let g = 0; g < SP.GRADES.length; g++) for (const skill of SP.ANCHORS)
       jobs.push(...split({ kind: 'curve', recipe: R.id, g, skill }, N, 500));
     agg = {};
+    if (only.length) { // keep the other twists' saved curves
+      const saved = JSON.parse(fs.readFileSync(CURVES, 'utf8'));
+      if (saved.attempts !== N) { console.error(`the saved curves have ${saved.attempts} attempts per cell: run --only with the same number`); process.exit(1); }
+      for (const k in saved.agg) if (!only.includes(k.split('|')[0])) agg[k] = saved.agg[k];
+    }
     for (const r of await runJobs(jobs)) {
       const k = r.recipe + '|' + r.g + '|' + r.skill, a = agg[k] || (agg[k] = new Array(SP.N_MAX + 1).fill(0));
       r.hist.forEach((v, i) => { a[i] += v; });

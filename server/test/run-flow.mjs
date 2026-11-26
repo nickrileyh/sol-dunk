@@ -281,6 +281,21 @@ function playTaps(seed, di, L, skill, salt) {
   const sp1 = await M.api('/api/special');
   check(sp1.specials.every((x, k) => x.me.tries === perSlot[k][0] && x.me.wins === perSlot[k][1]) && wins >= 2, 'special tally by slot: ' + JSON.stringify(sp1.specials.map((x) => x.me)));
   check(sp1.me.skill.tries === tries && sp1.specials[2].course.level > lv2 && perSlot[2][1] >= 1, `special: clearing the 5x special raises its level (${lv2} -> ${sp1.specials[2].course.level})`);
+  // each prize has SP.PER_SLOT specials a day: a clear moves it on to the next, and after the last it's done until tomorrow
+  check(sp1.specials.every((x, k) => x.of === SP.PER_SLOT && x.at === Math.min(perSlot[k][1], SP.PER_SLOT - 1) && x.done === (perSlot[k][1] >= SP.PER_SLOT) && (x.done || x.at === SP.PER_SLOT - 1 ? !x.next : !!x.next)), 'special: each prize is on the one after those cleared today ' + JSON.stringify(sp1.specials.map((x) => [x.at, x.of, x.done])));
+  for (let k = 0; perSlot[0][1] < SP.PER_SLOT && k < 40; k++) {
+    const s = await M.api('/api/special/start', { clientSeed: 'more' + k + 'x', slot: 0 });
+    if (s.status !== 200) { check(false, 'special: clearing on at 2x: ' + s.error); break; }
+    tries++; perSlot[0][0]++;
+    const st = E.createState(SP.generate(s.seed, 'gauntlet', s.grade, s.rings)), bot = B.createBot('perfect', E.makeRng('more' + k)), taps = [0];
+    let tap = true;
+    while (!st.done) { E.step(st, tap); tap = B.decide(bot, st); if (tap && !st.done) taps.push(st.tick); }
+    const f = await M.api('/api/special/finish', { runId: s.runId, taps });
+    if (f.status === 'won') { wins++; perSlot[0][1]++; }
+  }
+  const spD = await M.api('/api/special'), balD = (await M.api('/api/me')).balance, over = await M.api('/api/special/start', { clientSeed: 'done1x', slot: 0 });
+  check(perSlot[0][1] === SP.PER_SLOT && spD.specials[0].done && spD.specials[0].at === SP.PER_SLOT - 1 && !spD.specials[0].next && !spD.specials[1].done, 'special: a prize is done once all its specials are cleared ' + JSON.stringify(spD.specials.map((x) => [x.at, x.done])));
+  check(over.status === 400 && /cleared all/.test(over.error || '') && (await M.api('/api/me')).balance === balD, 'special: no entry at a prize that is done for the day: ' + over.error);
   const hardest = (x) => x.course.grade === SP.GRADES.length - 1 && x.course.rings === SP.N_MAX; // a level past the hardest course
   check(sp1.specials.every((x) => x.course.chance * x.x <= SP.TARGET + 1e-9 || hardest(x)), 'special: courses still set at 90% or less for their level, or the hardest one ' + JSON.stringify(sp1.specials.map((x) => x.course)));
   const mv = await M.api('/api/missions');
@@ -363,13 +378,36 @@ function playTaps(seed, di, L, skill, salt) {
     check(f2.comeback === 0 && f2.best === 10 && f2.greens === 1 && f2.hot === 1 && f2.early === 10, 'pots: a streak counts as a comeback only after a rim hit ' + JSON.stringify(f2));
     check(POTS.progress('early8', [lv('SSSSSS'), lv('SSRRRR')], 0).done === false && POTS.progress('early8', [lv('SSSSSS'), lv('SSRRRR')], 1).done === true, 'pots: a Hard challenge needs a Hard run');
     check(POTS.GOALS.length === 12 && new Set(POTS.GOALS.map((g) => g.id)).size === 12 && POTS.GOALS.every((g) => g.kind in f1 && g.p.length === 3), 'pots: twelve challenges, each of a kind the rules can judge');
-    let prev = [], bad = 0; const seen = {};
+    // each prize's specials for a day: PER_SLOT of them in order, every twist somewhere, no twist under two prizes;
+    // one prize a day opens with a course with walls, and no opener comes back the next day
+    let prev = [], bad = 0, walled = 0; const seen = {}, wallSlots = new Set();
     for (let d = 0; d < 120; d++) {
-      const ids = SP.specialsFor(new Date(Date.UTC(2026, 10, 1) + d * 86400000).toISOString().slice(0, 10)).map((x) => x.recipe.id);
-      if (new Set(ids).size !== 3 || ids.some((id) => prev.includes(id))) bad++;
+      const day = new Date(Date.UTC(2026, 10, 1) + d * 86400000).toISOString().slice(0, 10), q = SP.queuesFor(day), all = [].concat(...q).map((R) => R.id);
+      const ids = SP.specialsFor(day).map((x) => x.recipe.id);
+      if (new Set(ids).size !== 3 || ids.some((id) => prev.includes(id)) || ids.join() !== q.map((x) => x[0].id).join()) bad++;
+      if (q.some((x) => x.length !== SP.PER_SLOT) || new Set(all).size !== SP.RECIPES.length) bad++;
+      const w = q.map((x, k) => (x[0].ob ? k : -1)).filter((k) => k >= 0);
+      if (w.length === 1) { walled++; wallSlots.add(w[0]); }
       ids.forEach((id) => { seen[id] = (seen[id] || 0) + 1; }); prev = ids;
     }
-    check(SP.RECIPES.length === 12 && bad === 0 && Object.keys(seen).length === 12 && Object.values(seen).every((n) => n === 30), 'specials: twelve twists, each once every four days and never two days running');
+    check(SP.RECIPES.length === 15 && SP.PLAIN.length === 12 && SP.OBST.length === 3 && bad === 0 && Object.keys(seen).length === 15, 'specials: fifteen twists, all of them in a day\'s three queues of five, and no opener two days running ' + JSON.stringify([bad, Object.keys(seen).length]));
+    check(walled === 120 && wallSlots.size === 3 && SP.OBST.every((R) => seen[R.id] === 40), 'specials: one prize a day opens with a wall course, the prizes and the three courses taking turns');
+    const dq = SP.queuesFor('2026-11-20'), w2 = SP.specialsFor('2026-11-20', [2, 0, SP.PER_SLOT + 3]);
+    check(w2[0].recipe === dq[0][2] && w2[0].at === 2 && !w2[0].done && w2[0].next === dq[0][3] && w2[1].recipe === dq[1][0] && w2[2].done && w2[2].recipe === dq[2][SP.PER_SLOT - 1] && w2[2].next === null, 'specials: a prize is on the one after those cleared, and done after the last');
+    { // walls: in order, between the rings, the same at any length, and passable; a ball that flies into one is out
+      const a = SP.generate('w1', 'walls', 3, 8), b = SP.generate('w1', 'walls', 3, 20), plain = SP.generate('w1', 'gauntlet', 3, 8);
+      check(!plain.walls && a.walls.length === 7 && b.walls.length === 19 && a.walls.every((w, i) => w.x0 === b.walls[i].x0 && w.y0 === b.walls[i].y0), 'walls: one between every two rings, the same at any length');
+      check(b.walls.every((w, i) => w.x0 > b.hoops[i].x + 60 && w.x1 < b.hoops[i + 1].x - 60 && w.x1 - w.x0 === SP.WALL_W && w.y0 >= 120 && w.y0 < E.WORLD.FLOOR - 100 && (i === 0 || w.x0 > b.walls[i - 1].x1)), 'walls: each stands clear of the rings on both sides');
+      const st = E.createState(a); st.next = 1; st.ball.x = a.walls[0].x0 - 50; st.ball.y = a.walls[0].y0 + 40; // past the first ring, below the wall's top
+      let n = 0;
+      while (!st.done && n++ < 200) E.step(st, false);
+      check(st.result === 'wall' && st.walls[0].hit && st.ball.x < a.walls[0].x0, 'walls: flying into one ends the attempt: ' + st.result);
+      const over = E.createState(a); over.next = 1; over.ball.x = a.walls[0].x0 - 50; over.ball.y = a.walls[0].y0 - E.PHYS.R - 60; over.ball.vy = -200; // well over its top
+      for (n = 0; !over.done && over.ball.x - E.PHYS.R <= a.walls[0].x1 && n < 200; n++) E.step(over, false);
+      check(!over.done && over.wi <= 1 && !over.walls[0].hit, 'walls: a ball over its top passes');
+      const r = E.replay(a, [0]);
+      check(r.result !== 'clear', 'walls: a replay without taps does not clear');
+    }
     check(SP.RECIPES.every((R) => SP.TABLES.sp[R.id] && SP.TABLES.sp[R.id].length === SP.GRADES.length), 'specials: every twist has measured tables');
     for (const R of SP.RECIPES) { // a course of n rings is the first n rings of a longer one, inside the ring band
       const a = SP.generate('t1', R.id, 4, 8).hoops, b = SP.generate('t1', R.id, 4, 20).hoops;

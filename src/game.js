@@ -608,9 +608,11 @@
       const unlock = { need: round9(SP.UNLOCK * this.fee), played: stats.runPlayed || 0 };
       return {
         day, fee: this.fee, closesAt: SP.closesAt(day), target: SP.TARGET, unlock,
-        specials: SP.todayFor(profile.skill, day).map((c) => {
-          const R = SP.BY[c.recipe];
-          return { slot: c.slot, x: c.x, prize: round9(this.fee * c.x), recipe: { id: R.id, name: R.name, blurb: R.blurb }, course: { grade: c.g, rings: c.n, chance: c.chance, level: c.level, levelName: c.levelName }, me: { tries: t.tries[c.slot] || 0, wins: t.wins[c.slot] || 0 } };
+        // each prize is on the special after the ones cleared today; all cleared, it's done until tomorrow
+        specials: SP.todayFor(profile.skill, day, t.wins).map((c) => {
+          const R = SP.BY[c.recipe], N = c.next && !c.done ? SP.BY[c.next] : null;
+          return { slot: c.slot, x: c.x, prize: round9(this.fee * c.x), recipe: { id: R.id, name: R.name, blurb: R.blurb }, at: c.at, of: c.of, done: c.done, next: N ? { id: N.id, name: N.name } : null,
+            course: { grade: c.g, rings: c.n, chance: c.chance, level: c.level, levelName: c.levelName }, me: { tries: t.tries[c.slot] || 0, wins: t.wins[c.slot] || 0 } };
         }),
         me: { blocked: false, skill: SP.rating(profile.skill), locked: unlock.played + 1e-9 < unlock.need }
       };
@@ -619,6 +621,7 @@
       const v = this.view(), sp = v.specials[slot];
       if (!sp) throw new Error('There’s no such special level today');
       if (v.me.locked) throw new Error('Bet ' + fmtBet(v.unlock.need) + ' SOL in regular runs to unlock the special levels.');
+      if (sp.done) throw new Error(`You’ve cleared all ${sp.of} of today’s ${sp.x}× specials. New ones come at midnight UTC.`);
       if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
       wallet.balance = round9(wallet.balance - v.fee);
       DemoRake.add('special', v.fee);
@@ -1620,6 +1623,7 @@
     if (!c) return '<div class="empty">The special levels aren’t available right now. Try again in a moment.</div>';
     const left = s.closesAt - Date.now(), pct = Math.round((s.target || SP.TARGET) * 100);
     const play = s.me && s.me.blocked ? '<div class="empty">The special levels aren’t available on this account.</div>'
+      : c.done ? `<div class="group sp-lock sp-done"><b>All ${c.of} cleared today</b><p>You’ve cleared every ${c.x}× special for today. New ones come in ${left > 0 ? leftText(left) : 'a moment'}.</p></div>`
       : s.me && s.me.locked ? `<div class="group sp-lock">${unlockRow(s)}<p>Your regular runs also set the level you start at.</p></div>`
       : `<button class="btn btn-primary" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
     return `<div class="sp-card">
@@ -1629,14 +1633,14 @@
       </div>
       <div class="sp-prize"><span class="k">Clear every ring to win</span><div class="big"><span class="num">${fmtAmt(c.prize)}</span><span class="unit">SOL</span></div><span class="x">${c.x}× your ${fmtBet(s.fee)} SOL entry</span></div>
       ${play}
-      <div class="tiles"><div><b>${c.me.tries}</b><span>Tries today</span></div><div><b>${c.me.wins}</b><span>Wins today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>New specials</span></div></div>
+      <div class="tiles"><div><b>${c.me.tries}</b><span>Tries today</span></div><div><b>${Math.min(c.me.wins, c.of || c.me.wins)}<i> / ${c.of || 1}</i></b><span>Cleared today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>New specials</span></div></div>
       <div class="sec-h"><h3>Set for you</h3></div>
       <div class="group sp-odds">
         <div class="row"><span>Your level</span><b>${c.course.levelName || SP.levelName(c.course.level)}</b></div>
         <div class="row"><span>Players at your level clear it</span><b>${oneIn(c.course.chance)}</b></div>
       </div>
       <p class="foot">Clear it and the next course is harder. Miss and it gets a little easier.</p>
-      <p class="pot-rules">Clear every ring to win the prize. Miss one and the entry is gone. Your level settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries, whatever your level: the house keeps about ${100 - pct}%. They open once you’ve bet ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs. New specials come every day at midnight UTC. Special rings don’t count toward missions or the pot.</p>`;
+      <p class="pot-rules">Clear every ring to win the prize. Miss one and the entry is gone.${SP.BY[c.recipe.id] && SP.BY[c.recipe.id].ob ? ' Touch a wall and the attempt ends.' : ''} Clear it and a new special takes its place${c.next ? ` (next: ${c.next.name})` : ''}: ${c.of || SP.PER_SLOT} a day for each prize. Your level settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries, whatever your level: the house keeps about ${100 - pct}%. They open once you’ve bet ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs. New specials come every day at midnight UTC. Special rings don’t count toward missions or the pot.</p>`;
   }
   // a sketch of a course: the rings in order, how wide each is, how far it bobs, and the green finish
   function drawCourse(el, def) {
@@ -1649,6 +1653,13 @@
     // the way through: a dotted line from the ball to each ring in turn
     g.strokeStyle = 'rgba(185,140,255,0.3)'; g.lineWidth = 1.4; g.setLineDash([1.5, 5]);
     g.beginPath(); g.moveTo(sx(0), sy(def.startY)); for (const h of hs) g.lineTo(sx(h.x), sy(h.y0)); g.stroke(); g.setLineDash([]);
+    if (def.walls) { // walls: slabs from their top down to the floor of the sketch, with the game's purple cap
+      for (const wl of def.walls) {
+        const wx = sx((wl.x0 + wl.x1) / 2), wy = Math.max(6, sy(wl.y0));
+        g.fillStyle = 'rgba(90,69,160,0.55)'; g.fillRect(wx - 1.8, wy, 3.6, ht - 4 - wy);
+        g.fillStyle = '#9945ff'; g.fillRect(wx - 3, wy, 6, 2);
+      }
+    }
     const half0 = Math.max(5.5, Math.min(10, (w - pad * 2) / hs.length * 0.34)), wMax = Math.max(...hs.map((h) => h.w));
     for (const h of hs) { // how far each ring bobs: a soft track behind it
       if (!h.amp) continue;
@@ -1674,10 +1685,10 @@
     const s = specState;
     if (!s || !s.specials) return '';
     const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked, locked = !blocked && s.me && s.me.locked;
-    const act = (c) => (blocked ? '<span class="pill off">Not available</span>' : locked ? '<span class="pill off">Locked</span>'
+    const act = (c) => (blocked ? '<span class="pill off">Not available</span>' : locked ? '<span class="pill off">Locked</span>' : c.done ? '<span class="pill ok">Cleared</span>'
       : `<button class="pill go" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`);
     const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL. Details"><span class="spr-x">${c.x}×</span><span class="spr-t"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></span></button>
-      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(c.prize)}</b> SOL</span>${act(c)}</div></div>`).join('');
+      <div class="spr-act"><span class="spr-win">${c.done ? `All ${c.of} cleared today` : `Win <b class="num">${fmtAmt(c.prize)}</b> SOL${c.at ? ` · ${c.at + 1} of ${c.of}` : ''}`}</span>${act(c)}</div></div>`).join('');
     return `<div class="cc sp sp-cc"><div class="cc-h"><span class="cc-k">${ICON.star}Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftOf(left) : 'New soon'}</span></div>${locked ? unlockRow(s) : ''}${rows}</div>`;
   }
   // the specials open once the player has bet SP.UNLOCK entries in regular runs: how far along they are
@@ -1862,7 +1873,7 @@
       if (onScore(o, h, st)) return;
     }
     if (ev & EV.CLEAR) { onClear(); return; }
-    if (ev & (EV.MISS | EV.FLOOR)) onBust(st.result === 'floor' ? 'floor' : st.missKind, h);
+    if (ev & (EV.MISS | EV.FLOOR | EV.BLOCK)) onBust(st.result === 'floor' || st.result === 'wall' ? st.result : st.missKind, h);
   }
 
   function onScore(o, h, st) {
@@ -1935,7 +1946,7 @@
     }).catch(netFail);
   }
 
-  const BUST_TITLES = { rimout: 'Rimmed out', over: 'Over the rim', under: 'Under the rim', floor: 'Hit the floor', timeout: 'Out of time' };
+  const BUST_TITLES = { rimout: 'Rimmed out', over: 'Over the rim', under: 'Under the rim', floor: 'Hit the floor', wall: 'Hit a wall', timeout: 'Out of time' };
   function onBust(kind, h) {
     phase = 'over';
     run.lost = true; setHeat(0); // the flame goes out with the run
@@ -1943,7 +1954,7 @@
     if (run.log && run.log.length) run.log[run.log.length - 1].push('X');
     if (run.streak > 1) setStreakHud('broke');
     const lostPot = run.bet * run.total;
-    if (h) hoopVis(h).flash = -1;
+    if (h && kind !== 'wall') hoopVis(h).flash = -1;
     ball.fall = { vx: run.st.ball.vx * 0.6, vy: Math.min(run.st.ball.vy, 200), hover: false, t: 0 };
     if (!REDUCED) {
       view.shake = 7;
@@ -2153,7 +2164,9 @@
     run.share = prac ? '' : shareText(sp ? (cls === 'win' ? 'Cleared it' : title + ' at ring ' + Math.min(run.st ? run.st.hoops.length : 0, run.hoops + 1)) : cls !== 'loss' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
     $('resStats').innerHTML = [[run.score, nb ? 'New best' : 'Score', nb], [run.hoops, 'Rings'], [run.best, 'Best streak']]
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
-    $('againT').textContent = prac ? 'Practice again' : sp ? 'Try again' : 'Play again';
+    const spNow = sp && specState && specState.specials ? specState.specials[run.slot] : null;
+    $('againT').textContent = prac ? 'Practice again' : sp ? (cls === 'win' ? 'Play next' : 'Try again') : 'Play again';
+    $('againBtn').hidden = !!(spNow && spNow.done); // every special at that prize is cleared: it's back tomorrow
     $('againAmt').textContent = prac ? '' : fmtBet(sp ? run.bet : prefs.bet) + ' SOL';
     $('lobbyBtn').textContent = sp || prac ? 'Back' : 'Change bet';
     showProgress(pr);
@@ -2241,7 +2254,9 @@
     pr.weeklies.forEach((c) => g.push(['daily', ICON.check, weeklyText(c) + ' · +' + c.xp + ' XP']));
     pr.careers.forEach((m) => g.push(['daily', ICON.flag, careerText(m) + ' · +' + m[2] + ' XP']));
     const sNow = run.mode === 'special' && specState && specState.specials ? specState.specials[run.slot] : null;
-    if (!g.length && sNow) g.push(['', ICON.trophy, `${sNow.recipe.name} today: ${sNow.me.wins} of ${sNow.me.tries} cleared`]);
+    // after a special: what's next at that prize (clearing one brings up a new one), or how many are cleared today
+    if (sNow && !run.lost) g.unshift(['', ICON.trophy, sNow.done ? `All ${sNow.of} of today’s ${sNow.x}× specials cleared` : `Next up: ${sNow.recipe.name} · ${sNow.at + 1} of ${sNow.of} today`]);
+    else if (!g.length && sNow) g.push(['', ICON.trophy, `${sNow.at} of ${sNow.of} cleared today at ${sNow.x}×`]);
     // the mission to go for next, with where it stands and what it pays: there's always a goal for the next run
     const nm = run.mode === 'run' && !(vh < 720 && rbReady > 0) ? nearestMission(runFacts0()) : null, nx = $('resNext'); // a short screen shows the claim instead
     nx.innerHTML = nm ? `<div class="rn-h">${ICON.target}<span>${nm.text}</span><b>${nm.p}/${nm.n}${nm.sol ? ' · ' + fmtBet(nm.sol) + ' SOL' : ' · ' + nm.xp + ' XP'}</b></div><div class="rn-bar"><i style="width:${(nm.p / nm.n * 100).toFixed(1)}%"></i></div>` : '';
@@ -2267,6 +2282,23 @@
   // ---------------------------------------------------------------- guidance for new players
   const newPlayer = () => stats.runs <= 2;
   // a dotted path from the ball to the first ring, shown before the first few runs start
+  // Walls (special courses): a slab standing on the court, drawn at exactly its collision size. A dark purple body
+  // with its near side catching the light, a bright cap, and a soft light over its top so it reads against the dark
+  // hall; the one the ball hit flashes white.
+  function drawWalls(c, st, left, width) {
+    for (const w of st.walls) {
+      const x = view.offset + w.x0, wd = w.x1 - w.x0, hgt = W.FLOOR - w.y0;
+      if (x + wd < left - 60 || x > left + width + 60) continue;
+      c.globalCompositeOperation = 'lighter';
+      softGlow(c, x + wd / 2, w.y0, 44, 30, w.hit ? '255,255,255' : RING_GLOW.ring, w.hit ? 0.5 : 0.15, 0.3);
+      c.globalCompositeOperation = 'source-over';
+      c.fillStyle = '#31245a'; c.fillRect(x, w.y0, wd, hgt);
+      c.fillStyle = '#5a45a0'; c.fillRect(x, w.y0, 3, hgt);
+      c.fillStyle = 'rgba(0,0,0,0.32)'; c.fillRect(x + wd - 4, w.y0, 4, hgt);
+      c.fillStyle = w.hit ? '#ffffff' : '#9945ff'; c.fillRect(x, w.y0, wd, 5);
+      c.fillStyle = 'rgba(255,255,255,0.4)'; c.fillRect(x, w.y0, wd, 1.2);
+    }
+  }
   function drawGuide(c, bx, by) {
     if (phase !== 'ready' || run.level !== 1 || !newPlayer() || !run.st || ball.glide) return;
     const h = run.st.hoops[0], hx = view.offset + h.x, hy = E.hoopY(h, 0);
@@ -2703,6 +2735,7 @@
     const vis = hoops.filter((o) => { const x = o.off + o.h.x; return x > worldLeft - 80 && x < worldLeft + worldW + 80; });
     drawFar(c, worldLeft, worldW);
     drawCourt(c, worldLeft, worldW, S, bx, by, vis);
+    if (st && st.walls && st.walls.length) drawWalls(c, st, worldLeft, worldW);
     if (ball.fire > 0.05 && !ball.hidden && !REDUCED) fireLight(c, bx, by);
     if (ball.fire > 0.25 && !REDUCED && phase !== 'lobby') drawStreaks(c, worldLeft, worldW);
     view.nextRing = st && phase !== 'over' && phase !== 'clearing' ? st.hoops[st.next] || null : null;
@@ -3639,7 +3672,7 @@
       row('star', 'gold', 'Score and XP', `Rings score points, more for swishes and streaks. Points, missions and trophies earn XP, which unlocks balls, wings and trails. Neither changes what a run pays.`) +
       row('mission', 'purple', 'Missions', `Three at a time, new every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week. Finish all three to open the next round, which pays more.`) +
       row('back', 'green', 'Rakeback', `Every bet sets a little SOL aside for you: ${Math.round(LV.RATE * 100)}% of the house's cut. Level up to claim it.`) +
-      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
+      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. Clear one and a new one takes its place; some have walls to fly over. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Daily pot</b>: buy in, then meet the day's challenge to share the pot.`) +
       `</div>`;
   }
   // ---------------------------------------------------------------- the quick tour
