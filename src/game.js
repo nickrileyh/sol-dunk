@@ -2625,7 +2625,7 @@
     });
   }
   // Rakeback: released by a level up, claimed with one tap (on the result card or on Profile).
-  const rakeChip = (x) => `<button class="gain claim" id="rbChip" style="animation-delay:0.3s" aria-label="Claim ${fmtBet(x)} SOL of rakeback">${ICON.gift}<span>Level-up rakeback</span><em>Claim ${fmtBet(x)} SOL</em></button>`;
+  const rakeChip = (x) => `<button class="gain claim" id="rbChip" style="animation-delay:0.3s" aria-label="Claim ${fmtBet(x)} SOL of rakeback">${ICON.gift}<span>Level-up rakeback</span><em>Claim ${fmtBet(x)}<i> SOL</i></em></button>`;
   let rbBusy = false;
   async function claimRakeback(el) {
     if (rbBusy) return;
@@ -2645,7 +2645,7 @@
   }
   // Mission SOL: released when a round's need is played, claimed with a tap (a mission's Claim key on the Missions tab,
   // or the result card's ticket, which claims everything ready)
-  const missionChip = (x) => `<button class="gain claim" id="msChip" style="animation-delay:0.35s" aria-label="Claim ${fmtBet(x)} SOL of mission rewards">${ICON.gift}<span>Mission SOL ready</span><em>Claim ${fmtBet(x)} SOL</em></button>`;
+  const missionChip = (x) => `<button class="gain claim" id="msChip" style="animation-delay:0.35s" aria-label="Claim ${fmtBet(x)} SOL of mission rewards">${ICON.gift}<span>Mission SOL ready</span><em>Claim ${fmtBet(x)}<i> SOL</i></em></button>`;
   let msBusy = false;
   async function claimMission(win, i, el) {
     if (msBusy) return;
@@ -2715,7 +2715,7 @@
     nx.innerHTML = nm ? `<div class="rn-h">${ICON.target}<span>${nm.text}</span><b>${nm.p}/${nm.n}${nm.sol ? ' · ' + fmtBet(nm.sol) + ' SOL' : ' · ' + nm.xp + ' XP'}</b></div><div class="rn-bar"><i style="width:${(nm.p / nm.n * 100).toFixed(1)}%"></i></div>` : '';
     const room = Math.max(1, (vh < 720 ? 3 : 4) - (pr.unlocks.length ? 1 : 0) - (nm && vh < 720 ? 1 : 0) - tix), more = g.length > room ? g.length - (room - 1) : 0;
     $('resGains').innerHTML = (rbReady > 0 ? rakeChip(rbReady) : '') + (msReady > 0 ? missionChip(msReady) : '') + g.slice(0, more ? room - 1 : room).map((x, i) => (x[3] ? unlockChip(x[3], i) : gainChip(x[0], x[1], x[2], i))).join('') +
-      (more ? gainChip('', ICON.spark, '+' + more + ' more', room - 1) : '');
+      (more ? gainChip('more', '', '+' + more + ' more', room - 1) : '');
     wireUnlockChips();
     const rc = $('rbChip');
     if (rc) rc.addEventListener('click', () => { if (armed(ui.res)) claimRakeback(rc); });
@@ -4422,8 +4422,11 @@
       const net = stats.returned - stats.wagered, flat = Math.abs(net) < 0.00005;
       return `<div class="sp-prize wl-bal"><span class="k">Demo balance</span><div class="big"><span class="num">${fmtBal(wallet.balance)}</span><span class="unit">SOL</span></div></div>
         <div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${stats.best ? fmtMult(stats.best) : '–'}</b><span>Best</span></div><div><b class="${flat ? '' : net > 0 ? 'pos' : 'neg'}">${flat ? '0' : (net > 0 ? '+' : '−') + fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
-        <div class="prose"><p>You're playing with demo SOL. Real SOL play runs through the SOL DUNK server with Phantom or Solflare.</p></div>
-        <button class="btn btn-plain" id="resetBal">Reset to ${CFG.demoStart} demo SOL</button>`;
+        ${rulesHtml([
+          ['practice', 'You’re playing with demo SOL. Nothing won or lost here is real.'],
+          ['next', 'Real SOL play runs through the SOL DUNK server, with Phantom or Solflare.'],
+          ['back', `Running low? Start again with ${CFG.demoStart} demo SOL.`]], 'Demo SOL')}
+        <button class="btn btn-plain wl-reset" id="resetBal">Reset to ${CFG.demoStart} demo SOL</button>`;
     }
     if (!bank.real || !ServerBank.token) {
       return `<div class="prose"><p>Connect a Solana wallet to play with real SOL on <b>${CFG.network}</b>.</p></div><button class="btn btn-primary" id="wConnect">Connect wallet</button>

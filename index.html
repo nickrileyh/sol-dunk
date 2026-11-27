@@ -1468,6 +1468,26 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
 .mrow.done .mxp b.got { color: var(--green); }
 /* Odds & fairness: the last run's seeds and Verify sit under the fairness rows */
 .fair-last { margin-top: 14px; }
+
+/* ---------- a tidier result card and wallet ----------
+   The owner asked again for a better look. */
+/* the result card's tickets stand as one stack: each the card's width, its words on the left and its key (Claim, Use)
+   on the right, so a run's rewards read as a list (they were centred pills of every width); "+5 more" is a quiet line
+   under them, not another ticket */
+#resGains { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; }
+#resGains .gain { display: flex; width: 100%; min-height: 34px; padding: 0 10px 0 16px; gap: 8px; font-size: 13px; text-align: left; }
+#resGains .gain > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#resGains .gain em { margin-left: auto; flex: none; }
+#resGains .gain.more { justify-content: center; min-height: 0; padding: 2px 0 0; background: none; -webkit-mask: none; mask: none; color: var(--label-3); font-size: 12px; font-weight: 600; }
+#resGains .gain.more > span { flex: none; }
+/* the Wallet's demo note is a card of rows; its reset key stands under it */
+.wl-reset { margin-top: 14px; }
+#resGains .gain em i { font-style: normal; }
+/* the smallest phones: a Claim key drops its "SOL" (the line says what it is) so the ticket's words aren't cut off */
+@media (max-width: 359px) {
+  #resGains .gain { padding: 0 8px 0 12px; gap: 6px; }
+  #resGains .gain em i { display: none; }
+}
 </style>
 </head>
 <body class="hud-lobby">
@@ -6245,7 +6265,7 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
     });
   }
   // Rakeback: released by a level up, claimed with one tap (on the result card or on Profile).
-  const rakeChip = (x) => `<button class="gain claim" id="rbChip" style="animation-delay:0.3s" aria-label="Claim ${fmtBet(x)} SOL of rakeback">${ICON.gift}<span>Level-up rakeback</span><em>Claim ${fmtBet(x)} SOL</em></button>`;
+  const rakeChip = (x) => `<button class="gain claim" id="rbChip" style="animation-delay:0.3s" aria-label="Claim ${fmtBet(x)} SOL of rakeback">${ICON.gift}<span>Level-up rakeback</span><em>Claim ${fmtBet(x)}<i> SOL</i></em></button>`;
   let rbBusy = false;
   async function claimRakeback(el) {
     if (rbBusy) return;
@@ -6265,7 +6285,7 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
   }
   // Mission SOL: released when a round's need is played, claimed with a tap (a mission's Claim key on the Missions tab,
   // or the result card's ticket, which claims everything ready)
-  const missionChip = (x) => `<button class="gain claim" id="msChip" style="animation-delay:0.35s" aria-label="Claim ${fmtBet(x)} SOL of mission rewards">${ICON.gift}<span>Mission SOL ready</span><em>Claim ${fmtBet(x)} SOL</em></button>`;
+  const missionChip = (x) => `<button class="gain claim" id="msChip" style="animation-delay:0.35s" aria-label="Claim ${fmtBet(x)} SOL of mission rewards">${ICON.gift}<span>Mission SOL ready</span><em>Claim ${fmtBet(x)}<i> SOL</i></em></button>`;
   let msBusy = false;
   async function claimMission(win, i, el) {
     if (msBusy) return;
@@ -6335,7 +6355,7 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
     nx.innerHTML = nm ? `<div class="rn-h">${ICON.target}<span>${nm.text}</span><b>${nm.p}/${nm.n}${nm.sol ? ' · ' + fmtBet(nm.sol) + ' SOL' : ' · ' + nm.xp + ' XP'}</b></div><div class="rn-bar"><i style="width:${(nm.p / nm.n * 100).toFixed(1)}%"></i></div>` : '';
     const room = Math.max(1, (vh < 720 ? 3 : 4) - (pr.unlocks.length ? 1 : 0) - (nm && vh < 720 ? 1 : 0) - tix), more = g.length > room ? g.length - (room - 1) : 0;
     $('resGains').innerHTML = (rbReady > 0 ? rakeChip(rbReady) : '') + (msReady > 0 ? missionChip(msReady) : '') + g.slice(0, more ? room - 1 : room).map((x, i) => (x[3] ? unlockChip(x[3], i) : gainChip(x[0], x[1], x[2], i))).join('') +
-      (more ? gainChip('', ICON.spark, '+' + more + ' more', room - 1) : '');
+      (more ? gainChip('more', '', '+' + more + ' more', room - 1) : '');
     wireUnlockChips();
     const rc = $('rbChip');
     if (rc) rc.addEventListener('click', () => { if (armed(ui.res)) claimRakeback(rc); });
@@ -8042,8 +8062,11 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
       const net = stats.returned - stats.wagered, flat = Math.abs(net) < 0.00005;
       return `<div class="sp-prize wl-bal"><span class="k">Demo balance</span><div class="big"><span class="num">${fmtBal(wallet.balance)}</span><span class="unit">SOL</span></div></div>
         <div class="tiles"><div><b>${stats.runs}</b><span>Runs</span></div><div><b>${stats.best ? fmtMult(stats.best) : '–'}</b><span>Best</span></div><div><b class="${flat ? '' : net > 0 ? 'pos' : 'neg'}">${flat ? '0' : (net > 0 ? '+' : '−') + fmtSol(Math.abs(net))}</b><span>Net SOL</span></div></div>
-        <div class="prose"><p>You're playing with demo SOL. Real SOL play runs through the SOL DUNK server with Phantom or Solflare.</p></div>
-        <button class="btn btn-plain" id="resetBal">Reset to ${CFG.demoStart} demo SOL</button>`;
+        ${rulesHtml([
+          ['practice', 'You’re playing with demo SOL. Nothing won or lost here is real.'],
+          ['next', 'Real SOL play runs through the SOL DUNK server, with Phantom or Solflare.'],
+          ['back', `Running low? Start again with ${CFG.demoStart} demo SOL.`]], 'Demo SOL')}
+        <button class="btn btn-plain wl-reset" id="resetBal">Reset to ${CFG.demoStart} demo SOL</button>`;
     }
     if (!bank.real || !ServerBank.token) {
       return `<div class="prose"><p>Connect a Solana wallet to play with real SOL on <b>${CFG.network}</b>.</p></div><button class="btn btn-primary" id="wConnect">Connect wallet</button>

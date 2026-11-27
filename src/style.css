@@ -1459,3 +1459,23 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
 .mrow.done .mxp b.got { color: var(--green); }
 /* Odds & fairness: the last run's seeds and Verify sit under the fairness rows */
 .fair-last { margin-top: 14px; }
+
+/* ---------- a tidier result card and wallet ----------
+   The owner asked again for a better look. */
+/* the result card's tickets stand as one stack: each the card's width, its words on the left and its key (Claim, Use)
+   on the right, so a run's rewards read as a list (they were centred pills of every width); "+5 more" is a quiet line
+   under them, not another ticket */
+#resGains { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; }
+#resGains .gain { display: flex; width: 100%; min-height: 34px; padding: 0 10px 0 16px; gap: 8px; font-size: 13px; text-align: left; }
+#resGains .gain > span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#resGains .gain em { margin-left: auto; flex: none; }
+#resGains .gain.more { justify-content: center; min-height: 0; padding: 2px 0 0; background: none; -webkit-mask: none; mask: none; color: var(--label-3); font-size: 12px; font-weight: 600; }
+#resGains .gain.more > span { flex: none; }
+/* the Wallet's demo note is a card of rows; its reset key stands under it */
+.wl-reset { margin-top: 14px; }
+#resGains .gain em i { font-style: normal; }
+/* the smallest phones: a Claim key drops its "SOL" (the line says what it is) so the ticket's words aren't cut off */
+@media (max-width: 359px) {
+  #resGains .gain { padding: 0 8px 0 12px; gap: 6px; }
+  #resGains .gain em i { display: none; }
+}
