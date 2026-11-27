@@ -173,21 +173,21 @@ function playTaps(seed, di, L, skill, salt) {
   const M = client_(8802); await M.signIn(); await M.api('/api/dev/faucet', { lamports: 3e9 });
   const m0 = await M.api('/api/missions');
   check(m0.daily.length === 3 && m0.weekly.length === 3 && m0.playedLamports.day === 0 && m0.needLamports.day === NEED.day, 'missions: three a day, three a week, nothing played');
-  check(m0.rounds === MS.ROUNDS && m0.round.day === 0 && m0.round.week === 0 && m0.all.day.length === 3 && m0.baseNeedLamports.week === NEED.week, 'missions: round 1 of three is open');
+  check(m0.rounds === MS.ROUNDS && MS.ROUNDS === 5 && m0.round.day === 0 && m0.round.week === 0 && m0.all.day.length === 3 && m0.baseNeedLamports.week === NEED.week, 'missions: round 1 of five is open');
   const LV = require(path.join(root, 'src/levels.cjs'));
   const rb0 = (await M.api('/api/me')).rakeback;
   check(rb0 && rb0.accLamports === 0 && rb0.readyLamports === 0 && rb0.level === 1, 'rakeback: nothing set aside before the first bet ' + JSON.stringify(rb0));
-  let myXp = 0, rbAcc = 0, rbReady = 0; // a local copy of the server's XP and rakeback
-  const xpUp = (xp) => { const b = LV.stepsOf(myXp); myXp += xp; if (LV.stepsOf(myXp) > b) { const x = Math.floor(rbAcc); rbAcc -= x; rbReady += x; } };
+  let myXp = 0, rbS = LV.fix({}), lossSeen = 0; // a local copy of the server's XP and rakeback
+  const xpUp = (xp) => { const b = LV.stepsOf(myXp); myXp += xp; if (LV.stepsOf(myXp) > b) LV.release(rbS, true); };
   check(m0.daily[0].k === MS.daily(m0.day)[0].k && m0.daily.every((d, k) => d.rewardLamports === Math.floor(MS.reward('day', k, NEED.day))), 'missions: the day\'s set and its rewards');
   let mine = MS.roll(null, Date.now()), mbal = (await M.api('/api/me')).balance, readyTotal = 0, sawLocked = false, sawRound = false;
   const addReady = (x) => { for (const p of (x && x.ready) || []) readyTotal += p.lamports; }; // released, not credited: it waits for a claim
   for (let i = 0; i < 8; i++) {
     const bet = 10_000_000, di = 0;
     const s = await M.api('/api/run/start', { difficulty: di, lamports: bet, clientSeed: 'mis' + i + 'x' });
-    mbal -= bet; mine = MS.play(mine, bet, Date.now(), NEED).s; addReady(s.missions); rbAcc += bet * LV.BACK.run;
+    mbal -= bet; mine = MS.play(mine, bet, Date.now(), NEED).s; addReady(s.missions); LV.add(rbS, 'run', bet);
     check(s.balance === mbal, `missions run ${i}: start balance ${s.balance} vs ${mbal}`);
-    check(s.rakeback.accLamports === Math.floor(rbAcc) && s.rakeback.readyLamports === rbReady, `rakeback run ${i}: 0.2% of the bet is set aside ` + JSON.stringify([s.rakeback, rbAcc, rbReady]));
+    check(s.rakeback.accLamports === Math.floor(rbS.acc) && s.rakeback.readyLamports === rbS.ready && s.rakeback.betLamports === rbS.w[0], `rakeback run ${i}: 0.05% of the bet is set aside, and the bet counts toward the level's losses ` + JSON.stringify([s.rakeback, rbS.acc, rbS.ready]));
     let L = 1, seed = s.levelSeed, total = 1, streak = 0, levels = [], end = null;
     while (!end) {
       const def = E.generateLevel(seed, di, L), pl = playTaps(seed, di, L, i % 2 ? 'perfect' : 'good', 'm' + i + ':' + L);
@@ -195,12 +195,14 @@ function playTaps(seed, di, L, skill, salt) {
       const cnt = a.capped ? a.capIndex + 1 : pl.outcomes.length;
       levels.push({ outcomes: pl.outcomes.slice(0, cnt).join(''), clear: pl.result === 'clear' && !a.capped, mov: pl.outcomes.slice(0, cnt).map((o, k) => (def.hoops[k].amp ? '1' : '0')).join(''), tilt: pl.outcomes.slice(0, cnt).map((o, k) => (def.hoops[k].tilt ? '1' : '0')).join('') });
       total = a.total; streak = a.streak;
+      LV.rate(LV.rings(rbS, di, L, cnt, pl.result !== 'clear' && !a.capped, bet), SP.regular(LV.recOf(rbS)).m);
       const r = await M.api('/api/run/level', { runId: s.runId, level: L, taps: pl.taps });
       if (r.status === 'checkpoint' && L < 3) { const n = await M.api('/api/run/continue', { runId: s.runId }); L = n.level; seed = n.levelSeed; continue; }
       if (r.status === 'checkpoint') { end = await M.api('/api/run/cashout', { runId: s.runId }); mbal += end.payoutLamports; }
       else { end = r; mbal += r.payoutLamports; }
     }
     const local = MS.run(mine, levels, Date.now(), NEED); mine = local.s;
+    LV.pay(rbS, 'run', end.payoutLamports); if (end.payoutLamports < bet) lossSeen++;
     addReady(end.missions);
     const v = end.missions && end.missions.view;
     check(v && v.all.day.length === mine.d.length && v.all.day.every((d, k) => d.p === mine.d[k].p && d.done === mine.d[k].done && d.paid === mine.d[k].paid && d.ready === MS.isReady(mine.d[k])), `missions run ${i}: server progress matches a local replay ` + JSON.stringify([v && v.all.day.map((d) => d.p), mine.d.map((d) => d.p)]));
@@ -213,7 +215,8 @@ function playTaps(seed, di, L, skill, salt) {
     check(v && v.all.day.reduce((a, d) => a + (d.paid ? d.rewardLamports : 0), 0) <= v.playedLamports.day * MS.SHARES.day + 1e-6, `missions run ${i}: the day has paid no more than its share of the play`);
     check(end.balance === mbal, `missions run ${i}: balance ${end.balance} vs ${mbal} (nothing credited until a claim; ${readyTotal} ready)`);
     xpUp(LV.runXp(local.facts) + local.done.reduce((a, d) => a + d.xp, 0));
-    check(end.rakeback.readyLamports === rbReady && end.rakeback.accLamports === Math.floor(rbAcc) && end.rakeback.level === LV.lvlOf(myXp).l, `rakeback run ${i}: a level up (the server's own XP) releases it ` + JSON.stringify([end.rakeback, rbReady, rbAcc, LV.lvlOf(myXp).l]));
+    check(end.rakeback.readyLamports === rbS.ready && end.rakeback.accLamports === Math.floor(rbS.acc) && end.rakeback.level === LV.lvlOf(myXp).l && Math.abs(end.rakeback.share - rbS.k) < 1e-12,
+      `rakeback run ${i}: the payout nets against the bet, the share follows the rating, and a level up (the server's own XP) releases it ` + JSON.stringify([end.rakeback, rbS.ready, rbS.acc, rbS.k, LV.lvlOf(myXp).l]));
     // trophies: the server earns them from the same verified levels as a local replay does, and pays nothing for earning
     tro = TR.run(tro, levels, { paid: end.payoutLamports > 0, total, hard: di === E.DIFFS.length - 1, nl: E.LEVELS }, 1).s;
     const tv = end.trophies, mineT = TR.view(tro, tv ? tv.playedLamports : 0, TRU);
@@ -248,6 +251,7 @@ function playTaps(seed, di, L, skill, salt) {
     check((await M.api('/api/missions')).readyLamports === readyTotal, 'missions: the rest is still ready to claim');
   }
   // rakeback: what the level ups released can be claimed once
+  const rbReady = rbS.ready;
   check(rbReady > 0 && LV.lvlOf(myXp).l > 1, `rakeback: eight runs levelled up and released ${rbReady} lamports`);
   const rk1 = await M.api('/api/rakeback/claim', {});
   check(rk1.claimedLamports === rbReady && rk1.balance === mbal + rbReady && rk1.rakeback.readyLamports === 0 && rk1.rakeback.paidLamports === rbReady, 'rakeback: a claim pays what is ready ' + JSON.stringify(rk1));
@@ -395,26 +399,31 @@ function playTaps(seed, di, L, skill, salt) {
       const day = new Date(Date.UTC(2026, 10, 2) + d * 86400000).toISOString().slice(0, 10);
       const dr = MS.dailyRounds(day), wr = MS.weeklyRounds(MS.weekKey(Date.parse(day)));
       for (const [rounds, by] of [[dr, MS.DAILY_BY], [wr, MS.WEEKLY_BY]]) {
-        const ks = rounds.flat().map((m) => m.k).filter((k) => k !== 'days');
-        if (rounds.length !== MS.ROUNDS || rounds.some((r) => r.length !== 3) || new Set(ks).size !== ks.length || ks.some((k) => !by[k])) { ok = false; why = day; }
+        const ks = rounds.map((r) => r.map((m) => m.k).filter((k) => k !== 'days')), seen = {};
+        ks.flat().forEach((k) => { seen[k] = (seen[k] || 0) + 1; });
+        if (rounds.length !== MS.ROUNDS || rounds.some((r) => r.length !== 3) || ks.some((r) => new Set(r).size !== r.length) || ks.some((r, i) => i && r.some((k) => ks[i - 1].includes(k))) || Object.values(seen).some((n) => n > 2) || ks.flat().some((k) => !by[k])) { ok = false; why = day; }
+        // rounds 1 to 3 never repeat a kind (they draw as they did with three rounds)
+        if (new Set(ks.slice(0, 3).flat()).size !== ks.slice(0, 3).flat().length) { ok = false; why = day + ' first three'; }
       }
-      if (wr[0][1].k !== 'days' || wr[0][1].n !== 3 || wr[1][2].k !== 'days' || wr[1][2].n !== 5) { ok = false; why = day + ' days'; }
-      if (dr.flat().some((m) => m.n < MS.DAILY_BY[m.k].n[m.slot][0])) { ok = false; why = day + ' targets'; }
+      if (wr[0][1].k !== 'days' || wr[0][1].n !== 3 || wr[1][2].k !== 'days' || wr[1][2].n !== 5 || wr[4][2].k !== 'days' || wr[4][2].n !== 6) { ok = false; why = day + ' days'; }
+      if (dr.flat().some((m) => m.n < MS.DAILY_BY[m.k].n[m.slot][0]) || wr.flat().some((m) => m.k !== 'days' && m.n < MS.WEEKLY_BY[m.k].n[m.slot][0])) { ok = false; why = day + ' targets'; }
     }
-    check(ok, 'missions: three rounds of three a day and a week, no kind twice in a window, a days mission in weekly rounds 1 and 2 ' + why);
+    check(ok, 'missions: five rounds of three a day and a week, no kind twice in a round or in two rounds in a row, a days mission in weekly rounds 1, 2 and 5 ' + why);
+    const RS = MS.STEPS.map((x, r) => r);
     for (const win of ['day', 'week']) {
-      const total = [0, 1, 2].reduce((a, r) => a + [0, 1, 2].reduce((b, s) => b + MS.reward(win, s, null, r), 0), 0);
-      check(Math.abs(total - MS.NEED[win] * MS.SHARES[win] * MS.STEPS[MS.ROUNDS - 1]) < 1e-12 && [0, 1, 2].every((r) => Math.abs([0, 1, 2].reduce((b, s) => b + MS.reward(win, s, null, r), 0) - MS.SHARES[win] * (MS.needAt(win, r) - (r ? MS.needAt(win, r - 1) : 0))) < 1e-12), `missions: each ${win} round pays its share of the play its need adds`);
+      const total = RS.reduce((a, r) => a + [0, 1, 2].reduce((b, s) => b + MS.reward(win, s, null, r), 0), 0);
+      check(Math.abs(total - MS.NEED[win] * MS.SHARES[win] * MS.STEPS[MS.ROUNDS - 1]) < 1e-12 && RS.every((r) => Math.abs([0, 1, 2].reduce((b, s) => b + MS.reward(win, s, null, r), 0) - MS.SHARES[win] * (MS.needAt(win, r) - (r ? MS.needAt(win, r - 1) : 0))) < 1e-12), `missions: each ${win} round pays its share of the play its need adds`);
     }
-    check(Math.abs(MS.RATE - 0.005) < 1e-12 && MS.RATE + LV.BACK.run <= 0.0071 && LV.CUT.pot === POTS.RAKE && LV.CUT.special <= 1 - SP.TARGET, 'missions and rakeback together give back less than the 1% the house keeps from a good player');
-    // a player who swishes everything, a week of days: rounds open one at a time, later rounds wait for more play, and
-    // a window never pays more than its share of what was played in it
+    check(Math.abs(MS.RATE - 0.005) < 1e-12 && MS.RATE + LV.VOL <= 0.0056 && LV.LOSS + LV.VOL + MS.RATE < Math.min(POTS.RAKE, 1 - SP.TARGET) && LV.LOSS_TOP + LV.VOL + MS.RATE < 0.03,
+      'missions and rakeback: the volume part and mission SOL stay under the 1% the house keeps from a good player, every bet\'s worth of challenge losses back stays under their 10%, and a good player\'s share of a deep run under its 3% (sim/rakeback.cjs plays the rest)');
+    // a player who swishes everything, a week of 45 runs a day at 1.25 SOL: rounds open one at a time, later rounds wait
+    // for more play, and a window never pays more than its share of what was played in it
     let s = null, opened = 0, maxDay = 0, days = 0;
     const t0 = Date.parse('2027-01-04T10:00:00Z'), all = [lv('SSSSSS', true, '010101'), lv('SSSSSS', true, '111111'), lv('SSSSSS', true, '101010'), lv('SSSSSS', true, '111111'), lv('SSSSSS', true, '111111')];
     for (let d = 0; d < 7; d++) {
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 45; i++) {
         const ts = t0 + d * MS.DAY_MS + i * 60000;
-        s = MS.play(s, 0.5, ts).s;
+        s = MS.play(s, 1.25, ts).s;
         const before = s.d.length, r = MS.run(s, all, ts); s = r.s;
         if (s.d.length > before + 3) ok = false; // one run opens one round at most
         opened += r.opened.length;
@@ -427,13 +436,15 @@ function playTaps(seed, di, L, skill, salt) {
       }
       const v = MS.view(s, t0 + d * MS.DAY_MS + 3600000);
       maxDay = Math.max(maxDay, v.paid.day); days = v.days;
-      if (d === 0) check(v.round.day === MS.ROUNDS - 1 && v.daily.every((m) => m.done && m.paid) && v.next.day === null && Math.abs(v.paid.day - v.max.day) < 1e-9 && v.days === 1, 'missions: a strong day finishes all three daily rounds and collects the whole day ' + JSON.stringify([v.round, v.paid, v.max, v.days]));
+      if (v.round.day !== MS.ROUNDS - 1 || !v.daily.every((m) => m.done && m.paid) || v.next.day !== null || Math.abs(v.paid.day - v.max.day) > 1e-9) { ok = false; why = 'day ' + d + ' ' + JSON.stringify([v.round, v.paid, v.max]); }
+      if (d === 0) check(v.round.day === MS.ROUNDS - 1 && v.daily.every((m) => m.done && m.paid) && v.next.day === null && Math.abs(v.paid.day - v.max.day) < 1e-9 && v.days === 1, 'missions: a strong day finishes all five daily rounds and collects the whole day ' + JSON.stringify([v.round, v.paid, v.max, v.days]));
       if (d === 2) check(v.all.week[1].k === 'days' && v.all.week[1].done, 'missions: three days with a daily round finish the week\'s first days mission');
     }
-    check(ok && opened >= 14 && days === 7 && Math.abs(maxDay - MS.NEED.day * MS.SHARES.day * MS.STEPS[2]) < 1e-9, 'missions: rounds open one at a time and no window pays more than its share of the play ' + why);
+    const topStep = MS.STEPS[MS.ROUNDS - 1];
+    check(ok && opened === 8 * (MS.ROUNDS - 1) && days === 7 && Math.abs(maxDay - MS.NEED.day * MS.SHARES.day * topStep) < 1e-9, 'missions: rounds open one at a time, a strong player finishes every round, and no window pays more than its share of the play ' + why + ' ' + opened);
     // nothing was claimed in that week: everything released is still ready, the days' SOL that rolled over included
-    // (a whole week of a strong player: 0.03 SOL a day and 0.1 SOL for the week)
-    const full = 7 * MS.NEED.day * MS.SHARES.day * MS.STEPS[2] + MS.NEED.week * MS.SHARES.week * MS.STEPS[2];
+    // (a whole week of a strong player: 0.12 SOL a day and 0.4 SOL for the week)
+    const full = 7 * MS.NEED.day * MS.SHARES.day * topStep + MS.NEED.week * MS.SHARES.week * topStep;
     const vw = MS.view(s, t0 + 6 * MS.DAY_MS + 7200000);
     check(Math.abs(s.ready - full) < 1e-9 && Math.abs(vw.readyAll - full) < 1e-9 && Math.abs(vw.earlier - (full - vw.ready.day - vw.ready.week)) < 1e-9 && vw.ready.week > 0, 'missions: released SOL waits to be claimed, earlier days\' too ' + JSON.stringify([s.ready, full]));
     const w0 = s.w.findIndex((m) => MS.isReady(m)), c1 = MS.claim(s, 'week', w0), c2 = MS.claim(s, 'week', w0), cAll = MS.claim(s);
@@ -443,10 +454,26 @@ function playTaps(seed, di, L, skill, salt) {
     check(LV.lvlOf(0).l === 1 && LV.xpNeed(1) === 70 && LV.xpNeed(2) === 105 && LV.lvlOf(69).l === 1 && LV.lvlOf(70).l === 2 && LV.lvlOf(175).l === 3, 'levels: 70 XP for the first, 35 more for each after');
     check([0, 49, 50, 124, 125, 1000, 5000].every((x) => { let l = 1, n = 50, y = x; while (y >= n && l < 99) { y -= n; l++; n = 50 + 25 * (l - 1); } return LV.lvlOf(LV.fromOld(x)).l === l; }), 'levels: saved XP keeps its level on the new curve');
     let rb = null;
-    rb = LV.add(rb, 'run', 100); rb = LV.add(rb, 'special', 10); rb = LV.add(rb, 'pot', 5);
-    check(Math.abs(rb.acc - (0.2 + 0.1 + 0.1)) < 1e-12 && rb.ready === 0, 'rakeback: 0.2% of run bets, 1% of special entries, 2% of pot entries');
+    rb = LV.add(rb, 'run', 100); rb = LV.pay(rb, 'run', 80);
+    check(Math.abs(rb.acc - (0.05 + 1)) < 1e-12 && rb.ready === 0, 'rakeback: 0.05% of the bet, and 5% of the level\'s net loss (20 of 100) ' + rb.acc);
+    rb = LV.pay(rb, 'run', 30);
+    check(Math.abs(rb.acc - 0.05) < 1e-12, 'rakeback: a win nets against the level\'s losses (110 back on 100: nothing but the volume part)');
+    rb = LV.add(rb, 'special', 10); rb = LV.add(rb, 'pot', 10); rb = LV.add(rb, 'duel', 10); rb = LV.pay(rb, 'duel', 18);
+    check(Math.abs(rb.acc - (0.05 + 0.015 + 0.05 * 12)) < 1e-12, 'rakeback: challenges net separately from runs, at 5% of their losses (12 of 30) ' + rb.acc);
     const rel = LV.release(rb, false), got = LV.claim(rb);
-    check(Math.abs(rel - 0.4) < 1e-12 && Math.abs(got - 0.4) < 1e-12 && rb.acc === 0 && rb.ready === 0 && Math.abs(rb.paid - 0.4) < 1e-12 && LV.claim(rb) === 0, 'rakeback: a level up releases it, a claim pays it once');
+    check(Math.abs(rel - 0.665) < 1e-12 && Math.abs(got - 0.665) < 1e-12 && rb.acc === 0 && rb.ready === 0 && rb.w.every((x) => x === 0) && Math.abs(rb.paid - 0.665) < 1e-12 && LV.claim(rb) === 0, 'rakeback: a level up releases it and starts a new level\'s window, a claim pays it once');
+    rb = LV.add(rb, 'run', 100);
+    check(Math.abs(rb.acc - (0.05 + LV.CAP * 100)) < 1e-12, 'rakeback: the loss part is at most 2% of the level\'s bets (a 100 lost pays 2, not 5)');
+    check(LV.share(0) === LV.LOSS && LV.share(1.8) === LV.LOSS && LV.share(LV.RATED[1]) === LV.LOSS_TOP && LV.share(4) === LV.LOSS_TOP && Math.abs(LV.share((LV.RATED[0] + LV.RATED[1]) / 2) - (LV.LOSS + LV.LOSS_TOP) / 2) < 1e-12,
+      'rakeback: 5% of run losses up to a rating between average and good, falling to 2% at good');
+    // the rating counts each ring by its run's bet: a thousand cheap missed rings don't outweigh a few dear passed ones
+    let rr = LV.fix(null);
+    for (let k = 0; k < 200; k++) rr = LV.rings(rr, 1, 1, 0, true, 0.001);
+    for (let k = 0; k < 20; k++) rr = LV.rings(rr, 1, 1, 6, false, 1);
+    const flat = SP.regular({ r: { '1|1': [120, 200] } }).m, weighted = SP.regular(LV.recOf(rr)).m;
+    check(weighted > SP.regular({ r: {} }).m && weighted > flat + 1, 'rakeback: the rating counts rings by their bets, so cheap bad runs can\'t hide skill ' + JSON.stringify([flat, weighted]));
+    const old = LV.fix({ acc: 3, ready: 1, paid: 2 });
+    check(old.v === 3 && old.acc === 3 && old.ready === 1 && old.k === LV.LOSS, 'rakeback: a record from before keeps what it built up');
     const top = LV.lvlOf(1e9); let past = 0;
     for (let k = 1; k < LV.MAX; k++) past += LV.xpNeed(k);
     check(top.l === LV.MAX && LV.stepsOf(past + LV.xpNeed(LV.MAX) * 3 + 1) === LV.MAX + 3, 'levels: past the top level, rakeback still releases every level\'s worth of XP');
@@ -459,7 +486,7 @@ function playTaps(seed, di, L, skill, salt) {
     const r1 = TRr.run(null, [{ outcomes: 'SSSSSS', clear: true, mov: '010000', tilt: '000100' }, { outcomes: 'SSSS', clear: false }], { paid: false, total: 0, hard: false, nl: 8 }, 7);
     check(r1.earned.join() === 'swish1,cp1,fire3,moving,nova5,perfect,tilted,score50,streak10' && r1.s.sw === 10, 'trophies: judged from ring outcomes ' + r1.earned.join());
     check(TRr.run(null, [{ outcomes: 'RRRRRR', clear: true }], { paid: true, total: 2.2, hard: true, nl: 8 }, 7).earned.join() === 'cp1,double,legend', 'trophies: a 2x cash-out and a Hard clear');
-    check(TRr.LIST.reduce((n, t) => n + TRr.reward(t), 0) < 0.1 && TRr.RATE + require(path.join(root, 'src/missions.cjs')).RATE + require(path.join(root, 'src/levels.cjs')).BACK.run < 0.01, 'trophies: rewards are small, and with mission SOL and rakeback they stay under the 1% edge against a good player');
+    check(TRr.LIST.reduce((n, t) => n + TRr.reward(t), 0) < 0.1 && TRr.RATE + require(path.join(root, 'src/missions.cjs')).RATE + require(path.join(root, 'src/levels.cjs')).VOL < 0.01, 'trophies: rewards are small, and with mission SOL and rakeback they stay under the 1% edge against a good player');
     // each prize's specials for a day: PER_SLOT of them in order, every twist somewhere, no twist under two prizes;
     // one prize a day opens with a course with walls, and no opener comes back the next day
     let prev = [], bad = 0, walled = 0, fxed = 0; const seen = {}, wallSlots = new Set(), fxSlots = new Set();

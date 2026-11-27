@@ -19,6 +19,8 @@
   // a display amount: fmtSol's precision without the trailing zeros, but at least two decimals (0.13, 0.10, 0.1186)
   function fmtAmt(x) { const [i, f = ''] = fmtSol(x).split('.'), t = f.replace(/0+$/, ''); return i + '.' + (t.length >= 2 ? t : (t + '00').slice(0, 2)); }
   function fmtBet(x) { return (Math.round(x * 1e4) / 1e4).toString(); }
+  // a share as a percent, e.g. 0.05 -> "5%", 0.035 -> "3.5%"
+  const pctTxt = (x) => (Math.round(x * 1000) / 10) + '%';
   function fmtMult(m) { return (m < 10 ? m.toFixed(2) : m < 100 ? m.toFixed(1) : Math.round(m).toString()) + '×'; }
   function fmtX(m) { return '×' + m.toFixed(3); }
 
@@ -265,7 +267,7 @@
     greens: (n) => (n === 1 ? 'Swish a green ring' : `Swish ${n} green rings`), fires: (n) => (n === 1 ? 'Catch fire' : `Catch fire ${n} times`),
     runs: (n) => `Play ${n} runs`
   };
-  // Missions come in rounds of three: finishing all three opens the next round (three a day, three a week), each paying
+  // Missions come in rounds of three: finishing all three opens the next round (five a day, five a week), each paying
   // more SOL once more has been bet in the window.
   const mview = () => bank.missions.view(); // MS.view: { daily, weekly (the open round), round, need, played, paid, waiting, due, next, all, .. }
   const tview = () => bank.trophies.view(); // trophy SOL: { rate, played, claimed, open, list: [{ id, reward, earned, claimed, can, more }] }
@@ -576,7 +578,7 @@
       if (this.s !== s) return false; // closed meanwhile
       const { list, attempts } = this.entries(list0, force ? Infinity : close);
       const r = POTS.settle(attempts * this.fee, s.carryIn, list, false), mine = list.find((e) => e.id === 'me'), won = round9(r.pays.me || 0);
-      if (won) wallet.balance = round9(wallet.balance + won);
+      if (won) { wallet.balance = round9(wallet.balance + won); DemoRake.pay('pot', won); }
       this.last = {
         key: s.key, theme: POTS.THEME_BY[s.theme].name, entrants: list.length, refunded: false, rolled: round9(r.carry),
         results: list.slice(0, POTS.PLACES.length).map((e) => ({ who: e.who, rings: e.rings, score: e.score, place: e.place, won: round9(r.pays[e.id] || 0) })),
@@ -620,12 +622,16 @@
     }
   };
   // ---------------------------------------------------------------- rakeback, demo (rules in src/levels.cjs)
-  // Every bet sets a little SOL aside (20% of the house's cut of it); each level up releases it to claim.
+  // Each level up releases 5% of what was lost since the last one, net of wins (less of run losses for the strongest
+  // players), plus 0.05% of every bet; the loss part is at most 2% of the level's bets.
   const DemoRake = {
     s() { profile.rb = LV.fix(profile.rb); return profile.rb; },
-    view() { const s = this.s(); return { acc: s.acc, ready: s.ready, paid: s.paid }; },
-    add(kind, amount) { const s = LV.add(this.s(), kind, amount); s.acc = round9(s.acc); },
-    levelUp() { const s = this.s(), x = LV.release(s, false); s.acc = 0; s.ready = round9(s.ready); return x; },
+    view() { const s = this.s(), [rb, rp, gb, gp] = s.w; return { acc: round9(s.acc), ready: s.ready, paid: s.paid, loss: round9(Math.max(0, rb - rp) + Math.max(0, gb - gp)), bet: round9(rb + gb), share: s.k }; },
+    add(kind, amount) { LV.add(this.s(), kind, amount); },
+    pay(kind, amount) { if (amount > 0) LV.pay(this.s(), kind, amount); },
+    // a verified regular level: its rings go into the rating, counted by the run's bet, and the share follows it
+    rings(di, L, passes, missed, bet) { const s = LV.rings(this.s(), di, L, passes, missed, bet); LV.rate(s, SP.regular(LV.recOf(s)).m); },
+    levelUp() { const s = this.s(), x = round9(LV.release(s, false)); s.ready = round9(s.ready); return x; },
     async claim() {
       const s = this.s(), x = round9(LV.claim(s));
       if (x > 0) { wallet.balance = round9(wallet.balance + x); s.paid = round9(s.paid); stats.rakeback = round9((stats.rakeback || 0) + x); saveAll(); }
@@ -705,6 +711,7 @@
       const r = E.replay(SP.generate(c.seed, c.recipe, c.g, c.n), taps), won = r.result === 'clear';
       if (won) {
         wallet.balance = round9(wallet.balance + c.prize);
+        DemoRake.pay('special', c.prize);
         const t = this.tally(); if (t.day === c.day) { t.wins[c.slot]++; store.set('special', t); }
       }
       profile.skill = SP.addSpecial(profile.skill, c.slot, won, r.outcomes.length, c.fee); // that special's level at that stake moves
@@ -736,7 +743,7 @@
       if (wallet.balance + 1e-12 < want) throw new Error('Not enough demo SOL for that stake.');
       const v = { ...v0, fee: want, prize: tier.prize };
       wallet.balance = round9(wallet.balance - v.fee);
-      DemoRake.add('pot', v.fee);
+      DemoRake.add('duel', v.fee);
       const ready = DemoMissions.play(v.fee);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++, seed = deriveLevelSeed(serverSeed, clientSeed, nonce, 'duel');
       // the rival's flight: the autopilot on the same course
@@ -756,6 +763,7 @@
       const you = DU.fly(DU.generate(c.seed), taps, stop), cmp = DU.compare(you, c.rival);
       const payout = DU.payouts(Math.round(c.fee * 1e9), cmp).a / 1e9;
       wallet.balance = round9(wallet.balance + payout);
+      DemoRake.pay('duel', payout);
       const t = this.tally();
       if (cmp > 0) { t.w++; t.lv = Math.min(4, t.lv + 0.3); } else if (cmp < 0) { t.l++; t.lv = Math.max(0, t.lv - 0.3); } else t.d++;
       t.last = { status: cmp > 0 ? 'won' : cmp < 0 ? 'lost' : 'draw', you: { rings: you.rings, score: you.score }, rival: { rings: c.rival.rings, score: c.rival.score }, payout, t: Date.now() };
@@ -789,6 +797,7 @@
       c.total = a.total; c.streak = a.streak; c.level = L;
       c.levels.push(verifiedLevel(def, r, a.capped ? a.capIndex : -1));
       profile.skill = SP.addLevel(profile.skill, c.di, L, a.capped ? a.capIndex + 1 : r.outcomes.length, !a.capped && r.result !== 'clear'); // rates the player for the special levels
+      DemoRake.rings(c.di, L, a.capped ? a.capIndex + 1 : r.outcomes.length, !a.capped && r.result !== 'clear', c.bet); // and for rakeback, by the bet
       const status = a.capped ? 'maxwin' : r.result === 'clear' ? (L >= NL ? 'final' : 'checkpoint') : 'bust';
       let payout = 0, missions = null;
       if (status === 'maxwin' || status === 'final') payout = this._pay();
@@ -797,7 +806,7 @@
     },
     async next() { const c = this.cur; c.level++; return { levelSeed: deriveLevelSeed(c.serverSeed, c.clientSeed, c.nonce, c.level) }; },
     async cashout() { const payout = this._pay(), missions = DemoMissions.run(this.cur.levels); saveAll(); return { payout, serverSeed: this.cur.serverSeed, missions }; },
-    _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); saveAll(); return payout; },
+    _pay() { const c = this.cur; const payout = round9(c.bet * c.total); wallet.balance = round9(wallet.balance + payout); DemoRake.pay('run', payout); saveAll(); return payout; },
     pot: {
       async state() { return DemoPot.view(); },
       async start() { return DemoPot.start(); },
@@ -817,7 +826,7 @@
 
   // Real SOL: talks to server/server.mjs. Only active when SOL_DUNK_CONFIG.serverUrl is set.
   const ServerBank = {
-    real: true, token: null, address: null, bal: 0, runId: null, specId: null, mv: null, modeMax: null, rb: { acc: 0, ready: 0, paid: 0 },
+    real: true, token: null, address: null, bal: 0, runId: null, specId: null, mv: null, modeMax: null, rb: { acc: 0, ready: 0, paid: 0, loss: 0, bet: 0, share: LV.LOSS },
     // the most each mode takes right now: the server sets it from the house's bankroll
     async betLimits() { const c = await this.api('/api/config'); this.modeMax = (c.difficulties || []).map((d) => d.maxBet / 1e9); },
     async api(path, body) {
@@ -829,7 +838,7 @@
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || ('Server error ' + res.status));
       if (typeof j.balance === 'number') this.bal = j.balance / 1e9;
-      if (j.rakeback) this.rb = { acc: j.rakeback.accLamports / 1e9, ready: j.rakeback.readyLamports / 1e9, paid: j.rakeback.paidLamports / 1e9 };
+      if (j.rakeback) { const k = j.rakeback; this.rb = { acc: k.accLamports / 1e9, ready: k.readyLamports / 1e9, paid: k.paidLamports / 1e9, loss: (k.lossLamports || 0) / 1e9, bet: (k.betLamports || 0) / 1e9, share: k.share == null ? LV.LOSS : k.share }; }
       if (j.trophies && j.trophies.list) this.tv = this.tconv(j.trophies); // the server's word on trophy SOL, whenever it sends it
       return j;
     },
@@ -4373,9 +4382,9 @@
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the green ring ends the level. Cash out, or keep going for more.`) +
       row('practice', 'blue', 'Practice', `${KB ? 'Click' : 'Tap'} <b>Practice for free</b> under Play for a run with nothing at stake.`) +
       row('star', 'gold', 'Score and XP', `Rings score points, more for swishes and streaks. Points, missions and trophies earn XP, which unlocks balls, wings and trails. Neither changes what a run pays.`) +
-      row('mission', 'purple', 'Missions', `Three at a time, new every day and every week, whatever you bet. Their SOL unlocks once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week; tap Claim to collect it.`) +
+      row('mission', 'purple', 'Missions', `Three at a time, new every day and every week, whatever you bet; finish them for the next round, up to ${MS.ROUNDS}. Their SOL unlocks once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week, more for later rounds; tap Claim to collect it.`) +
       row('medal', 'gold', 'Trophies', `Fifteen one-time goals. Each adds XP and pays a little SOL: claim it on the Trophies page once your bets cover it.`) +
-      row('back', 'green', 'Rakeback', `Every bet sets a little SOL aside for you: ${Math.round(LV.RATE * 100)}% of the house's cut. Level up to claim it.`) +
+      row('back', 'green', 'Rakeback', `Each level up pays back ${pctTxt(LV.LOSS)} of what you lost since the last one, net of what you won, plus a little of every bet. The strongest players get ${pctTxt(LV.LOSS_TOP)} of their run losses.`) +
       row('trophy', 'gold', 'Special levels', `Pick a stake and clear every ring to win 2×, 3× or 5× it. A clear brings up a new one; some have walls to fly over, rings on their side or rings that breathe. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs.`) +
       row('rival', 'purple', 'Duel', `Pick a stake and race a rival over the same rings. Whoever gets further takes 1.8× it.`) +
       row('split', 'green', 'Daily pot', `One course for everyone each day. Fly it as often as you like; your best counts, and the best three split the pot.`) +
@@ -4760,13 +4769,17 @@
   }
   // what one round of a window pays in all
   const roundSol = (mv, win, r) => mv.base[win] * MS.SHARES[win] * (MS.STEPS[r == null ? mv.round[win] : r] - ((r == null ? mv.round[win] : r) ? MS.STEPS[(r == null ? mv.round[win] : r) - 1] : 0));
-  // The rounds of a window, side by side: done (its SOL claimed, ready to claim, or waiting for play), open, or locked.
+  // The rounds of a window, side by side: done (its SOL claimed, ready to claim, or waiting for play), open, or locked,
+  // each with what it pays in all. Five fit a phone's width only as their number, so only the open one says "Round"
+  // (not on the smallest phones).
+  const RD_SAYS = { paid: 'done and claimed', ready: 'done, SOL ready to claim', wait: 'done, SOL waiting for bets', now: 'open', lock: 'locked' };
   function roundsRow(mv, win) {
     const all = mv.all[win], cur = mv.round[win];
-    return `<div class="rounds">${MS.STEPS.map((x, r) => {
+    return `<div class="rounds" style="--n:${MS.STEPS.length}">${MS.STEPS.map((x, r) => {
       const mine = all.slice(r * 3, r * 3 + 3), done = mine.length === 3 && mine.every((c) => c.done);
       const st = done ? (mine.some((c) => !c.paid) ? 'wait' : mine.some((c) => c.ready) ? 'ready' : 'paid') : r === cur ? 'now' : 'lock';
-      return `<div class="rd ${st}"><span>${st === 'lock' ? ICON.lock : done ? ICON.check : ''}Round ${r + 1}</span><b>${fmtBet(roundSol(mv, win, r))} SOL</b></div>`;
+      const sol = fmtBet(roundSol(mv, win, r));
+      return `<div class="rd ${st}" role="img" aria-label="Round ${r + 1}, ${sol} SOL, ${RD_SAYS[st]}"><span>${st === 'lock' ? ICON.lock : done ? ICON.check : ''}${st === 'now' ? '<i>Round </i>' : ''}${r + 1}</span><b>${sol}</b></div>`;
     }).join('')}</div>`;
   }
   // A round's SOL pays once this much has been bet in the window (run bets and special level entries). If SOL from an
@@ -4944,7 +4957,9 @@
   // what has built up toward the next level, or what a level up has released to claim
   function rakeHtml(v) {
     const rb = bank.rakeback.view(), ready = rb.ready > 0;
-    const sub = ready ? (rb.acc > 0 ? `${fmtBet(rb.acc)} SOL more at level ${v.l + 1}` : 'Yours from levelling up') : rb.acc > 0 ? `Claim it at level ${v.l + 1}` : 'Every bet adds to it. Level up to claim it.';
+    const lost = rb.loss > 0.00005 ? ` · ${fmtBet(rb.loss)} SOL lost since level ${v.l}` : '';
+    const back = rb.share < LV.LOSS - 1e-9 ? `${pctTxt(rb.share)} of your run losses and ${pctTxt(LV.LOSS)} of challenge losses come back at each level up` : `${pctTxt(LV.LOSS)} of what you lose comes back at each level up`;
+    const sub = ready ? (rb.acc > 0 ? `${fmtBet(rb.acc)} SOL more at level ${v.l + 1}` : 'Yours from levelling up') : rb.acc > 0 ? `Claim it at level ${v.l + 1}${lost}` : back;
     return `<div class="rake${ready ? ' ready' : ''}"><span class="rk-i">${ICON.gift}</span><span class="rk-t"><b>Rakeback<span class="num">${fmtBet(ready ? rb.ready : rb.acc)} SOL</span></b><small>${sub}</small></span>${ready ? `<button class="btn btn-green rk-b" id="rbBtn">Claim</button>` : ''}</div>`;
   }
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);

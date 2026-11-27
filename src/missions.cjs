@@ -1,9 +1,11 @@
 /* SOL DUNK daily and weekly missions: shared by the browser, the server and the simulator.
  *
- * Missions come in rounds of three (easy, medium, hard): three rounds a day and three a week, the same for everyone in
+ * Missions come in rounds of three (easy, medium, hard): five rounds a day and five a week, the same for everyone in
  * a window. Finishing all three of a round opens the next one, with new missions and more SOL. Days are UTC days and
  * weeks start on Monday 00:00 UTC, so the server can judge them. Every run counts toward them, whatever the bet: they
- * are about how you play (swishes, streaks, clears, points). Each pays XP when done, and SOL too.
+ * are about how you play (swishes, streaks, clears, points). Each pays XP when done, and SOL too. Rounds 4 and 5 are
+ * for the players who play the most (the owner asked for more mission rounds): they ask for twice and four times
+ * round 3's play, and pay for it at the same rate.
  *
  * SOL. A round's SOL rewards are released once the player has played that round's need in the window (bets on runs
  * plus special level entries): NEED for round 1, then NEED × STEPS for the later rounds. A reward is released at once if
@@ -13,11 +15,11 @@
  *
  * The house's edge. A round's rewards add up to the window's share (SHARE: 0.3% a day, 0.2% a week) of the play its
  * need adds on top of the round before, so however far a player gets, what a window has paid is never more than that
- * share of what they played in it. Later rounds pay more only because they ask for more play; the shares never rise.
- * RATE, days and weeks together, is half the house's smallest edge against a good player (1%: Hard pays a good player
- * back 99% at checkpoint 1), so a good player who plays just enough to collect everything still loses on average, and
- * the house keeps its edge however the player bets. Amounts are in whatever unit NEED is in (SOL here, lamports on
- * the server).
+ * share of what they played in it. Later rounds pay more only because they ask for more play; the shares never rise,
+ * so more rounds don't raise RATE. RATE, days and weeks together, is half the house's smallest edge against a good
+ * player (1%: Hard pays a good player back 99% at checkpoint 1), so a good player who plays just enough to collect
+ * everything still loses on average, and the house keeps its edge however the player bets. Amounts are in whatever
+ * unit NEED is in (SOL here, lamports on the server).
  *
  * Progress is judged from a run's verified ring outcomes per level, so the server decides it from the taps it replays.
  * One weekly mission counts something else the server knows: the days on which the player finished a daily round.
@@ -31,15 +33,16 @@
 
   const DAY_MS = 86400000, WEEK_MS = 7 * DAY_MS, HOOPS = 6, PERFECT_BONUS = 10;
   const NEED = { day: 2, week: 10 };                                  // SOL played in the window before round 1's rewards pay
-  const ROUNDS = 3;                                                   // rounds of three missions in a window
-  const STEPS = [1, 2.5, 5];                                          // a round's rewards pay at NEED × its step (2, 5, 10 SOL a day)
+  const ROUNDS = 5;                                                   // rounds of three missions in a window
+  const STEPS = [1, 2.5, 5, 10, 20];                                  // a round's rewards pay at NEED × its step (2, 5, 10, 20, 40 SOL a day)
   const SHARE = { day: [0.0005, 0.001, 0.0015], week: [0.0004, 0.0006, 0.001] }; // reward per slot, as a share of the play a round adds
   // the most the rewards can add to a player's return: 0.3% of a day's play, and 0.2% of a week's on top
   const RATE = SHARE.day.reduce((a, b) => a + b, 0) + SHARE.week.reduce((a, b) => a + b, 0);
   const SHARES = { day: SHARE.day.reduce((a, b) => a + b, 0), week: SHARE.week.reduce((a, b) => a + b, 0) };
-  // Later daily rounds ask for more: totals that add up over the day grow by GROW, and every mission pays XP_STEP more
-  // XP a round. Targets that have to happen within one run stay as they are (a round can't ask for a longer streak).
-  const GROW = [1, 1.5, 2], XP_STEP = 20;
+  // Later rounds ask for more: totals that add up over the window grow by GROW (a day's from round 2, a week's from
+  // round 4), and every daily mission pays XP_STEP more XP a round. Targets that have to happen within one run stay as
+  // they are (a round can't ask for a longer streak).
+  const GROW = { day: [1, 1.5, 2, 2.5, 3], week: [1, 1, 1, 1.5, 2] }, XP_STEP = { day: 20, week: 0 };
 
   // Daily missions: [target, XP] for the easy, medium and hard slot. "sum" missions add up over the day; the others
   // have to happen within one run. Keys are run facts (see facts).
@@ -68,9 +71,10 @@
     { k: 'greens', sum: true, n: [[8, 120], [14, 180], [22, 260]] },
     { k: 'runs', sum: true, n: [[15, 120], [25, 180], [40, 260]] }
   ];
-  // Every week ties the days together: "finish a daily round on N days" sits in weekly round 1 (medium slot) and
-  // round 2 (hard slot). It counts days of this week, so the days before its round opened count too.
-  const WEEK_DAYS = [{ slot: 1, k: 'days', n: 3, xp: 180 }, { slot: 2, k: 'days', n: 5, xp: 260 }, null];
+  // Every week ties the days together: "finish a daily round on N days" sits in weekly round 1 (medium slot), round 2
+  // and round 5 (hard slot). It counts days of this week, so the days before its round opened count too. Round 5's
+  // leaves a day off; it's the last round, so a week that can't make it still has everything before it.
+  const WEEK_DAYS = [{ slot: 1, k: 'days', n: 3, xp: 180 }, { slot: 2, k: 'days', n: 5, xp: 260 }, null, null, { slot: 2, k: 'days', n: 6, xp: 280 }];
   const DAILY_BY = Object.fromEntries(DAILY.map((d) => [d.k, d]));
   const WEEKLY_BY = Object.fromEntries(WEEKLY.map((d) => [d.k, d]));
 
@@ -81,17 +85,20 @@
   const weekKey = (ts) => dayKey(weekStart(ts));
   const weekEnd = (ts) => weekStart(ts) + WEEK_MS;
 
-  // a window's rounds, three missions each: no kind twice in a window, drawn from the window's key
+  // A window's rounds, three missions each, drawn from the window's key: no kind twice in a round or in two rounds in a
+  // row. A window has more slots than kinds, so once what's left can't fill a round, every kind the round before didn't
+  // use goes back in (from round 4: rounds 1 to 3 draw just as they did when there were three rounds).
   const picked = new Map();
-  function pick(defs, by, seed, fixed, grow) {
+  function pick(defs, by, seed, fixed, win) {
     if (picked.has(seed)) return picked.get(seed);
     const rng = E.makeRng(seed), pool = defs.map((d) => d.k), rounds = [];
     for (let round = 0; round < ROUNDS; round++) {
       const list = [], f = fixed && fixed[round];
+      if (pool.length < (f ? 2 : 3)) { const last = rounds[round - 1].map((m) => m.k); for (const d of defs) if (!pool.includes(d.k) && !last.includes(d.k)) pool.push(d.k); }
       for (let slot = 0; slot < 3; slot++) {
         if (f && f.slot === slot) { list.push({ k: f.k, n: f.n, xp: f.xp, sum: false, slot, round }); continue; }
-        const k = pool.splice(Math.floor(rng() * pool.length), 1)[0], [n, xp] = by[k].n[slot], up = grow && by[k].sum && !by[k].flat;
-        list.push({ k, n: up ? Math.round(n * GROW[round]) : n, xp: grow ? xp + XP_STEP * round : xp, sum: !!by[k].sum, slot, round });
+        const k = pool.splice(Math.floor(rng() * pool.length), 1)[0], [n, xp] = by[k].n[slot], up = by[k].sum && !by[k].flat;
+        list.push({ k, n: up ? Math.round(n * GROW[win][round]) : n, xp: xp + XP_STEP[win] * round, sum: !!by[k].sum, slot, round });
       }
       rounds.push(list);
     }
@@ -99,8 +106,8 @@
     picked.set(seed, rounds);
     return rounds;
   }
-  const dailyRounds = (day) => pick(DAILY, DAILY_BY, 'daily|' + day, null, true);
-  const weeklyRounds = (wk) => pick(WEEKLY, WEEKLY_BY, 'weekly|' + wk, WEEK_DAYS, false);
+  const dailyRounds = (day) => pick(DAILY, DAILY_BY, 'daily|' + day, null, 'day');
+  const weeklyRounds = (wk) => pick(WEEKLY, WEEKLY_BY, 'weekly|' + wk, WEEK_DAYS, 'week');
   const daily = (day, round) => dailyRounds(day)[round | 0];
   const weekly = (wk, round) => weeklyRounds(wk)[round | 0];
   // what a round's rewards wait for, and what a mission pays: its slot's share of the play its round adds
@@ -253,5 +260,5 @@
     return shape({ day: s.day, week: s.week, dayEnds: dayEnd(ts), weekEnds: weekEnd(ts), base: need, played: { day: s.dp, week: s.wp }, days: s.wd, readyAll: s.ready, all: { day: one('day', s.d), week: one('week', s.w) } });
   }
 
-  return { DAY_MS, WEEK_MS, NEED, ROUNDS, STEPS, GROW, SHARE, SHARES, RATE, DAILY, WEEKLY, WEEK_DAYS, DAILY_BY, WEEKLY_BY, dayKey, dayEnd, weekKey, weekEnd, daily, weekly, dailyRounds, weeklyRounds, needAt, reward, facts, roll, collect, play, run, claim, isReady, isClaimed, shape, view };
+  return { DAY_MS, WEEK_MS, NEED, ROUNDS, STEPS, GROW, XP_STEP, SHARE, SHARES, RATE, DAILY, WEEKLY, WEEK_DAYS, DAILY_BY, WEEKLY_BY, dayKey, dayEnd, weekKey, weekEnd, daily, weekly, dailyRounds, weeklyRounds, needAt, reward, facts, roll, collect, play, run, claim, isReady, isClaimed, shape, view };
 });

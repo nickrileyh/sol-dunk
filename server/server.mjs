@@ -132,10 +132,19 @@ export async function createServer(CFG, log) {
     return u;
   }
   const maybeAuth = async (t, req) => { try { return await auth(t, req, { lock: false }); } catch { return null; } };
-  // rakeback (rules in src/levels.cjs): every bet sets 20% of the house's cut of it aside, and a level up releases it
-  // to claim. The level is the server's own: XP from the runs and missions it verifies.
-  const rakeView = (u) => { const s = LV.fix(u.rb); return { accLamports: Math.floor(s.acc), readyLamports: s.ready, paidLamports: s.paid, level: LV.lvlOf(u.xp || 0).l }; };
+  // rakeback (rules in src/levels.cjs): each level up releases a share of what the player lost since the last one, net
+  // of what they won (5% of challenge losses; of run losses 5%, falling to 2% as their bet-weighted rating from regular
+  // runs climbs to good), plus 0.05% of every bet; the loss part at most 2% of the level's bets. The level is the
+  // server's own: XP from the runs and missions it verifies.
+  const rakeView = (u) => {
+    const s = LV.fix(u.rb), [rb, rp, gb, gp] = s.w;
+    return { accLamports: Math.floor(s.acc), readyLamports: s.ready, paidLamports: s.paid, level: LV.lvlOf(u.xp || 0).l,
+      lossLamports: Math.floor(Math.max(0, rb - rp) + Math.max(0, gb - gp)), betLamports: Math.floor(rb + gb), share: s.k, shareChallenges: LV.LOSS, vol: LV.VOL, cap: LV.CAP };
+  };
   const rakeAdd = (u, kind, lamports) => { u.rb = LV.add(u.rb, kind, lamports); };
+  const rakePay = (u, kind, lamports) => { if (lamports > 0) u.rb = LV.pay(u.rb, kind, lamports); };
+  // a verified regular level: its rings go into the rakeback rating, counted by the run's bet, and the share follows it
+  const rakeRings = (u, run, counted, missed) => { u.rb = LV.rate(LV.rings(u.rb, run.di, run.level, counted, missed, run.bet), SP.regular(LV.recOf(u.rb)).m); };
   function xpAdd(u, xp) {
     const before = LV.stepsOf(u.xp || 0);
     u.xp = (u.xp || 0) + Math.max(0, Math.floor(xp));
@@ -331,6 +340,7 @@ export async function createServer(CFG, log) {
           for (const e of await t.potEntries(p.day)) {
             const u = await t.user(e.address);
             await t.credit(u, p.fee, 'pot_refund', p.day);
+            rakePay(u, 'pot', p.fee);
             const { address, ...doc } = e;
             await t.putPotEntry(p.day, address, { ...doc, won: p.fee, refunded: true });
           }
@@ -346,6 +356,7 @@ export async function createServer(CFG, log) {
             const u = await t.user(e.id);
             await t.credit(u, won, 'pot_win', p.day);
             u.returned += won; u.potWon = (u.potWon || 0) + won;
+            rakePay(u, 'pot', won); // a win nets against the pot attempts' losses
           }
           await t.putPotEntry(p.day, e.id, { ...raw, won, place: e.place });
         }
@@ -450,6 +461,7 @@ export async function createServer(CFG, log) {
       const gameMs = f.ticks * E.DT * 1000, elapsed = Date.now() - run.levelStartedAt;
       if (elapsed < gameMs * CFG.minRealtime - 250) { // faster than real time: the attempt counts for nothing
         run.flag = 'too fast'; await t.addReview('void', u.address, run.id, { gameMs, elapsed });
+        rakePay(u, 'pot', run.bet); // a voided attempt is no loss to pay back
         f = { rings: 0, score: 0, cleared: false, outcomes: [], result: 'void', ticks: f.ticks };
       } else {
         u.hoops += f.rings; u.swishes += f.outcomes.filter((o) => o === 'S').length;
@@ -601,6 +613,8 @@ export async function createServer(CFG, log) {
     if (OVER.includes(status)) { payout = Math.floor(run.bet * run.total); await t.credit(u, payout, 'payout', run.id); }
     run.payout = payout;
     u.returned += payout; u.runs++;
+    // rakeback nets the payout against the bet; a voided run is no loss to pay back (its bet is treated as returned)
+    rakePay(u, run.kind === 'special' ? 'special' : 'run', status === 'void' ? run.bet : payout);
     // missions move on from the levels the server verified (a voided run doesn't count)
     if (run.kind !== 'special' && status !== 'void') {
       const r = MS.run(u.ms, verifiedLevels(run), potNow(), CFG.missionNeed);
@@ -684,6 +698,7 @@ export async function createServer(CFG, log) {
         tilt: r.outcomes.slice(0, counted).map((o, k) => (def.hoops[k].tilt ? '1' : '0')).join('') });
       // the special levels' skill rating learns from every verified level (src/special.cjs)
       u.skill = SP.addLevel(u.skill, run.di, run.level, counted, !a.capped && r.result !== 'clear');
+      rakeRings(u, run, counted, !a.capped && r.result !== 'clear');
       await botCheck(t, u, def, taps, run.id);
       let status;
       if (a.capped) status = 'maxwin';
@@ -835,6 +850,7 @@ export async function createServer(CFG, log) {
       run.payout = payout;
       if (payout) { await t.credit(u, payout, 'special_prize', run.id); }
       u.returned += payout; u.runs++;
+      rakePay(u, 'special', payout);
       if (won && u.special && u.special.day === run.day && Array.isArray(u.special.wins)) u.special.wins[run.slot]++;
       xpAdd(u, LV.specialXp(MS.facts([{ outcomes: r.outcomes.join(''), clear: false }]).points, won));
       await review(t, u);
@@ -875,7 +891,7 @@ export async function createServer(CFG, log) {
       run.status = c > 0 ? 'won' : c < 0 ? 'lost' : 'draw'; run.exposure = 0; run.payout = amount; run.total = amount / run.bet; run.settledAt = Date.now(); run.rival = other.id;
       if (amount) await t.credit(u, amount, 'duel_prize', run.id);
       u.returned += amount; u.wagered += run.bet;
-      rakeAdd(u, 'pot', run.bet);
+      if (run.flag !== 'too fast') { rakeAdd(u, 'duel', run.bet); rakePay(u, 'duel', amount); } // stake and payout count together, when the duel settles; a voided flight counts for nothing
       missionPlay(t, u, run.bet); // may release mission SOL, which waits for the player's claim
       if (c > 0) xpAdd(u, LV.specialXp(0, true)); // the win bonus, as for a cleared special
       const d = duelDay(u); d[c > 0 ? 'w' : c < 0 ? 'l' : 'd']++;

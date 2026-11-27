@@ -1,5 +1,5 @@
 // Mission rounds: how many runs a casual, an average and a good player need to finish each round of daily missions,
-// and how far a week of play gets through the weekly rounds. Also checks the rule the SOL rests on: at every moment
+// and how far a week of play gets through the weekly rounds (rounds 4 and 5 want a lot of runs: try 150 runs a day). Also checks the rule the SOL rests on: at every moment
 // a window has paid no more than its share of what was played in it.
 // Runs are on Easy, from level 1, and end at a miss or with a cash out after level STOP (default 3).
 //   node sim/missions.cjs [days per skill, default 60] [runs a day, default 40] [stop level, default 3]
@@ -35,9 +35,9 @@ function inside(s) { // released so far (ready to claim or claimed) against the 
 
 console.log(`engine v${E.VERSION}, Easy, ${DAYS} days per skill, up to ${RUNS} runs a day, cash out after level ${STOP}, ${BET} SOL a run`);
 console.log(`needs a day ${MS.STEPS.map((x) => MS.NEED.day * x).join(' / ')} SOL, a week ${MS.STEPS.map((x) => MS.NEED.week * x).join(' / ')} SOL; rewards a day ${MS.STEPS.map((x, r) => +(MS.NEED.day * MS.SHARES.day * (x - (r ? MS.STEPS[r - 1] : 0))).toFixed(4)).join(' / ')} SOL, a week ${MS.STEPS.map((x, r) => +(MS.NEED.week * MS.SHARES.week * (x - (r ? MS.STEPS[r - 1] : 0))).toFixed(4)).join(' / ')} SOL\n`);
-console.log('daily rounds: runs needed to finish round 1 / 2 / 3 (median over the days it was finished), and the share of days it was');
+console.log(`daily rounds: runs needed to finish round ${MS.STEPS.map((x, r) => r + 1).join(' / ')} (median over the days it was finished), and the share of days it was`);
 for (const sk of SKILLS) {
-  const at = [[], [], []], slow = {};
+  const at = MS.STEPS.map(() => []), slow = {};
   let s = null, weekRounds = [], weekDays = [];
   for (let d = 0; d < DAYS; d++) {
     const ts = START + d * MS.DAY_MS;

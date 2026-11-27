@@ -6,11 +6,13 @@
  * trophy SOL only up to RATE (0.2%) of everything they have bet (run bets and special level entries): a reward can be
  * claimed once RATE x bets covers it on top of what has been claimed already and the smaller rewards still open. So
  * trophy SOL never adds more than RATE to a player's return, however they bet and whenever they stop, and a fresh
- * account can't farm the easy trophies: it has to bet 500 times a reward before it can claim it. With mission SOL
- * (0.5%, src/missions.cjs) and rakeback (0.2% of a run bet, src/levels.cjs) that is 0.9% at most, under the house's
- * smallest edge against a good player (1%: Hard pays a good player back 99% at checkpoint 1). Raise UNIT to pay more
- * per trophy (players then bet more before each claim); don't raise RATE past what is left of that edge. Amounts are
- * in whatever unit the caller passes (SOL in the browser, lamports on the server).
+ * account can't farm the easy trophies: it has to bet 500 times a reward before it can claim it. Mission SOL (0.5%,
+ * src/missions.cjs), trophy SOL and the volume part of rakeback (0.05%, src/levels.cjs) add up to 0.75% at most, under
+ * the house's smallest edge against a good player (1%: Hard pays a good player back 99% at checkpoint 1); rakeback's
+ * share of losses is sized by node sim/rakeback.cjs, which counts trophy SOL at its most. Raise UNIT to pay more per
+ * trophy (players then bet more before each claim); don't raise RATE past what is left of that edge, and run the
+ * simulator after any change to it. Amounts are in whatever unit the caller passes (SOL in the browser, lamports on
+ * the server).
  *
  * A trophy is judged from a run's verified ring outcomes per level, so the server decides it from the taps it replays.
  * Special levels and practice runs don't count.

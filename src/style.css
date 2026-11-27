@@ -1177,11 +1177,13 @@ body.desk #tabbar::after, body:has(#lobby:not(.hide)) #tabbar::after { display: 
 }
 .hero { box-shadow: 0 0 0 100vmax var(--bg), inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 44px rgba(0, 0, 0, 0.45); }
 
-/* mission rounds: the window's three rounds side by side (done, open, locked), and what finishing a round opens */
-.rounds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 12px 14px 0; }
-.rd { display: flex; flex-direction: column; gap: 3px; padding: 8px 10px 9px; border-radius: 8px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--hair); min-width: 0; }
-.rd span { display: flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--label-2); white-space: nowrap; }
+/* mission rounds: the window's five rounds side by side (done, open, locked), each with its SOL, and what finishing a
+   round opens. Five only fit a phone as their numbers, centred, with the open one named in full. */
+.rounds { display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 1fr)); gap: 6px; padding: 12px 14px 0; }
+.rd { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 2px 9px; border-radius: 8px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--hair); min-width: 0; }
+.rd span { display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 11.5px; font-weight: 600; color: var(--label-2); white-space: nowrap; }
 .rd span svg { width: 11px; height: 11px; flex: none; }
+.rd span i { font-style: normal; }
 .rd b { font-family: var(--font-round); font-size: 13px; font-weight: 700; color: var(--label); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .rd.now { background: var(--accent-tint); box-shadow: inset 0 0 0 1.5px var(--accent); }
 .rd.now span { color: var(--accent-hi); }
@@ -1299,11 +1301,12 @@ body.desk .ms-panels .msp { display: block; }
 .spr-dots { display: grid; grid-auto-flow: column; column-gap: 3px; }
 .spr-dots i { width: 6px; height: 4px; border-radius: 1px; background: var(--track); }
 .spr-dots i.on { background: var(--green); box-shadow: 0 0 6px rgba(20, 241, 149, 0.55); }
-@media (max-width: 359px) { /* small phones: the three segments and a round's reward fit their boxes */
+@media (max-width: 359px) { /* small phones: the three segments and a round's reward fit their boxes (the open round as its number) */
   .ms-seg button { gap: 4px; font-size: 12.5px; }
   .ms-seg button i { font-size: 10.5px; }
-  .rounds { gap: 5px; padding: 12px 10px 0; }
-  .rd { padding: 8px 7px 9px; }
+  .rounds { gap: 4px; padding: 12px 8px 0; }
+  .rd { padding: 8px 1px 9px; }
+  .rd span i { display: none; }
   .rd b { font-size: 12px; }
 }
 

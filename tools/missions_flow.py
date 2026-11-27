@@ -2,8 +2,8 @@
 its round's need (the result card says how much more), released to claim the moment a bet gets there (a notice, nothing
 credited yet), claimed with a mission's Claim key on the Missions tab (coins into the balance, the row says claimed) or
 the result card's ticket, SOL from an earlier day claimed from its own ticket, the daily missions with their three
-rounds, a finished round opening the next, the next mission on the result card, and level-up rakeback (set aside by a
-bet, released by a level up, claimed once).
+rounds, a finished round opening the next, the next mission on the result card, and level-up rakeback (a little of
+every bet and a share of a level's net losses, released by a level up, claimed once).
 Screenshots to ./shots/missions_*.png. Usage: python3 tools/missions_flow.py"""
 import asyncio, json
 from playwright.async_api import async_playwright
@@ -30,9 +30,9 @@ async def main():
         m0 = await mv()
         need = m0['need']['day']
         check(len(m0['daily']) == 3 and len(m0['weekly']) == 3 and m0['played']['day'] == 0 and need > 0, 'three daily and three weekly missions, nothing played yet')
-        check(m0['rounds'] == 3 and m0['round'] == {'day': 0, 'week': 0} and m0['next']['day']['need'] > need and m0['next']['day']['reward'] > sum(c['reward'] for c in m0['daily']), 'round 1 of 3 is open, and round 2 needs more play and pays more')
+        check(m0['rounds'] == 5 and m0['round'] == {'day': 0, 'week': 0} and m0['next']['day']['need'] > need and m0['next']['day']['reward'] > sum(c['reward'] for c in m0['daily']), 'round 1 of 5 is open, and round 2 needs more play and pays more')
         rb0 = await page.evaluate('__solDunk.rakeback()'); lv0 = await page.evaluate('__solDunk.level()')
-        check(rb0 == {'acc': 0, 'ready': 0, 'paid': 0} and lv0['l'] == 1 and lv0['need'] == 70, 'no rakeback yet, level 1, 70 XP to level 2')
+        check(rb0['acc'] == 0 and rb0['ready'] == 0 and rb0['paid'] == 0 and rb0['share'] == 0.05 and lv0['l'] == 1 and lv0['need'] == 70, 'no rakeback yet (5% of losses to come), level 1, 70 XP to level 2')
         check(all(c['reward'] > 0 for c in m0['daily'] + m0['weekly']), 'every daily and weekly mission pays SOL')
         await page.click('#diff0'); await page.fill('#betInput', '1'); await page.evaluate("document.getElementById('betInput').blur()"); await page.wait_for_timeout(200)
 
@@ -59,14 +59,15 @@ async def main():
         check('SOL waiting' in gains and 'SOL more today' in gains, 'the result card says how much more play unlocks it: ' + gains.replace('\n', ' | '))
         nxt = await page.evaluate("document.getElementById('resNext').innerText")
         check('/' in nxt and ('SOL' in nxt or 'XP' in nxt), 'the result card shows the next mission to go for: ' + nxt.replace('\n', ' | '))
-        # level-up rakeback: the 1 SOL bet set 0.002 SOL aside, the run levelled up, and one tap claims it
+        # level-up rakeback: the run won, so there was no loss to share: the 1 SOL bet's 0.05% is released by the level
+        # up, and one tap claims it
         rb1 = await page.evaluate('__solDunk.rakeback()'); lv1 = await page.evaluate('__solDunk.level()')
-        check(lv1['l'] > 1 and abs(rb1['ready'] - 0.002) < 1e-9 and rb1['acc'] == 0, 'the run levelled up and released 0.2% of the bet as rakeback: ' + json.dumps([lv1, rb1]))
-        check('Claim 0.002 SOL' in gains, 'the result card offers the claim')
+        check(lv1['l'] > 1 and abs(rb1['ready'] - 0.0005) < 1e-9 and rb1['acc'] == 0 and rb1['bet'] == 0, 'the run levelled up and released 0.05% of the bet as rakeback (a won run has no loss to share): ' + json.dumps([lv1, rb1]))
+        check('Claim 0.0005 SOL' in gains, 'the result card offers the claim')
         bc = await bal()
         await page.click('#rbChip'); await page.wait_for_timeout(400)
         rb2 = await page.evaluate('__solDunk.rakeback()')
-        check(abs(await bal() - (bc + 0.002)) < 1e-9 and rb2['ready'] == 0 and abs(rb2['paid'] - 0.002) < 1e-9, 'claiming pays it to the balance, once')
+        check(abs(await bal() - (bc + 0.0005)) < 1e-9 and rb2['ready'] == 0 and abs(rb2['paid'] - 0.0005) < 1e-9, 'claiming pays it to the balance, once')
         check('Rakeback claimed' in await page.evaluate("document.getElementById('rbChip').innerText"), 'and the chip says so')
         await page.screenshot(path=OUT + 'rakeback.png')
         # run 2: the bet reaches the need, so everything already done is released to claim (nothing is credited yet)
@@ -96,7 +97,10 @@ async def main():
         day = '#mBody .msp[data-seg="day"]'
         txt = await page.evaluate(f"document.querySelector('{day}').innerText")
         m3 = await mv()
-        check('Round 1' in txt and 'Round 2' in txt and 'Round 3' in txt, 'the daily missions on the Missions tab show their three rounds')
+        labels = await page.evaluate(f"[...document.querySelectorAll('{day} .rd')].map((e) => e.getAttribute('aria-label'))")
+        now = await page.evaluate(f"(document.querySelector('{day} .rd.now') || {{}}).textContent || ''")
+        check(len(labels) == 5 and all(('Round %d, ' % (k + 1)) in labels[k] and ' SOL, ' in labels[k] for k in range(5)) and now.startswith('Round %d' % (m3['round']['day'] + 1)) and labels[m3['round']['day']].endswith(', open'),
+              'the daily missions on the Missions tab show their five rounds, each with its SOL, the open one named ' + json.dumps(labels))
         # SOL ready on the open round's rows has a Claim key on each; a run that finished the whole round has already
         # opened the next, so its SOL isn't on any row and the ticket at the top of the tab claims it
         off = any(c['ready'] and c['round'] < m3['round']['day'] for c in m3['all']['day'])
@@ -190,11 +194,35 @@ async def main():
         await page.click('#tabMissions'); await page.wait_for_timeout(600)
         await page.screenshot(path=OUT + 'round2_page.png')
         cls = await page.evaluate("[...document.querySelectorAll('#mBody .msp[data-seg=\"day\"] .rd')].map((e) => e.className)")
-        check(cls == ['rd paid', 'rd now', 'rd lock'], 'the rounds on Missions: round 1 paid, round 2 open, round 3 locked ' + json.dumps(cls))
+        check(cls == ['rd paid', 'rd now', 'rd lock', 'rd lock', 'rd lock'], 'the rounds on Missions: round 1 paid, round 2 open, rounds 3 to 5 locked ' + json.dumps(cls))
         await page.click('#tabProfile'); await page.wait_for_timeout(500)
         ptxt = await page.evaluate("document.getElementById('pBody').innerText")
         check('Rakeback' in ptxt, 'Profile shows the rakeback under the player card')
         await page.screenshot(path=OUT + 'profile.png')
+        check(not errs, 'no page errors ' + json.dumps(errs))
+        await ctx.close()
+
+        # a lost run: 5% of the loss comes back at the next level up, at most 2% of the level's bets (1 SOL lost: 0.02)
+        ctx = await b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
+        await ctx.clock.set_fixed_time(DAY)
+        page = await ctx.new_page(); errs = []
+        page.on('pageerror', lambda e: errs.append(str(e)))
+        await page.goto(URL); await page.wait_for_timeout(1500)
+        await page.click('#diff0'); await page.fill('#betInput', '1'); await page.evaluate("document.getElementById('betInput').blur()"); await page.wait_for_timeout(200)
+        await page.click('#playBtn'); await page.wait_for_timeout(800)
+        await page.evaluate('__solDunk.tap()')  # one flap, then the ball falls to the floor
+        for i in range(200):
+            if await page.evaluate('__solDunk.phase()') == 'over': break
+            await page.wait_for_timeout(100)
+        await page.wait_for_timeout(1500)
+        rb = await page.evaluate('__solDunk.rakeback()'); lv = await page.evaluate('__solDunk.level()')
+        check(lv['l'] == 1 and abs(rb['bet'] - 1) < 1e-9 and abs(rb['loss'] - 1) < 1e-9 and abs(rb['acc'] - (0.0005 + 0.02)) < 1e-9 and rb['ready'] == 0,
+              'a 1 SOL run lost on the floor: 0.0205 SOL waits for the next level up (0.05% of the bet, and 5% of the loss up to 2% of the level\'s bets): ' + json.dumps(rb))
+        await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
+        await page.click('#tabProfile'); await page.wait_for_timeout(500)
+        ptxt = await page.evaluate("document.getElementById('pBody').innerText")
+        check('0.0205 SOL' in ptxt and 'Claim it at level 2' in ptxt and '1 SOL lost since level 1' in ptxt, 'Profile says what has built up and what was lost: ' + ptxt[ptxt.find('Rakeback'):][:120].replace('\n', ' | '))
+        await page.screenshot(path=OUT + 'rakeback_loss.png')
         check(not errs, 'no page errors ' + json.dumps(errs))
         await ctx.close()
 
