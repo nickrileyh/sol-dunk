@@ -1428,3 +1428,19 @@ input { caret-color: var(--accent-hi); }
 .pboard.mini .sc { display: none; }
 .sec-h .sec-k { font-size: 12px; font-weight: 600; color: var(--label-3); }
 .tiles.places b { color: var(--green); }
+/* a desktop run from the Play tab plays inside its window (the owner asked to play in the preview window instead of
+   zooming into a run screen): the sidebar and the bet stay in place, quiet and out of reach, and everything the run
+   shows sits over the window (--runl, --runw across; --stt, --sth down; --stb below it; set by layoutStage in game.js) */
+body.desk.inwin.hud-play #tabbar { transform: none; opacity: 0.36; pointer-events: none; }
+body.inwin #lobby { pointer-events: none; }
+body.inwin #lobby .controls { opacity: 0.36; transition: opacity 0.3s; }
+body.inwin #lobby #playBtn, body.inwin #lobby .practice-link, body.inwin #lobby .err { visibility: hidden; }
+body.desk.inwin:not(.hud-lobby) #hud { left: var(--runl); top: var(--stt); width: var(--runw); transform: none; padding: 16px 18px 0; }
+body.inwin #prompt { left: calc(var(--runl) + var(--runw) / 2); top: calc(var(--stt) + var(--sth) * 0.63); }
+body.inwin #banner { left: var(--runl); right: auto; width: var(--runw); top: calc(var(--stt) + var(--sth) * 0.21); }
+body.inwin #callout { left: var(--runl); right: auto; width: var(--runw); top: calc(var(--stt) + max(var(--sth) * 0.21, 168px)); }
+body.inwin #notice { left: calc(var(--runl) + var(--runw) / 2); bottom: calc(var(--stb) + 18px); max-width: calc(var(--runw) - 28px); }
+body.inwin .card { left: calc(var(--runl) + var(--runw) / 2); top: calc(var(--stt) + var(--sth) / 2); width: min(430px, calc(var(--runw) - 24px)); }
+body.inwin #dim { inset: auto; left: var(--runl); top: var(--stt); width: var(--runw); height: var(--sth); border-radius: 24px; }
+body.desk.inwin #heatFrame, body.desk.inwin #heatPulse { left: var(--runl); top: var(--stt); bottom: auto; width: var(--runw); height: var(--sth); transform: none; border-radius: 24px; -webkit-mask-image: none; mask-image: none; }
+body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border-radius: 0; background: none; }  /* where it stands between runs */

@@ -1,8 +1,10 @@
 """Checks the desktop layout (a window at least 1024 x 600): the sidebar in place of the tab bar, the arena's window
 beside the bet on Play and beside the collection in the Locker (with the demo ball flying inside it), Challenges
 and Profile in two columns, pages in a reading column beside the sidebar, the keys between runs (1 to 4 for the
-tabs, the arrows for the mode and the bet) and through a run (Space, C, Enter, Esc, P, M), the hall carrying on dimly
-at the sides of a run with the pointer out of the way, and that a smaller window goes back to the phone layout."""
+tabs, the arrows for the mode and the bet) and through a run (Space, C, Enter, Esc, P, M), a run from Play playing
+inside the Play tab's window with a phone's view ahead (the sidebar and the bet staying, quiet), a window too small for
+that taking the screen with the hall carrying on dimly at its sides, the pointer out of the way while the ball flies,
+and that a smaller window goes back to the phone layout."""
 import asyncio, json
 from playwright.async_api import async_playwright
 from _paths import URL, SHOTS, CHROME
@@ -61,6 +63,23 @@ async def main():
             await page.keyboard.press('Escape'); await page.wait_for_timeout(400)
             await page.click('#tabPlay'); await page.wait_for_timeout(700)
             await page.screenshot(path=f'{SHOTS}/desk_{W}_play.png')
+            if W == 1920:  # a big window: the run plays in it
+                hero3 = await rect('#hero')
+                await page.keyboard.press('Space'); await page.wait_for_timeout(1300)
+                g, hud = await page.evaluate('__solDunk.geom()'), await rect('#hud')
+                check(g['inWin'] and abs(g['stW'] - hero3['w']) < 1 and abs(hud['l'] - g['runL']) < 2 and abs(g['runR'] - g['runBX'] - (352 - 56) * g['scale']) < 0.5, tag + f"the run plays in the window, with a phone's view ahead (the ball {round((g['runBX'] - g['runL']) / (g['runR'] - g['runL']) * 100)}% across)")
+            if W == 1024:  # a window too small for the cards: the run takes the screen, wider than a phone's behind the ball only
+                await page.keyboard.press('Space'); await page.wait_for_timeout(1300)
+                hud, w, g = await rect('#hud'), await page.evaluate("parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--col'))"), await page.evaluate('__solDunk.geom()')
+                runw = g['runR'] - g['runL']
+                check(not g['inWin'] and (await rect('#tabbar'))['r'] <= 1, tag + 'a small window: the run takes the screen and the sidebar slides away')
+                check(abs((hud['l'] + hud['r']) / 2 - W / 2) < 2 and abs(hud['w'] - max(runw, 400)) < 2, tag + f"the HUD sits over the centred court ({round(hud['w'])} px)")
+                check(runw > w * 1.3 and abs(g['runR'] - g['runBX'] - g['ahead']) < 0.5 and abs(g['ahead'] - (352 - 56) * g['scale']) < 0.5, tag + f"its window is wider than a phone's ({round(runw)} px against {round(w)}) with the same view ahead ({round(g['ahead'])} px)")
+                await page.evaluate("__solDunk.autoplay('pro')"); await page.keyboard.press('Space'); await page.wait_for_timeout(1300)
+                # the hall carries on at the sides of the play column, dim, and the column's edge stays dark
+                SUM = "(a) => { const cv = document.getElementById('game'), k = cv.width / innerWidth, g = cv.getContext('2d'); let m = 0; for (let y = a[1]; y < a[2]; y += 4) { const d = g.getImageData(Math.round(a[0] * k), Math.round(y * k), 1, 1).data; m = Math.max(m, d[0] + d[1] + d[2]); } return m; }"
+                side, seam = await page.evaluate(SUM, [g['runL'] - 150, int(H * 0.6), H - 10]), await page.evaluate(SUM, [g['runL'] - 40, 60, H - 10])
+                check(side > 60 and seam < 45, tag + f'the hall carries on at the sides (brightest {side}) and the column\'s edge is dark ({seam})')
             if W == 1440:  # the keys, through a run
                 check(await page.evaluate("getComputedStyle(document.getElementById('keys')).display") != 'none', 'with a keyboard, the keys are listed')
                 snd = await page.evaluate('__solDunk.settings.sound')
@@ -90,22 +109,20 @@ async def main():
                 await page.keyboard.press('Space'); await page.wait_for_timeout(1300)
                 check(await phase() == 'ready', 'Space starts a run from Play')
                 check(await page.evaluate("document.getElementById('promptText').textContent") == 'Press Space to fly', 'the prompt names the key')
-                check((await rect('#tabbar'))['r'] <= 1, 'the sidebar slides away for the run')
-                hud, w = await rect('#hud'), await page.evaluate("parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--col'))")
-                g = await page.evaluate('__solDunk.geom()')
-                runw = g['runR'] - g['runL']
-                check(abs((hud['l'] + hud['r']) / 2 - W / 2) < 2 and abs(hud['w'] - runw) < 2, f"in a run the HUD sits over the centred court ({round(hud['w'])} px)")
-                # wider than a phone's, but only behind the ball: the window ends as far ahead of the ball as a phone's
-                check(runw > w * 1.3 and abs(g['runR'] - g['runBX'] - g['ahead']) < 0.5 and abs(g['ahead'] - (352 - 56) * g['scale']) < 0.5, f"a run's window is wider than a phone's ({round(runw)} px against {round(w)}) with the same view ahead ({round(g['ahead'])} px)")
+                # the run plays inside the Play tab's window: the sidebar and the bet stay, quiet and out of reach
+                tb2, hero2, ctl2 = await rect('#tabbar'), await rect('#hero'), await rect('#lobby .controls')
+                quiet = await page.evaluate("[getComputedStyle(document.getElementById('tabbar')).opacity, getComputedStyle(document.getElementById('tabbar')).pointerEvents, getComputedStyle(document.querySelector('#lobby .controls')).opacity, getComputedStyle(document.getElementById('lobby')).pointerEvents, getComputedStyle(document.getElementById('playBtn')).visibility]")
+                check(tb2['l'] == 0 and float(quiet[0]) < 0.5 and quiet[1] == 'none' and ctl2['w'] > 0 and float(quiet[2]) < 0.5 and quiet[3] == 'none' and quiet[4] == 'hidden', 'the run plays in the window: the sidebar and the bet stay, quiet and out of reach ' + json.dumps(quiet))
+                hud, g = await rect('#hud'), await page.evaluate('__solDunk.geom()')
+                check(g['inWin'] and abs(g['stL'] - hero2['l']) < 1 and abs(g['stW'] - hero2['w']) < 1 and abs(g['stH'] - hero2['h']) < 1, f"the run's stage is the window ({round(g['stW'])} x {round(g['stH'])})")
+                check(abs(hud['l'] - g['runL']) < 2 and abs(hud['w'] - (g['runR'] - g['runL'])) < 2 and abs(hud['t'] - hero2['t']) < 2, f"the HUD sits over the window ({round(hud['w'])} px)")
+                # the window ends a phone's distance ahead of the ball, at the window's scale: no more of the course in view
+                check(abs(g['scale'] - min(hero2['w'] / 352, hero2['h'] / 690)) < 1e-6 and abs(g['runR'] - g['runBX'] - g['ahead']) < 0.5 and abs(g['ahead'] - (352 - 56) * g['scale']) < 0.5 and g['runR'] <= hero2['r'] + 0.5, f"the view ahead is a phone's ({round(g['ahead'])} px; the ball {round((g['runBX'] - g['runL']) / (g['runR'] - g['runL']) * 100)}% across)")
                 await page.evaluate("__solDunk.autoplay('pro')"); await page.keyboard.press('Space'); await page.wait_for_timeout(600)
                 check(await phase() == 'play', 'Space flaps')
                 await page.wait_for_timeout(700)
                 bs, v = await page.evaluate('__solDunk.ballScreen()'), await page.evaluate('({ wr: __solDunk.view.wr, x: __solDunk.view.drawX, z: __solDunk.view.zoom })')
-                check(abs(bs['x'] - g['runBX']) < 6 and abs((v['wr'] - v['x']) - 296 / v['z']) < 3, f"the ball flies at its spot and sees {round(v['wr'] - v['x'])} units ahead, a phone's {round(296 / v['z'])}")
-                # the hall carries on at the sides of the play column, dim, and the column's edge stays dark
-                SUM = "(a) => { const cv = document.getElementById('game'), k = cv.width / innerWidth, g = cv.getContext('2d'); let m = 0; for (let y = a[1]; y < a[2]; y += 4) { const d = g.getImageData(Math.round(a[0] * k), Math.round(y * k), 1, 1).data; m = Math.max(m, d[0] + d[1] + d[2]); } return m; }"
-                side, seam = await page.evaluate(SUM, [150, 600, 890]), await page.evaluate(SUM, [g['runL'] - 40, 100, 890])
-                check(side > 60 and seam < 45, f'in a run the hall carries on at the sides (brightest {side}) and the column\'s edge is dark ({seam})')
+                check(abs(bs['x'] - g['runBX']) < 6 and hero2['t'] < bs['y'] < hero2['b'] and abs((v['wr'] - v['x']) - 296 / v['z']) < 3, f"the ball flies at its spot in the window and sees {round(v['wr'] - v['x'])} units ahead, a phone's {round(296 / v['z'])}")
                 check(await page.evaluate("document.body.classList.contains('nocursor')"), 'the pointer hides while the ball flies')
                 await page.mouse.move(700, 450); await page.wait_for_timeout(100)
                 check(not await page.evaluate("document.body.classList.contains('nocursor')"), 'and comes back when the mouse moves')
@@ -126,6 +143,8 @@ async def main():
                     await page.wait_for_timeout(1200)
                     go, kc = await rect('#goBtn'), await rect('#goBtn .kc')
                     check(kc and kc['w'] > 0 and kc['r'] <= go['r'], 'the checkpoint buttons show their keys')
+                    cpr = await rect('#checkpoint')
+                    check(abs((cpr['l'] + cpr['r']) / 2 - (hero2['l'] + hero2['r']) / 2) < 2 and hero2['t'] < cpr['t'] and cpr['b'] < hero2['b'], 'the checkpoint card sits over the window')
                     await page.screenshot(path=f'{SHOTS}/desk_checkpoint.png')
                     await page.keyboard.press('KeyC'); await page.wait_for_timeout(1800)
                     check(await phase() == 'over', 'C cashes out')
@@ -134,7 +153,7 @@ async def main():
                     await page.wait_for_timeout(1800)
                 await page.screenshot(path=f'{SHOTS}/desk_result.png')
                 await page.click('#lobbyBtn'); await page.wait_for_timeout(900)
-                check(await phase() == 'lobby' and (await rect('#tabbar'))['l'] == 0, 'back between runs, the sidebar returns')
+                check(await phase() == 'lobby' and (await rect('#tabbar'))['l'] == 0 and await page.evaluate("getComputedStyle(document.getElementById('tabbar')).opacity") == '1' and not await page.evaluate("document.body.classList.contains('inwin')"), 'back between runs, the sidebar and the bet come up again')
                 # a smaller window goes back to the phone layout, and a bigger one to the desktop's
                 await page.set_viewport_size({'width': 900, 'height': 800}); await page.wait_for_timeout(700)
                 tb2 = await rect('#tabbar')

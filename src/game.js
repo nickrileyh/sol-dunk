@@ -994,6 +994,14 @@
   // view. The extra width shows the rings already passed, and the ball sits DESK_BALL_F of the way across.
   const DESK_BALL_F = 0.44;
   let runL = 0, runR = 0, runBX = 0;
+  // A desktop run from the Play tab plays inside that tab's window onto the arena (the owner asked to play in the
+  // preview window instead of zooming into a run screen): the sidebar and the bet stay where they are, and the
+  // stage (stL, stT, stW, stH) is the window instead of the screen. The view of the course is framed into it the same
+  // way: its height holds the world from VIEW_TOP to VIEW_BOT, and its right edge is a phone's distance ahead of the
+  // ball, so the ball sits up to WIN_BALL_F of the way across (past that the hall carries on at the sides, as above).
+  // A window too small for the cards (WIN_MIN_W x WIN_MIN_H) keeps the screen-wide run.
+  const WIN_BALL_F = 0.5, WIN_MIN_W = 440, WIN_MIN_H = 520;
+  let inWin = false, stL = 0, stT = 0, stW = 0, stH = 0;
   // canvas sharpness: up to 2x, stepped down if a phone can't keep up during play (see frame)
   let dprCap = 2;
   const perf = { avg: 1 / 60, slow: 0 };
@@ -1014,13 +1022,42 @@
     desk = vw >= 1024 && vh >= 600; document.body.classList.toggle('desk', desk);
     cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr);
     cv.style.width = vw + 'px'; cv.style.height = vh + 'px';
-    scale = Math.min(vw / VIEW_W, vh / VIEW_H);
-    offX = (vw - VIEW_W * scale) / 2;
-    offY = (vh - VIEW_H * scale) / 2 - VIEW_TOP * scale;
-    const ahead = (VIEW_W - BALL_SX) * scale, runW = desk ? Math.min(vw, Math.max(VIEW_W * scale, ahead / (1 - DESK_BALL_F))) : VIEW_W * scale;
-    runL = (vw - runW) / 2; runR = runL + runW; runBX = runR - ahead;
-    document.documentElement.style.setProperty('--col', Math.round(VIEW_W * scale) + 'px'); // the play column, for the HUD and the pages
-    document.documentElement.style.setProperty('--runw', Math.round(runW) + 'px'); // a run's window (wider on a desktop)
+    document.documentElement.style.setProperty('--col', Math.round(VIEW_W * Math.min(vw / VIEW_W, vh / VIEW_H)) + 'px'); // the play column, for the HUD and the pages
+    if (inWin && !desk) { leaveWin(); show(ui.lobby, false); } // too small for the desktop layout: the run carries on screen-wide
+    else if (inWin) measureHero();
+    layoutStage(inWin);
+  }
+  // the stage, the scale and the run's window onto the court (runL..runR, the ball at runBX) for the screen or the
+  // Play tab's window; keep says to keep the picture where it is when the scale changes (going into or out of the window)
+  function layoutStage(keep) {
+    const was = scale;
+    if (inWin) { stL = heroL; stT = heroT; stW = Math.max(1, heroR - heroL); stH = Math.max(1, heroB - heroT); }
+    else { stL = 0; stT = 0; stW = vw; stH = vh; }
+    scale = Math.min(stW / VIEW_W, stH / VIEW_H);
+    offX = stL + (stW - VIEW_W * scale) / 2;
+    offY = stT + (stH - VIEW_H * scale) / 2 - VIEW_TOP * scale;
+    const ahead = (VIEW_W - BALL_SX) * scale, runW = inWin ? Math.min(stW, Math.max(VIEW_W * scale, ahead / (1 - WIN_BALL_F)))
+      : desk ? Math.min(vw, Math.max(VIEW_W * scale, ahead / (1 - DESK_BALL_F))) : VIEW_W * scale;
+    runL = stL + (stW - runW) / 2; runR = runL + runW; runBX = runR - ahead;
+    if (keep && was && was !== scale) view.zoom *= was / scale; // S = scale * zoom stays put, then eases to the new framing
+    if (was !== scale) bgEl = null; // the backdrop's spotlight is as wide as the view
+    const css = document.documentElement.style, px = (v) => Math.round(v) + 'px';
+    css.setProperty('--runw', px(runW)); // a run's window (wider on a desktop)
+    css.setProperty('--runl', px(runL)); css.setProperty('--stt', px(stT)); css.setProperty('--sth', px(stH)); css.setProperty('--stb', px(vh - stT - stH));
+    HUD_DIRTY.on = true;
+  }
+  // into the Play tab's window for a desktop run, if it's big enough for the cards; false keeps the screen-wide run
+  function enterWin() {
+    measureHero();
+    if (!(heroR - heroL >= WIN_MIN_W && heroB - heroT >= WIN_MIN_H)) return false;
+    inWin = true; document.body.classList.add('inwin');
+    layoutStage(true);
+    return true;
+  }
+  function leaveWin() {
+    if (!inWin) return;
+    inWin = false; document.body.classList.remove('inwin');
+    layoutStage(true);
   }
   window.addEventListener('resize', resize);
   resize();
@@ -2018,7 +2055,7 @@
       $('lobbyErr').textContent = '';
     } catch (e) {
       $('lobbyErr').textContent = e.message; run.busy = false;
-      if (ui.lobby.classList.contains('hide')) { toast(e.message); backToLobby(); }
+      if (ui.lobby.classList.contains('hide') || inWin) { toast(e.message); backToLobby(); }
       return;
     }
     run.busy = false;
@@ -2080,7 +2117,17 @@
     enterRun(null);
   }
   function enterRun(missions) {
-    closePage(true); endTry(); show(ui.lobby, false); show(vL, false); show(vP, false); show(vC, false); show(vM, false); show(ui.res, false); show(ui.cp, false); nav.cover = false;
+    closePage(true); endTry(); show(ui.res, false); show(ui.cp, false);
+    // on a desktop a run from the Play tab plays in its window, with the sidebar and the bet left in place (quiet);
+    // specials and duels, and a window too small for the cards, take the screen
+    let win = false;
+    if (desk && (run.mode === 'run' || run.mode === 'practice')) {
+      if (nav.tab !== 'play') { nav.tab = 'play'; document.body.dataset.tab = 'play'; document.querySelectorAll('#tabbar [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === 'play'))); }
+      show(ui.lobby, true); sheetTopC = -1;
+      win = inWin || enterWin();
+    }
+    if (!win) { leaveWin(); show(ui.lobby, false); }
+    show(vL, false); show(vP, false); show(vC, false); show(vM, false); nav.cover = false;
     ball.lastVis = 0; // a new run lets the old flame die down quietly
     setHudMode(true); setBalance();
     clearCallouts(); clearNotices(); potShown = run.bet; setStreakHud();
@@ -2663,12 +2710,13 @@
     show(ui.res, false); show(ui.cp, false); hidePrompt(); clearNotices();
     setHudMode(false);
     phase = 'lobby';
+    leaveWin();
     run.st = null; run.streak = 0; view.st = null; view.prevHoops = []; ball.lastVis = 0; ghost = null;
     attract.wait = 0.3; attract.st = null;
     setTab('play', true); refreshLobby(); refreshPot();
     if (bank.betLimits) bank.betLimits().then(() => { if (phase === 'lobby') refreshLobby(true); }).catch(() => null);
   }
-  if (window.ResizeObserver) { try { const ro = new ResizeObserver(() => { sheetTopC = -1; }); ro.observe(ui.lobby); ro.observe($('vLocker')); } catch (e) { /* optional */ } }
+  if (window.ResizeObserver) { try { const ro = new ResizeObserver(() => { sheetTopC = -1; if (inWin) { measureHero(); layoutStage(true); } }); ro.observe(ui.lobby); ro.observe($('vLocker')); } catch (e) { /* optional */ } }
 
   // ---------------------------------------------------------------- guidance for new players
   const newPlayer = () => stats.runs <= 2;
@@ -3145,7 +3193,10 @@
       const near = lk, top = 130, bot = near ? 560 : 676;
       zoomT = clamp((heroB - heroT - 8) / ((bot - top) * scale), 0.45, 1);
       centreY = (heroT + heroB) / 2; centreW = (top + bot) / 2;
-    } else if (phase !== 'lobby' && run.st) zoomT = levelZoom(run.level);
+    } else if (phase !== 'lobby' && run.st) {
+      zoomT = levelZoom(run.level);
+      centreY = stT + stH / 2; centreW = (VIEW_TOP + VIEW_BOT) / 2; // the stage's middle (the screen's, or the Play tab's window's)
+    }
     view.zoom = lerp(view.zoom, zoomT, 1 - Math.exp(-dt * 4));
     const S = scale * view.zoom;
     // camera: follows the drawn ball with velocity feed-forward, so the ball holds the same
@@ -3155,7 +3206,7 @@
     const ballSX = runBX, ox0 = (vw - VIEW_W * S) / 2;
     // between runs on a desktop the window sits beside the controls: the demo ball flies 30% into it
     const deskLobby = desk && phase === 'lobby' && centreY != null;
-    view.bgX = lerp(view.bgX || 0, deskLobby ? (heroL + heroR - vw) / 2 : 0, 1 - Math.exp(-dt * 7)); // the spotlight stands over the window
+    view.bgX = lerp(view.bgX || 0, deskLobby || inWin ? (heroL + heroR - vw) / 2 : 0, 1 - Math.exp(-dt * 7)); // the spotlight stands over the window
     const target = deskLobby ? dxw - (heroL + (heroR - heroL) * 0.3 - ox0) / S : phase === 'lobby' ? dxw - BALL_SX / view.zoom : dxw - (ballSX - ox0) / S;
     if (view.camT != null && dt > 0 && Math.abs(target - view.camT) < 60) {
       view.camV = lerp(view.camV, (target - view.camT) / dt, 1 - Math.exp(-dt * 4));
@@ -3198,14 +3249,14 @@
     const bannerOn = performance.now() < bannerUntil;
     view.scoreA = lerp(view.scoreA == null ? 1 : view.scoreA, bannerOn ? 0 : CALL.busy ? 0.2 : 1, 1 - Math.exp(-dt * (bannerOn ? 21 : 7.7)));
     if (phase !== 'lobby' && run.st && run.score > 0) {
-      const p = view.pulse, best = profile.best[run.di], cy = offY + 205 * scale, fa = view.scoreA;
+      const p = view.pulse, best = profile.best[run.di], cy = offY + 205 * scale, cxm = (runL + runR) / 2, fa = view.scoreA;
       const col = run.newBest ? '245,197,66' : run.streak >= 5 ? heatText(1) : run.streak >= 3 ? heatText(0) : '255,255,255';
       const m = multSprite(String(run.score), col), k = (84 + p * 9) / 91;
       c.globalAlpha = Math.min(1, 0.09 + p * 0.26) * fa;
-      c.drawImage(m.el, vw / 2 - m.w * k / 2, cy - m.h * k / 2, m.w * k, m.h * k);
+      c.drawImage(m.el, cxm - m.w * k / 2, cy - m.h * k / 2, m.w * k, m.h * k);
       if (best > 0) {
         c.globalAlpha = (run.newBest ? 0.55 : 0.26) * fa;
-        drawText(c, textSprite(run.newBest ? 'New best' : 'Best ' + best, 600, 15 * scale * dpr, FONT_DISPLAY, run.newBest ? '#14f195' : '#ffffff'), vw / 2, cy + 48 * scale, dpr);
+        drawText(c, textSprite(run.newBest ? 'New best' : 'Best ' + best, 600, 15 * scale * dpr, FONT_DISPLAY, run.newBest ? '#14f195' : '#ffffff'), cxm, cy + 48 * scale, dpr);
       }
       c.globalAlpha = 1;
     }
@@ -3263,27 +3314,29 @@
 
     // Wide screens: everyone sees the same distance ahead. Past the play column the course fades out; where there's
     // room, the hall itself (sky, crowd, board and floor, with no rings, walls or labels in it) carries on to the
-    // window's edges, dim, so a run fills a big screen without showing any more of what's coming.
-    if (runL > 2 && (phase !== 'lobby' || (view.zoom > 0.98 && !desk))) {
+    // stage's edges (the screen's, or the Play tab's window's), dim, so a run fills it without showing any more of
+    // what's coming.
+    const sa = stL, sb = stL + stW;
+    if ((runL - sa > 2 || sb - runR > 2) && (phase !== 'lobby' || (view.zoom > 0.98 && !desk))) {
       // the edges sit on whole device pixels, and the fills overlap by one: two fills that only meet on a part-covered
       // pixel leave a bright hairline down the screen (they did, at both edges of the column)
       const L = Math.floor((runL - 40) * dpr) / dpr, r0 = Math.ceil(runR * dpr) / dpr, R = r0 + 40, G = sideGrads(c, L, r0), px = 1 / dpr;
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
-      if (L > 60) {
+      if (L - sa > 60) {
         c.save();
-        c.beginPath(); c.rect(0, 0, L, vh); c.rect(R, 0, vw - R, vh); c.clip();
+        c.beginPath(); c.rect(sa, 0, L - sa, vh); c.rect(R, 0, sb - R, vh); c.clip();
         c.fillStyle = EDGE; c.fillRect(0, 0, vw, vh);
         c.drawImage(backdrop(), bgX, 0, vw, vh);
         c.setTransform(k, 0, 0, k, (ox + sx) * dpr - view.camX * k, (oy + sy) * dpr - view.camY * k);
         drawFar(c, worldLeft, worldW);
         drawCourt(c, worldLeft, worldW, S, bx, by, null);
         c.setTransform(dpr, 0, 0, dpr, 0, 0);
-        c.fillStyle = G.dl; c.fillRect(0, 0, L, vh); // darkest beside the play column, so the lit lane stands out
-        c.fillStyle = G.dr; c.fillRect(R, 0, vw - R, vh);
+        c.fillStyle = G.dl; c.fillRect(sa, 0, L - sa, vh); // darkest beside the play column, so the lit lane stands out
+        c.fillStyle = G.dr; c.fillRect(R, 0, sb - R, vh);
         c.restore();
       } else {
-        c.fillStyle = EDGE; c.fillRect(0, 0, Math.max(0, L), vh);
-        c.fillRect(R, 0, vw, vh);
+        c.fillStyle = EDGE; c.fillRect(sa, 0, Math.max(0, L - sa), vh);
+        c.fillRect(R, 0, Math.max(0, sb - R), vh);
       }
       c.fillStyle = G.l; c.fillRect(L - px, 0, 46 + px, vh);
       c.fillStyle = G.r; c.fillRect(r0 - 6, 0, 46 + px, vh);
@@ -4839,7 +4892,7 @@
   }
   if (hot && hot.ready) hot.ready(boot); else boot((hot && hot.data) || {});
   window.__solDunk = {
-    run, stats, wallet, view, E, PAY, ball, profile, nav, settings, prefs, geom: () => ({ scale, offX, offY, runL, runR, runBX, ahead: (VIEW_W - BALL_SX) * scale }),
+    run, stats, wallet, view, E, PAY, ball, profile, nav, settings, prefs, geom: () => ({ scale, offX, offY, runL, runR, runBX, ahead: (VIEW_W - BALL_SX) * scale, inWin, stL, stT, stW, stH }),
     phase: () => phase,
     dbg,
     unfreeze: () => { dbg.frozen = false; goPlay(); },

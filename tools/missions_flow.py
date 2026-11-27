@@ -9,6 +9,10 @@ import asyncio, json
 from playwright.async_api import async_playwright
 from _paths import URL, SHOTS, CHROME
 OUT = SHOTS + '/missions_'
+# The day's missions are drawn from the UTC date, and on some days the perfect bot finishes all of round 1 in the
+# first run, which opens round 2 before the checks below expect it. The clock is held on one day (timers still run),
+# so the check plays the same missions whatever the date.
+DAY = '2026-11-26T12:00:00Z'
 fails = []
 def check(ok, what):
     print(('ok   ' if ok else 'FAIL ') + what)
@@ -17,6 +21,7 @@ async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(executable_path=CHROME)
         ctx = await b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
+        await ctx.clock.set_fixed_time(DAY)
         page = await ctx.new_page(); errs = []
         page.on('pageerror', lambda e: errs.append(str(e)))
         await page.goto(URL); await page.wait_for_timeout(1500)
@@ -133,6 +138,7 @@ async def main():
 
         # a finished round opens the next: start a player with today's first round done (its SOL still waiting)
         ctx = await b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
+        await ctx.clock.set_fixed_time(DAY)
         page = await ctx.new_page(); errs = []
         page.on('pageerror', lambda e: errs.append(str(e)))
         await page.add_init_script("""(() => { if (localStorage.getItem('soldunk.profile')) return; const d = new Date().toISOString().slice(0, 10);
@@ -181,6 +187,7 @@ async def main():
 
         # SOL released on an earlier day and never claimed is still the player's: a ticket at the top of Missions claims it
         ctx = await b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
+        await ctx.clock.set_fixed_time(DAY)
         page = await ctx.new_page(); errs = []
         page.on('pageerror', lambda e: errs.append(str(e)))
         await page.add_init_script("""(() => { if (localStorage.getItem('soldunk.profile')) return; const d = new Date().toISOString().slice(0, 10);
