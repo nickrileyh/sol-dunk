@@ -97,32 +97,45 @@ async def main():
         txt = await page.evaluate(f"document.querySelector('{day}').innerText")
         m3 = await mv()
         check('Round 1' in txt and 'Round 2' in txt and 'Round 3' in txt, 'the daily missions on the Missions tab show their three rounds')
-        check(('%g SOL ready to claim' % round(m3['ready']['day'], 4)) in txt if m3['ready']['day'] > 0 else True, 'and how much is ready to claim: ' + txt.replace('\n', ' | ')[:160])
+        # SOL ready on the open round's rows has a Claim key on each; a run that finished the whole round has already
+        # opened the next, so its SOL isn't on any row and the ticket at the top of the tab claims it
+        off = any(c['ready'] and c['round'] < m3['round']['day'] for c in m3['all']['day'])
+        tk = await page.evaluate("(document.getElementById('msEarlier') || {}).innerText || ''")
+        check((('%g SOL ready to claim' % round(m3['ready']['day'], 4)) in txt or ('Claim %g SOL' % round(m3['readyAll'], 4)) in tk) if m3['ready']['day'] > 0 else True, 'and how much is ready to claim: ' + (tk or txt).replace('\n', ' | ')[:160])
         keys = await page.evaluate(f"document.querySelectorAll('{day} .m-claim').length")
-        check(keys == sum(1 for c in m3['daily'] if c['ready']) and keys > 0, f'each ready mission has a Claim key ({keys})')
+        check(keys == sum(1 for c in m3['daily'] if c['ready']) and (keys > 0 or (off and tk)), f'each ready mission has a Claim key, or the ticket has SOL from a finished round ({keys}, {tk!r})')
         await page.screenshot(path=OUT + 'claim_keys.png')
-        # claim one: its SOL goes to the balance, coins fly, the balance counts up and the row says claimed
-        first = next(c for c in m3['daily'] if c['ready'])
-        bc = await bal()
-        await page.click(f'{day} .m-claim'); await page.wait_for_timeout(250)
-        await page.screenshot(path=OUT + 'claim_fly.png')
-        check(abs(await bal() - (bc + first['reward'])) < 1e-9 and await page.evaluate(f"document.querySelector('{day} .m-claim.got') !== null"), 'Claim pays that mission\'s SOL and the key turns to what it paid')
-        await page.wait_for_timeout(900)
-        gain = await page.evaluate("document.querySelector('.claim-gain') ? document.querySelector('.claim-gain').textContent : ''")
-        shown = await page.evaluate("document.getElementById('balTxt').textContent")
-        check(gain == '+%g SOL' % first['reward'] and abs(float(shown) - (bc + first['reward'])) <= 0.5 * 10 ** -len(shown.split('.')[1]) + 1e-9 and len(shown.split('.')[1]) >= 3, f'the balance counts up to show it ({shown}) with {gain} under it')
-        await page.wait_for_timeout(400)
-        txt = await page.evaluate(f"document.querySelector('{day}').innerText")
-        check('%g SOL claimed' % first['reward'] in txt and await page.evaluate(f"document.querySelectorAll('{day} .m-claim').length") == keys - 1, 'the row says it was claimed and the other keys stay')
-        await page.screenshot(path=OUT + 'claimed.png')
-        # claim the rest, one key at a time; then nothing is ready and the dot goes
-        for _ in range(8):
-            if not await page.evaluate(f"document.querySelector('{day} .m-claim:not(.got)') !== null"): break
-            await page.click(f'{day} .m-claim:not(.got)'); await page.wait_for_timeout(1300)
-        m4 = await mv()
-        check(m4['ready']['day'] == 0 and abs(await bal() - (bc + m3['ready']['day'])) < 1e-9, 'claiming every key pays all of the day\'s ready SOL, once')
-        check(not await page.evaluate("document.getElementById('badgeM').classList.contains('on')") or m4['readyAll'] > 0, 'and the dot goes once nothing is left to claim')
-        txt = await page.evaluate(f"document.querySelector('{day}').innerText")
+        if keys == 0 and off and tk:
+            # the whole round was finished in a run: the ticket claims its SOL (and anything else ready), once
+            bc = await bal(); allr = m3['readyAll']
+            await page.click('#msEarlier'); await page.wait_for_timeout(1500)
+            m4 = await mv()
+            check(m4['readyAll'] == 0 and abs(await bal() - (bc + allr)) < 1e-9, 'the ticket claims every ready SOL, once (%g)' % allr)
+            check(not await page.evaluate("document.getElementById('msEarlier')") and not await page.evaluate("document.getElementById('badgeM').classList.contains('on')"), 'then the ticket and the dot go')
+            txt = await page.evaluate(f"document.querySelector('{day}').innerText")
+        else:
+            # claim one: its SOL goes to the balance, coins fly, the balance counts up and the row says claimed
+            first = next(c for c in m3['daily'] if c['ready'])
+            bc = await bal()
+            await page.click(f'{day} .m-claim'); await page.wait_for_timeout(250)
+            await page.screenshot(path=OUT + 'claim_fly.png')
+            check(abs(await bal() - (bc + first['reward'])) < 1e-9 and await page.evaluate(f"document.querySelector('{day} .m-claim.got') !== null"), 'Claim pays that mission\'s SOL and the key turns to what it paid')
+            await page.wait_for_timeout(900)
+            gain = await page.evaluate("document.querySelector('.claim-gain') ? document.querySelector('.claim-gain').textContent : ''")
+            shown = await page.evaluate("document.getElementById('balTxt').textContent")
+            check(gain == '+%g SOL' % first['reward'] and abs(float(shown) - (bc + first['reward'])) <= 0.5 * 10 ** -len(shown.split('.')[1]) + 1e-9 and len(shown.split('.')[1]) >= 3, f'the balance counts up to show it ({shown}) with {gain} under it')
+            await page.wait_for_timeout(400)
+            txt = await page.evaluate(f"document.querySelector('{day}').innerText")
+            check('%g SOL claimed' % first['reward'] in txt and await page.evaluate(f"document.querySelectorAll('{day} .m-claim').length") == keys - 1, 'the row says it was claimed and the other keys stay')
+            await page.screenshot(path=OUT + 'claimed.png')
+            # claim the rest, one key at a time; then nothing is ready and the dot goes
+            for _ in range(8):
+                if not await page.evaluate(f"document.querySelector('{day} .m-claim:not(.got)') !== null"): break
+                await page.click(f'{day} .m-claim:not(.got)'); await page.wait_for_timeout(1300)
+            m4 = await mv()
+            check(m4['ready']['day'] == 0 and abs(await bal() - (bc + m3['ready']['day'])) < 1e-9, 'claiming every key pays all of the day\'s ready SOL, once')
+            check(not await page.evaluate("document.getElementById('badgeM').classList.contains('on')") or m4['readyAll'] > 0, 'and the dot goes once nothing is left to claim')
+            txt = await page.evaluate(f"document.querySelector('{day}').innerText")
         met = m4['played']['day'] >= m4['need']['day'] - 1e-9
         check(('SOL rewards unlocked today' in txt) if met else ('Bet %g SOL today' % m4['need']['day'] in txt), 'and what the open round\'s SOL waits for')
         check(('to open round %d' % (m3['round']['day'] + 2)) in txt if m3['next']['day'] and not all(c['done'] for c in m3['daily']) else True, 'and what finishing all three opens')

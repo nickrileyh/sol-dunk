@@ -1453,6 +1453,21 @@ body.inwin .card { left: calc(var(--runl) + var(--runw) / 2); top: calc(var(--st
 body.inwin #dim { inset: auto; left: var(--runl); top: var(--stt); width: var(--runw); height: var(--sth); border-radius: 24px; }
 body.desk.inwin #heatFrame, body.desk.inwin #heatPulse { left: var(--runl); top: var(--stt); bottom: auto; width: var(--runw); height: var(--sth); transform: none; border-radius: 24px; -webkit-mask-image: none; mask-image: none; }
 body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border-radius: 0; background: none; }  /* where it stands between runs */
+
+/* ---------- cleaner pages ----------
+   The owner asked again for a cleaner, sleeker look. */
+/* a page's rules (a special, the duel, the pot): a card of short rows under "How it works", each with a small glyph
+   on a graphite key, like How to play (they were one grey paragraph of six to nine lines) */
+.rules { background: var(--surface); border-radius: 18px; border: 1px solid var(--hair); border-top-color: rgba(255, 255, 255, 0.12); }
+.rules .rl { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px 16px 12px 12px; }
+.rules .rl + .rl::before { content: ""; position: absolute; left: 52px; right: 0; top: 0; height: 1px; background: var(--sep); }
+.rules .rl-ic { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-2); color: var(--label-2); }
+.rules .rl-ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.rules p { margin: 4px 0 0; font-size: 14px; line-height: 1.4; color: var(--label-2); text-wrap: pretty; }
+/* a finished mission says "Done" once: the right side shows what it earned, in green */
+.mrow.done .mxp b.got { color: var(--green); }
+/* Odds & fairness: the last run's seeds and Verify sit under the fairness rows */
+.fair-last { margin-top: 14px; }
 </style>
 </head>
 <body class="hud-lobby">
@@ -5398,7 +5413,12 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
       ${mine}
       ${p.board.length ? `<div class="sec-h"><h3>Today’s board</h3><span class="sec-k">Rings</span></div>${potBoard(p, 10)}` : '<div class="empty">Nobody has flown today’s course yet.</div>'}
       <div class="tiles"><div><b>${p.entrants}</b><span>Players</span></div><div><b>${p.attempts}</b><span>Attempts</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Closing'}</b><span>Left</span></div></div>
-      <p class="pot-rules">Fly today’s course as often as you like. Each attempt costs ${fmtBet(p.fee)} SOL and goes into the pot, and your best one counts: the most rings, then the higher score. At midnight UTC the best three split the pot: ${p.places.map((x) => Math.round(x * 100) + '%').join(', ')}. The house keeps ${Math.round(p.rake * 100)}% of each entry. You race the leader’s best flight as a pale ball.${p.carryIn > 0 ? ' This pot includes ' + fmtAmt(p.carryIn) + ' SOL rolled over.' : ''}</p>
+      ${rulesHtml([
+        ['swish', `Fly today’s course as often as you like. Each attempt costs ${fmtBet(p.fee)} SOL and goes into the pot.`],
+        ['star', 'Your best attempt counts: the most rings, then the higher score.'],
+        ['split', `At midnight UTC the best three split the pot: ${p.places.map((x) => Math.round(x * 100) + '%').join(', ')}.` + (p.carryIn > 0 ? ' This pot includes ' + fmtAmt(p.carryIn) + ' SOL rolled over.' : '')],
+        ['rival', 'You race the leader’s best flight as a pale ball.'],
+        ['cut', `The house keeps ${Math.round(p.rake * 100)}% of each entry.`]])}
       ${last}
       ${p.simulated ? `<div class="pot-demo"><p>Demo: the other players are simulated. They’re the game’s autopilot, from novice to pro, flying today’s course through the day.</p><button class="btn btn-plain" id="potClose">Close this pot now</button></div>` : ''}`;
   }
@@ -5491,7 +5511,11 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
       <button class="btn btn-primary" id="duPlay">Play for ${fmtBet(d.fee)} SOL</button><div class="err" id="duErr" role="alert"></div>
       ${wait}
       <div class="tiles"><div><b>${t.w}</b><span>Won today</span></div><div><b>${t.l}</b><span>Lost today</span></div><div><b>${d.rings}</b><span>Rings</span></div></div>
-      <p class="pot-rules">You both pay ${fmtBet(d.fee)} SOL and fly the same course. It starts easy and gets harder with every ring. More rings wins. Level on rings, the better score wins. Level on both, the pot is split. Your rival shows as a pale ball beside yours. The house keeps ${Math.round(d.rake * 100)}% of each entry.</p>
+      ${rulesHtml([
+        ['swish', `You both pay ${fmtBet(d.fee)} SOL and fly the same course. It gets harder with every ring.`],
+        ['star', 'More rings wins. Level on rings, the better score wins; level on both, the pot is split.'],
+        ['rival', 'Your rival flies beside you as a pale ball.'],
+        ['cut', `The house keeps ${Math.round(d.rake * 100)}% of each entry.`]])}
       ${last}
       ${d.demo ? '<div class="pot-demo"><p>Demo: your rival is the game’s autopilot, set near your level. With real SOL you race another player’s flight.</p></div>' : ''}`;
   }
@@ -5534,7 +5558,13 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
         <div class="row"><span>Players at your level clear it</span><b>${oneIn(c.course.chance)}</b></div>
       </div>
       <p class="foot">Clear it and the next course is harder. Miss and it gets a little easier.</p>
-      <p class="pot-rules">Clear every ring to win the prize. Miss one and the entry is gone.${SP.BY[c.recipe.id] && SP.BY[c.recipe.id].ob ? ' Touch a wall and the attempt ends.' : ''} Clear it and a new special takes its place${c.next ? ` (next: ${c.next.name})` : ''}: ${c.of || SP.PER_SLOT} a day for each prize. Your level settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries, whatever your level: the house keeps about ${100 - pct}%. They open once you’ve bet ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs. New specials come every day at midnight UTC. Special rings don’t count toward missions or the pot.</p>`;
+      ${rulesHtml([
+        ['swish', 'Clear every ring to win the prize. Miss one and the entry is gone.'],
+        SP.BY[c.recipe.id] && SP.BY[c.recipe.id].ob ? ['wall', 'Touch a wall and the attempt ends.'] : null,
+        ['next', `Clear it and a new special takes its place${c.next ? ` (next: ${c.next.name})` : ''}: ${c.of || SP.PER_SLOT} a day for each prize.`],
+        ['level', `Your level settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries.`],
+        ['clock', 'New specials every day at midnight UTC.'],
+        ['mission', `They open once you’ve bet ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs. Their rings don’t count toward missions or the pot.`]])}`;
   }
   // a sketch of a course: the rings in order, how wide each is, how far it bobs, and the green finish
   function drawCourse(el, def) {
@@ -5598,7 +5628,7 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
     if (!d || d.blocked) return '';
     const t = d.today, rec = t.w + t.l + t.d ? `${t.w} won · ${t.l} lost today` : 'One on one';
     return `<div class="cc du"><div class="cc-h"><span class="cc-k">${ICON.versus}Duel</span><span class="cc-t">${rec}</span></div>
-      <div class="spr"><button class="spr-open" data-page="duel" aria-label="Duel: race a rival over the same rings, win ${fmtAmt(d.prize)} SOL. Details"><span class="spr-x">1v1</span><span class="spr-t"><b>Race a rival</b><span>The same rings for both · further wins</span></span></button>
+      <div class="spr"><button class="spr-open" data-page="duel" aria-label="Duel: race a rival over the same rings, win ${fmtAmt(d.prize)} SOL. Details"><span class="spr-x">1v1</span><span class="spr-t"><b>Race a rival</b><span>Same rings · further wins</span></span></button>
       <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(d.prize)}</b> SOL</span><button class="pill go" id="chDuel" aria-label="Play a duel for ${fmtBet(d.fee)} SOL">Play ${fmtBet(d.fee)}</button></div></div></div>`;
   }
   function potCard() {
@@ -6100,7 +6130,9 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
     // daily and weekly missions: the bank moved them on with this run's verified levels and says what it finished
     const mv = mview();
     for (const d of (mres && mres.done) || []) {
-      const c = (d.win === 'day' ? mv.daily : mv.weekly)[d.slot];
+      // by its round and place: a run that finishes a whole round has already opened the next one, so the open
+      // round's slot holds a different mission (looking there dropped the finished three, their XP and the chips)
+      const all = mv.all && mv.all[d.win], c = (all && d.round != null && all[d.round * 3 + d.slot]) || (d.win === 'day' ? mv.daily : mv.weekly)[d.slot];
       if (!c || c.k !== d.k) continue;
       (d.win === 'day' ? dailies : weeklies).push(c); xp += d.xp;
     }
@@ -7878,8 +7910,18 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
     mission: '<rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="m8.4 12.2 2.5 2.5 4.8-5"/>',
     trophy: '<path d="M7.6 3.8h8.8v5.4a4.4 4.4 0 0 1-8.8 0z"/><path d="M7.6 5.6H4.8v1.2a3.3 3.3 0 0 0 3.1 3.3M16.4 5.6h2.8v1.2a3.3 3.3 0 0 1-3.1 3.3M12 13.6v3.6M8.4 20.2h7.2"/>',
     practice: '<circle cx="12" cy="12" r="9"/><path d="M10 8.4v7.2l5.6-3.6z" fill="currentColor"/>',
-    back: '<circle cx="12" cy="12" r="8.6"/><path d="M15.8 12H8.4M11.4 8.9 8.3 12l3.1 3.1"/>'
+    back: '<circle cx="12" cy="12" r="8.6"/><path d="M15.8 12H8.4M11.4 8.9 8.3 12l3.1 3.1"/>',
+    // the rule rows on the special, duel and pot pages
+    clock: '<circle cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.3 2.1"/>',
+    wall: '<path d="M3.6 20.4h16.8"/><rect x="9.2" y="10.4" width="5.6" height="10" rx="1"/><path d="M4.4 12.2C6 7.6 8.6 5.4 12 5.4s6 2.2 7.6 6.8" opacity=".55"/>',
+    cut: '<path d="M6.4 17.6 17.6 6.4"/><circle cx="7.6" cy="7.6" r="2.4"/><circle cx="16.4" cy="16.4" r="2.4"/>',
+    rival: '<circle cx="8.4" cy="12" r="4.8"/><circle cx="16.6" cy="12" r="4.8" opacity=".5"/>',
+    level: '<path d="M4 19.4h4.6v-4.6h4.6v-4.6h4.6V5.6"/><path d="m15.6 7.6 2.2-2.2 2.2 2.2"/>',
+    split: '<circle cx="12" cy="6.2" r="2.8"/><path d="M12 9v4.2M12 13.2l-5.6 5.4M12 13.2l5.6 5.4"/>',
+    next: '<path d="M4.6 12h12.6M13 7.6l4.4 4.4-4.4 4.4"/><path d="M20.2 6.4v11.2" opacity=".55"/>'
   };
+  // A page's rules as a card of short rows, each with a glyph, under "How it works" (they were one grey paragraph).
+  const rulesHtml = (rows, head = 'How it works') => `${head ? `<div class="sec-h"><h3>${head}</h3></div>` : ''}<div class="rules">${rows.filter(Boolean).map(([ic, t]) => `<div class="rl"><span class="rl-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${HOW_ICON[ic]}</svg></span><p>${t}</p></div>`).join('')}</div>`;
   function howHtml() {
     const row = (icon, tone, title, text) => `<div class="hrow"><span class="hic ${tone}"><svg viewBox="0 0 24 24" aria-hidden="true">${HOW_ICON[icon]}</svg></span><div><h3>${title}</h3><p>${text}</p></div></div>`;
     // one short idea a row; the details live on the pages they belong to
@@ -7891,10 +7933,12 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
       row('flag', 'gold', 'Checkpoints', `Every ${NH} rings, the green ring ends the level. Cash out, or keep going for more.`) +
       row('practice', 'blue', 'Practice', `${KB ? 'Click' : 'Tap'} <b>Practice for free</b> under Play for a run with nothing at stake.`) +
       row('star', 'gold', 'Score and XP', `Rings score points, more for swishes and streaks. Points, missions and trophies earn XP, which unlocks balls, wings and trails. Neither changes what a run pays.`) +
-      row('mission', 'purple', 'Missions', `Three at a time, new every day and every week. They count in every run, whatever you bet, and pay SOL once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week: tap Claim to collect it. Finish all three to open the next round, which pays more.`) +
+      row('mission', 'purple', 'Missions', `Three at a time, new every day and every week, whatever you bet. Their SOL unlocks once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week; tap Claim to collect it.`) +
       row('medal', 'gold', 'Trophies', `Fifteen one-time goals. Each adds XP and pays a little SOL: claim it on the Trophies page once your bets cover it.`) +
       row('back', 'green', 'Rakeback', `Every bet sets a little SOL aside for you: ${Math.round(LV.RATE * 100)}% of the house's cut. Level up to claim it.`) +
-      row('trophy', 'gold', 'Challenges', `<b>Special levels</b>: pay the entry and clear one course to win 2×, 3× or 5× it. Clear one and a new one takes its place; some have walls to fly over, rings on their side to fly straight through, or rings that breathe. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs. <b>Duel</b>: race a rival over the same rings; whoever gets further takes the pot. <b>Daily pot</b>: one course for everyone each day. Fly it as often as you like; your best counts, and the best three split the pot.`) +
+      row('trophy', 'gold', 'Special levels', `Pay the entry and clear every ring to win 2×, 3× or 5× it. A clear brings up a new one; some have walls to fly over, rings on their side or rings that breathe. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs.`) +
+      row('rival', 'purple', 'Duel', `Race a rival over the same rings. Whoever gets further takes the pot.`) +
+      row('split', 'green', 'Daily pot', `One course for everyone each day. Fly it as often as you like; your best counts, and the best three split the pot.`) +
       `</div>`;
   }
   // ---------------------------------------------------------------- the quick tour
@@ -7978,18 +8022,20 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
     return `<p class="vsub">Every ring you pass multiplies your bet. A swish multiplies it more than a rim hit, and a swish streak more still.</p>
       <div class="seg odds-seg" id="oddsSeg" role="group" aria-label="Tier">${E.DIFFS.map((d, i) => `<button data-t="${i}" aria-pressed="${i === di}">${d.name}</button>`).join('')}</div>
       <div class="tbl"><table><thead><tr><th>Level</th><th class="r">Rim</th><th class="r">Swish</th><th class="r">5+ streak</th><th class="r">Total</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
-      <div class="prose"><p><b>Rim</b>, <b>Swish</b> and <b>5+ streak</b> are what one ring multiplies your bet by on that level. <b>Total</b> is what your bet is multiplied by once you clear the level: the low end if every ring was a rim hit, the high end if every one was a swish.</p>
+      <div class="prose"><p><b>Rim</b>, <b>Swish</b> and <b>5+ streak</b> are what one ring multiplies your bet by on that level. <b>Total</b> is what your bet is multiplied by once you clear the level, from every ring a rim hit to every one a swish.</p>
       <p>${D.name} pays up to <b>${TOP[di]}×</b> your bet. An average player who cashes out at the first checkpoint gets back about ${Math.round(PAY.AVG_RTP[di][0] * 100)}% of their bet over time, and less the deeper they go. Skilled players do better.</p></div>
       <div class="sec-h"><h3>Fairness</h3></div>
-      <div class="prose">${fairHtml()}</div>`;
+      ${fairHtml()}`;
   }
   function fairHtml() {
     const h = stats.history[0];
     const canVerify = h && h.serverSeed && h.seedHash;
     const last = h ? `<h3>Your last run</h3><span class="mono">hash ${h.seedHash}</span><span class="mono">seed ${h.serverSeed || 'revealed when the run ends'}</span><span class="mono">client ${h.clientSeed} · nonce ${h.nonce}</span>
       ${canVerify ? '<button class="btn btn-plain verify" id="fairVerify">Verify this run</button><div class="verify-out" id="fairOut"></div>' : ''}` : '';
-    return `<p>Every ring position comes from a seed that is locked in before you tap. You see its SHA-256 hash first, and the seed itself when the run ends.</p>
-      <p>Each level is built from <b>HMAC-SHA256(seed, client seed:nonce:level)</b>, and a special level from <b>HMAC-SHA256(seed, client seed:nonce:special)</b>. Every payout is checked by replaying your taps through the same physics.</p>${last}`;
+    return rulesHtml([
+      ['mission', 'Every ring comes from a seed locked in before you tap. You see its SHA-256 hash first, and the seed when the run ends.'],
+      ['level', 'Each level is built from <b>HMAC-SHA256(seed, client seed:nonce:level)</b>; a special level’s ends in <b>:special</b>, a duel’s in <b>:duel</b>.'],
+      ['back', 'Every payout is checked by replaying your taps through the same physics.']], null) + (last ? `<div class="prose fair-last">${last}</div>` : '');
   }
   function walletHtml() {
     if (!CFG.serverUrl) {
@@ -8024,7 +8070,7 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
       if (x.earned) return `<em class="tx wait"><b>${fmtBet(x.reward)} SOL</b>Bet ${more(x.more)} more</em>`;
       return `<em class="tx two"><b>+${a.xp} XP</b>${fmtBet(x.reward)} SOL</em>`;
     };
-    return `<p class="vsub">${got ? got + ' of ' + ACH.length + ' earned.' : 'None yet.'} Each one adds XP and pays a little SOL. Every 1 SOL you bet lets you claim ${fmtBet(tv.rate)} SOL of it.</p>
+    return `<p class="vsub">Each adds XP and pays a little SOL. Every 1 SOL you bet opens ${fmtBet(tv.rate)} SOL of it to claim.</p>
       <div class="tro-sum" aria-hidden="true"><b class="num">${got}<small> / ${ACH.length}</small></b><span class="tro-seg">${ACH.map((a) => `<i${profile.ach[a.id] ? ' class="on"' : ''}></i>`).join('')}</span></div>
       <p class="tro-sol"><span>${fmtBet(tv.claimed)} of ${fmtBet(total)} SOL claimed</span>${open > 0 ? `<b>${fmtBet(open)} SOL to claim</b>` : next > 0 ? `<span>Next: bet ${more(next)} SOL more</span>` : ''}</p>
       <div class="trophies">${ACH.map((a) => { const on = profile.ach[a.id] || (T[a.id] && T[a.id].earned); return `<div class="tro${on ? ' got' : ''}"><span class="ti">${troIcon(a.id)}</span><b>${a.name}</b><span>${a.desc}</span>${foot(a)}</div>`; }).join('')}</div>`;
@@ -8249,7 +8295,7 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
   function mRow(text, p, n, xp, done, sol, m, win) {
     const ready = !!(m && m.ready), claimed = !!(m && m.claimed);
     const right = ready ? `<button class="m-claim" data-mclaim="${win}:${m.i}" aria-label="Claim ${fmtBet(sol)} SOL for ${text}">Claim ${fmtBet(sol)}</button>`
-      : done ? '<b>Done</b>' + (sol ? `<small class="${claimed ? 'paid' : ''}">${fmtBet(sol)} SOL ${claimed ? 'claimed' : 'waiting'}</small>` : '')
+      : done ? `<b class="got">+${xp} XP</b>` + (sol ? `<small class="${claimed ? 'paid' : ''}">${fmtBet(sol)} SOL ${claimed ? 'claimed' : 'waiting'}</small>` : '')
       : `<b>+${xp} XP</b>` + (sol ? `<small>+${fmtBet(sol)} SOL</small>` : '');
     return `<div class="mrow${done ? ' done' : ''}${ready ? ' ready' : ''}">${ring(done ? 1 : p / n)}<span class="mt"><b>${text}</b><span>${done ? (ready ? '+' + xp + ' XP · SOL ready' : 'Done') : p + ' / ' + n}</span></span><span class="mxp">${right}</span></div>`;
   }
@@ -8309,8 +8355,10 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
     if (!SEGS.some((x) => x[0] === nav.seg)) nav.seg = 'day';
     body.classList.toggle('quiet', !!keep); // a redraw (after a claim, the clock) doesn't pop the Claim keys in again
     const mv = mview(), has = { day: mv.ready.day > 0, week: mv.ready.week > 0, career: false };
-    // SOL left from a day or week that has ended isn't on any row: a ticket claims it, with whatever else is ready
-    const earlier = mv.earlier > 0 ? `<button class="gain claim ms-earlier" id="msEarlier" aria-label="Claim ${fmtBet(mv.readyAll)} SOL of mission rewards">${ICON.gift}<span>Unclaimed mission SOL</span><em>Claim ${fmtBet(mv.readyAll)} SOL</em></button>` : '';
+    // SOL that isn't on any row (from a day or week that has ended, or from an earlier round of this one: a run that
+    // finishes a round opens the next, and the card shows the open round) gets a ticket that claims everything ready
+    const offRows = ['day', 'week'].some((w) => (mv.all[w] || []).some((c) => c.ready && c.round < mv.round[w]));
+    const earlier = mv.earlier > 0 || offRows ? `<button class="gain claim ms-earlier" id="msEarlier" aria-label="Claim ${fmtBet(mv.readyAll)} SOL of mission rewards">${ICON.gift}<span>Unclaimed mission SOL</span><em>Claim ${fmtBet(mv.readyAll)} SOL</em></button>` : '';
     body.innerHTML = `<div class="vcol"><h2 class="vtitle">Missions</h2>
       <div class="seg ms-seg" role="group" aria-label="Which missions">${SEGS.map(([k, name]) => `<button data-seg="${k}" aria-pressed="${k === nav.seg}">${name}<i>${segCount(k)}</i>${has[k] ? '<s class="sd" aria-label="SOL to claim"></s>' : ''}</button>`).join('')}</div>${earlier}
       <div class="ms-panels" data-seg="${nav.seg}"><section class="msp" data-seg="day" aria-label="Today">${dayHtml()}</section><section class="msp" data-seg="week" aria-label="This week">${weekHtml()}</section><section class="msp" data-seg="career" aria-label="Career">${careerHtml()}</section></div></div>`;

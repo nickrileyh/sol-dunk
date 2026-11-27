@@ -1444,3 +1444,18 @@ body.inwin .card { left: calc(var(--runl) + var(--runw) / 2); top: calc(var(--st
 body.inwin #dim { inset: auto; left: var(--runl); top: var(--stt); width: var(--runw); height: var(--sth); border-radius: 24px; }
 body.desk.inwin #heatFrame, body.desk.inwin #heatPulse { left: var(--runl); top: var(--stt); bottom: auto; width: var(--runw); height: var(--sth); transform: none; border-radius: 24px; -webkit-mask-image: none; mask-image: none; }
 body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border-radius: 0; background: none; }  /* where it stands between runs */
+
+/* ---------- cleaner pages ----------
+   The owner asked again for a cleaner, sleeker look. */
+/* a page's rules (a special, the duel, the pot): a card of short rows under "How it works", each with a small glyph
+   on a graphite key, like How to play (they were one grey paragraph of six to nine lines) */
+.rules { background: var(--surface); border-radius: 18px; border: 1px solid var(--hair); border-top-color: rgba(255, 255, 255, 0.12); }
+.rules .rl { position: relative; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 12px; align-items: start; padding: 12px 16px 12px 12px; }
+.rules .rl + .rl::before { content: ""; position: absolute; left: 52px; right: 0; top: 0; height: 1px; background: var(--sep); }
+.rules .rl-ic { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--surface-2); color: var(--label-2); }
+.rules .rl-ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.rules p { margin: 4px 0 0; font-size: 14px; line-height: 1.4; color: var(--label-2); text-wrap: pretty; }
+/* a finished mission says "Done" once: the right side shows what it earned, in green */
+.mrow.done .mxp b.got { color: var(--green); }
+/* Odds & fairness: the last run's seeds and Verify sit under the fairness rows */
+.fair-last { margin-top: 14px; }
