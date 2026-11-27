@@ -54,9 +54,15 @@
   // The course from a seed: the same shape of object as engine.generateLevel (a fixed number of draws per ring).
   // feat (the daily pot's course, src/pots.cjs; a duel has none, and its rings are exactly what they were): prefix
   // names its stream of random numbers; up(i) stands ring i on its side and pulse(i) makes it breathe (engine v17);
-  // moveAll makes every ring from the fourth on move. Breathing rings draw from their own stream, three numbers a
-  // ring, so ring i never depends on the course's length.
+  // moveAll makes every ring from the fourth on move, and move(i) ring i; wide(i) makes ring i that many units wider
+  // (narrower if less than 0); still(i) keeps it still and level; wall(i) stands a wall in front of it, to fly over
+  // (engine v16). Breathing rings and walls draw from streams of their own (three numbers a ring, two a gap), so ring
+  // i never depends on the course's length.
   const GATE_W = [18, 8], PULSE = { w: [9, 14], p: [1.6, 2.4] };
+  // a wall in front of a ring: where in the gap (a share of it), how far above the line between the rings its top is,
+  // how thick, and the room a ball needs to clear it; never higher than a ball can climb to after dropping through
+  // the ring before (it drops WALL_DIVE while the player reacts), nor too high to drop into the next ring from
+  const WALL = { at: [0.5, 0.58], up: [0, 30], w: 18, pad: 8, top: 120, react: 0.2, dive: 90 };
   function generate(seed, n, feat) {
     n = n || RINGS;
     const F = feat || null, pre = (F && F.prefix) || 'duel';
@@ -68,8 +74,8 @@
       let gap = FIRST_X;
       if (i > 0) { gap = SPACING * (0.92 + 0.16 * r9); x += gap; }
       let amp = 0, period = 1, phase = 0;
-      const up = !!(F && F.up && F.up(i));
-      if (r2 < (F && F.moveAll && i >= 3 ? 1 : C.moveP)) { amp = C.moveAmp * (0.75 + 0.25 * r3); period = C.period * (0.85 + 0.3 * r4); phase = r5; }
+      const up = !!(F && F.up && F.up(i)), still = !!(F && F.still && F.still(i));
+      if (!still && r2 < (F && ((F.moveAll && i >= 3) || (F.move && F.move(i))) ? 1 : C.moveP)) { amp = C.moveAmp * (0.75 + 0.25 * r3); period = C.period * (0.85 + 0.3 * r4); phase = r5; }
       let y = i === 0 ? 320 + (r1 * 2 - 1) * 40 : prevY + (r1 * 2 - 1) * C.dy;
       if (y < E.Y_MIN) y = E.Y_MIN + (E.Y_MIN - y) * 0.5;
       if (y > E.Y_MAX) y = E.Y_MAX - (y - E.Y_MAX) * 0.5;
@@ -80,8 +86,9 @@
       if (y - amp < E.Y_MIN) y = E.Y_MIN + amp;
       if (y + amp > E.Y_MAX) y = E.Y_MAX - amp;
       let tilt = 0;
-      if (r6 < C.tiltP && !up) tilt = (r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * DEG;
-      const w = up ? Math.round((C.w + lerp(GATE_W[0], GATE_W[1], Math.min(1, i / RAMP))) * 10) / 10 : C.w;
+      if (r6 < C.tiltP && !up && !still) tilt = (r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * DEG;
+      let w = up ? Math.round((C.w + lerp(GATE_W[0], GATE_W[1], Math.min(1, i / RAMP))) * 10) / 10 : C.w;
+      if (F && F.wide) w = Math.max(W_MIN, Math.round((w + (F.wide(i) || 0)) * 10) / 10);
       const hp = { i, x, y0: y, w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 };
       if (up) { hp.v = true; hp.tilt = -90 * DEG; hp.c = 0; hp.s = -1; }
       if (pr) {
@@ -91,7 +98,24 @@
       hoops.push(hp);
       prevY = y;
     }
-    return { seed: String(seed), di: 0, L: 0, special: pre, speed: SPEED, startY: START_Y, hoops, endX: x + SPACING, maxTicks: E.TICK_HZ * (20 + 3 * n) };
+    const def = { seed: String(seed), di: 0, L: 0, special: pre, speed: SPEED, startY: START_Y, hoops, endX: x + SPACING, maxTicks: E.TICK_HZ * (20 + 3 * n) };
+    if (F && F.wall) def.walls = walls(hoops, F.wall, E.makeRng(pre + 'walls|' + seed));
+    return def;
+  }
+  // the walls in front of the rings wall(i) asks for, in order (the same rules as the special levels' walls)
+  function walls(hoops, want, rng) {
+    const out = [], clear = E.PHYS.R + WALL.pad;
+    for (let i = 0; i + 1 < hoops.length; i++) {
+      const a = hoops[i], b = hoops[i + 1], gap = b.x - a.x, r1 = rng(), r2 = rng();
+      if (!want(i + 1)) continue;
+      const f = WALL.at[0] + (WALL.at[1] - WALL.at[0]) * r1, xm = Math.round(a.x + gap * f), x0 = xm - WALL.w / 2, x1 = xm + WALL.w / 2;
+      const t1 = (x0 - E.PHYS.R - a.x) / SPEED, t2 = (b.x - x1 - E.PHYS.R) / SPEED;
+      let y = a.y0 + (b.y0 - a.y0) * f - (WALL.up[0] + (WALL.up[1] - WALL.up[0]) * r2);
+      const climb = CLIMB_RATE * Math.max(0, t1 - WALL.react) - WALL.dive, fall = Math.min(260, 0.8 * 0.5 * E.PHYS.G * t2 * t2);
+      y = Math.max(y, (a.y0 + a.amp) - climb + clear, (b.y0 + b.amp) - fall + clear, WALL.top);
+      out.push({ x0, x1, y0: Math.round(y), y1: E.WORLD.FLOOR + 400 });
+    }
+    return out;
   }
 
   // a flight's score from its ring outcomes ('S' swish, anything else a rim hit): the game's own score, without the

@@ -81,7 +81,16 @@
     // prize a day, so the day's rotation of the twelve ring twists is unchanged.
     { id: 'side', name: 'Side doors', blurb: 'Every ring stands on its side: fly straight through', t: {}, upright: 'all', fx: true },
     { id: 'switch', name: 'Switchback', blurb: 'A flat ring, then one on its side', t: { moveScale: 0.5 }, upright: 'alt', fx: true },
-    { id: 'pulse', name: 'Heartbeat', blurb: 'Every ring breathes wider and tighter', t: { moveScale: 0.5 }, pulse: true, fx: true }
+    { id: 'pulse', name: 'Heartbeat', blurb: 'Every ring breathes wider and tighter', t: { moveScale: 0.5 }, pulse: true, fx: true },
+    // Five new ways to set out the rings (the owner asked for more specials, more unique than these: "all sideways
+    // rings super close together ... just be creative"). They use rings the game already has, so the engine plays
+    // them as it is; lay picks the layout (LAYS below). Like the walls and the new rings, they take turns opening a
+    // prize each day.
+    { id: 'rush', name: 'Gate rush', blurb: 'Doors packed close together: thread every one', t: { moveScale: 0.4 }, lay: 'rush' },
+    { id: 'hop', name: 'Bunny hop', blurb: 'Rings close together: hop, drop, hop, drop', t: { moveScale: 0.4 }, lay: 'hop' },
+    { id: 'falls', name: 'Waterfall', blurb: 'Three rings down one falling line: drop through all three', t: { moveP: 0 }, lay: 'fall' },
+    { id: 'high', name: 'High wire', blurb: 'Every ring up high, tall walls between: don\'t dip', t: { moveScale: 0.4 }, lay: 'high' },
+    { id: 'mix', name: 'Obstacle course', blurb: 'Something different at every ring', t: { moveScale: 0.5 }, lay: 'mix' }
   ];
   // an upright ring is this much wider than a flat one of its grade (a gate has to be met at the right height while
   // the ball rises and falls, where a flat ring is met as it comes down); a breathing ring breathes PULSE.w either
@@ -90,11 +99,37 @@
   const PER_DAY = 3;
   const PER_SLOT = 5;        // a prize has this many specials a day: clear one and the next takes its place
   const BY = Object.fromEntries(RECIPES.map((r) => [r.id, r]));
-  const PLAIN = RECIPES.filter((r) => !r.ob && !r.fx), OBST = RECIPES.filter((r) => r.ob), FX = RECIPES.filter((r) => r.fx);
+  const PLAIN = RECIPES.filter((r) => !r.ob && !r.fx && !r.lay), OBST = RECIPES.filter((r) => r.ob), FX = RECIPES.filter((r) => r.fx), LAY = RECIPES.filter((r) => r.lay);
   // Walls: how thick; and for each layout, where in the gap between two rings each wall stands (a range, as a share
   // of the gap) and how far above the line from one ring to the next its top is (a range; below the line if negative)
   const WALL_W = 18, WALL_PAD = 8, WALL_TOP = 120, WALL_REACT = 0.2, WALL_DIVE = 90;
-  const WALLS = { wall: { at: [[0.52, 0.6]], up: [6, 38] }, low: { at: [[0.5, 0.58]], up: [-6, 24] } };
+  const WALLS = { wall: { at: [[0.52, 0.6]], up: [6, 38] }, low: { at: [[0.5, 0.58]], up: [-6, 24] }, some: { at: [[0.5, 0.58]], up: [0, 28], only: true }, tall: { at: [[0.32, 0.42]], up: [20, 45] } };
+  // The new layouts (lay in a recipe):
+  //   rush  every ring a door, at half the usual gap, each a little higher or lower than the last; the doors start
+  //         wider than other doors and narrow faster grade by grade (doors this close are easy to string together at
+  //         one height: with the usual taper, the hardest course paid a player a little past a pro 163% at 5×)
+  //   hop   flat rings packed close at about the same height: a hop for each one
+  //   fall  rings in threes down one falling line, so a drop through the first carries on through the other two
+  //   high  every ring in the top band, with a tall wall early in every gap: no dipping between them (a wall any
+  //         later leaves too little room to come down into the next ring at the slower grades)
+  //   mix   something different at every ring (never the same twice running): a plain ring, a door, a ring that
+  //         breathes, one on a lift, a tight one, or one with a wall in front of it
+  // gap: the gap between rings as a share of the grade's; drift: how far a ring's height may step from the last;
+  // wide0 and taper: a door this much wider at the first grade, and narrowing this much more a grade than others;
+  // group: rings in groups this big, where every ring after the first hangs off the one before it (dx forward and dy
+  // down from it, still, level and wide more units wider; dx is at Easy level 1's speed, and grows with the grade's).
+  // A ball falls 80 to 100 units in about the time it moves 30 forward, so a fall's rings sit almost one under the
+  // other. band: ring heights drawn in this band (from the top) instead of stepping from the last. (Tried and
+  // dropped: a door with a hoop just past it and below it, a trapdoor. The hoop is only reachable from a door passed
+  // at the top of a hop, which even the simulator's best player managed less than half the time.)
+  const LAYS = {
+    rush: { gap: 0.5, drift: 38, wide0: 6, taper: 1.6 },
+    hop: { gap: 0.55, drift: 26 },
+    fall: { group: 3, dx: [28, 40], dy: [80, 100], wide: 16 },
+    high: { band: 60 },
+    mix: { kinds: 6 }
+  };
+  const MIX = { PLAIN: 0, DOOR: 1, BREATHE: 2, LIFT: 3, TIGHT: 4, WALL: 5 };
 
   // the skill scale, the regular-run rating and the staircase
   const ANCHORS = ['novice', 'casual', 'average', 'good', 'pro'];
@@ -345,9 +380,69 @@
         [[-0.0203, -0.55175, 0.005513], [-0.021, -0.39812, -0.002143], [-0.0104, -0.31712, -0.000515], [-0.0242, -0.18364, 0.000185], [-0.0337, -0.10448, 0.000228]],
         [[0.0298, -0.74787, 0.010994], [-0.0351, -0.51936, -0.002467], [-0.001, -0.4221, 0.000321], [-0.024, -0.27458, -0.000736], [-0.044, -0.15358, -0.000701]],
         [[-0.0823, -0.73457, -0.019403], [-0.0535, -0.65228, 0], [0.0045, -0.58649, 0.005767], [-0.0089, -0.42144, 0.005565], [-0.0367, -0.24567, -0.000615]]
+      ],
+      rush: [
+        [[-0.0913, -0.18769, -0.000765], [-0.0723, -0.08857, -0.00023], [-0.0452, -0.04042, -0.000134], [-0.0141, -0.0116, 0.000014], [-0.0016, -0.00126, -0.000018]],
+        [[-0.0901, -0.24696, -0.000973], [-0.0588, -0.13232, 0.000182], [-0.0445, -0.05836, 0.000097], [-0.0189, -0.01898, 0.000019], [-0.0047, -0.0028, -0.000008]],
+        [[-0.1285, -0.30476, -0.000083], [-0.0616, -0.15813, -0.000391], [-0.0569, -0.08734, 0.000097], [-0.0112, -0.02969, 0.000101], [-0.0061, -0.00499, 0.000017]],
+        [[0.0582, -0.37119, 0.003229], [0.0265, -0.19803, -0.00036], [0.0347, -0.11915, 0.000596], [0.0009, -0.03876, 0.000068], [-0.0075, -0.00874, -0.000022]],
+        [[0.0214, -0.38761, -0.005345], [0.0643, -0.27701, 0.001813], [0.0179, -0.13645, 0.00036], [-0.0023, -0.05461, 0.000103], [-0.0226, -0.01361, -0.000038]],
+        [[0.0356, -0.47426, 0.000367], [0.0529, -0.3138, 0.000826], [0.0036, -0.17913, 0.000146], [-0.0008, -0.07134, 0.000017], [-0.0187, -0.0215, 0.000042]],
+        [[0.0021, -0.54502, -0.001091], [0.0655, -0.36419, 0.000088], [0.0148, -0.21665, -0.000209], [-0.0128, -0.09862, 0.000167], [-0.0223, -0.0359, 0.000177]],
+        [[-0.0442, -0.60182, -0.024124], [0.0354, -0.47837, -0.001074], [0.004, -0.30235, -0.000576], [-0.0086, -0.15253, -0.000037], [-0.0254, -0.05859, -0.00009]],
+        [[0.0947, -1.04797, 0.019618], [0.0787, -0.72229, 0.000907], [-0.0321, -0.42724, -0.012013], [-0.002, -0.27554, 0.001069], [-0.0369, -0.12746, 0.000277]],
+        [[-0.0536, -1.24431, 0], [0.1071, -1.08485, 0.021799], [-0.0353, -0.70081, -0.005697], [-0.1008, -0.42264, -0.00724], [-0.0776, -0.25908, -0.00003]]
+      ],
+      hop: [
+        [[-0.0141, -0.08291, -0.000128], [0.007, -0.04082, -0.000065], [0.0022, -0.0184, -0.000009], [0.0042, -0.00523, 0.000044], [-0.0013, -0.00012, -0.000014]],
+        [[-0.0195, -0.11405, -0.000294], [0.0065, -0.06641, -0.000003], [0.006, -0.03356, -0.000098], [0.006, -0.01222, 0.000045], [0.0009, -0.00285, -0.000006]],
+        [[-0.0184, -0.1886, -0.000458], [-0.0146, -0.11561, -0.000414], [0.0166, -0.07853, 0.000183], [0.0096, -0.02865, -0.000118], [0.0008, -0.00869, 0.000002]],
+        [[0.0409, -0.27663, 0.000445], [0.0462, -0.19654, -0.000436], [0.0457, -0.14484, 0.000324], [0.0467, -0.07786, -0.000079], [0.0208, -0.02833, -0.000063]],
+        [[0.0349, -0.33641, 0.001207], [0.0558, -0.23502, -0.000582], [0.0689, -0.19081, 0.000189], [0.0674, -0.12032, 0.000344], [0.0299, -0.05259, 0.000161]],
+        [[0.0505, -0.37629, -0.000977], [0.0821, -0.29981, -0.000362], [0.0515, -0.21151, -0.000503], [0.0618, -0.14289, -0.000425], [0.0376, -0.0676, -0.000442]],
+        [[0.0755, -0.47528, 0.003746], [0.0866, -0.35973, 0.000447], [0.0986, -0.29656, 0.000852], [0.0845, -0.18043, -0.000666], [0.064, -0.1138, -0.000108]],
+        [[0.0284, -0.55799, 0.000056], [0.1192, -0.49875, 0.000067], [0.1258, -0.40503, -0.000277], [0.1099, -0.29062, -0.00234], [0.1055, -0.20435, -0.000519]],
+        [[0.0074, -0.70357, 0.000256], [0.0954, -0.58142, -0.005732], [0.1128, -0.50048, -0.00257], [0.1826, -0.4357, 0.001267], [0.1512, -0.32715, -0.000436]],
+        [[0.0442, -0.82827, 0], [0.1107, -0.77841, 0.007162], [0.1808, -0.71468, 0.009259], [0.192, -0.58357, -0.004775], [0.2236, -0.48497, 0.001111]]
+      ],
+      falls: [
+        [[0.0242, -0.11271, 0.000261], [0.05, -0.08124, 0.000342], [0.0398, -0.05295, 0.00025], [0.023, -0.02493, 0.000058], [0.0064, -0.0079, 0.000012]],
+        [[0.023, -0.14002, 0.000915], [0.0534, -0.096, 0.000652], [0.0354, -0.059, 0.000313], [0.0254, -0.02821, 0.000178], [0.0099, -0.01034, 0.000082]],
+        [[-0.0134, -0.16026, 0.000916], [0.0169, -0.10468, 0.00032], [0.0179, -0.06945, 0.000223], [0.0278, -0.03723, 0.000169], [0.0108, -0.01324, -0.000023]],
+        [[-0.0424, -0.17712, 0.000711], [-0.0167, -0.12929, 0.000109], [-0.0016, -0.09498, 0.000373], [0.0285, -0.06767, 0.000763], [0.0326, -0.04292, 0.000781]],
+        [[-0.0537, -0.19794, 0.000403], [-0.034, -0.13817, -0.000041], [0.0027, -0.11135, 0.000673], [0.0163, -0.0711, 0.000783], [0.0278, -0.04837, 0.000874]],
+        [[-0.063, -0.22166, -0.000199], [-0.0518, -0.15212, -0.00016], [-0.0136, -0.12898, 0.000743], [-0.009, -0.07581, 0.000533], [0.0073, -0.04987, 0.000721]],
+        [[-0.0831, -0.23339, 0.000201], [-0.0659, -0.17265, 0.000525], [-0.041, -0.13726, 0.000388], [-0.0198, -0.09161, 0.000914], [0.0093, -0.06466, 0.000998]],
+        [[-0.1866, -0.26014, -0.001121], [-0.0804, -0.22354, 0.00118], [-0.0936, -0.16567, 0.000422], [-0.0528, -0.11728, 0.000864], [0.0018, -0.09222, 0.001217]],
+        [[-0.2926, -0.28023, -0.007093], [-0.1087, -0.30764, 0.002121], [-0.1488, -0.24509, 0.000175], [-0.0985, -0.19423, 0.00093], [-0.0429, -0.16053, 0.001558]],
+        [[-0.2921, -0.39133, -0.006475], [-0.1615, -0.39508, 0.002972], [-0.1606, -0.34181, -0.003298], [-0.1096, -0.27756, -0.000731], [-0.0796, -0.24973, 0.000411]]
+      ],
+      high: [
+        [[0.0487, -0.13591, -0.000602], [0.0456, -0.08363, -0.000112], [0.0323, -0.05042, -0.000071], [0.0219, -0.02543, -0.000021], [0.0085, -0.01011, 0.000021]],
+        [[0.0621, -0.17638, -0.000288], [0.0452, -0.1007, -0.000293], [0.0407, -0.06741, 0.000115], [0.0231, -0.0293, -0.0001], [0.0109, -0.01211, 0.000008]],
+        [[0.0581, -0.24271, -0.000663], [0.0578, -0.15568, -0.00049], [0.0491, -0.1026, 0.000091], [0.0281, -0.04718, -0.00002], [0.0129, -0.01809, 0.000055]],
+        [[0.0166, -0.25085, -0.000846], [0.037, -0.16923, -0.000052], [0.0195, -0.10717, 0.000046], [0.006, -0.04754, 0.000047], [0.0043, -0.01314, -0.000016]],
+        [[0.017, -0.30782, 0.000903], [0.0347, -0.20159, -0.001008], [0.0239, -0.13408, 0.000229], [0.0031, -0.05834, -0.000023], [0.0049, -0.02119, -0.000028]],
+        [[0.0579, -0.39209, 0.002091], [0.0465, -0.26604, 0.000885], [0.0092, -0.16482, -0.000021], [-0.0019, -0.08181, -0.000172], [0.0024, -0.03412, -0.00002]],
+        [[0.0441, -0.45205, 0.005123], [0.0311, -0.30233, 0.00005], [0.005, -0.20737, -0.000121], [0.0091, -0.10461, -0.00051], [0.0025, -0.05106, 0.000075]],
+        [[-0.0082, -0.55093, -0.000532], [0.0028, -0.40376, -0.002923], [0.031, -0.34566, 0.002815], [0.0241, -0.19598, 0.000477], [-0.0024, -0.09715, -0.00014]],
+        [[-0.0195, -0.65454, -0.000847], [0.0737, -0.60083, 0.009966], [0.0156, -0.44138, 0.003835], [-0.0349, -0.26392, -0.001445], [-0.0447, -0.14868, -0.000481]],
+        [[0.0481, -0.86156, 0.010272], [-0.0098, -0.63647, -0.002019], [0.0314, -0.59695, 0.007328], [0.021, -0.40402, 0.002168], [-0.0721, -0.20579, -0.001343]]
+      ],
+      mix: [
+        [[0.0407, -0.14097, 0.000062], [0.0414, -0.07546, 0.000053], [0.0293, -0.04146, 0.000113], [0.0139, -0.01534, 0.000044], [0.0044, -0.00423, -0.000004]],
+        [[0.0261, -0.16579, -0.000662], [0.0431, -0.09977, -0.000302], [0.0218, -0.04899, -0.00016], [0.0121, -0.01985, -0.000048], [0.0067, -0.0079, 0.000033]],
+        [[0.0057, -0.23238, -0.000772], [0.0215, -0.14289, -0.000649], [0.008, -0.08643, 0.000098], [0.0151, -0.03723, 0.000065], [0.0072, -0.01018, -0.00005]],
+        [[0.0251, -0.28241, 0.000165], [0.0342, -0.18339, 0.000098], [-0.0003, -0.1027, -0.000139], [0.0077, -0.04637, 0.000152], [0.006, -0.01548, 0.000112]],
+        [[0.0493, -0.35148, 0.001744], [0.0237, -0.2128, 0.000316], [-0.0066, -0.13537, 0.000041], [-0.0025, -0.06547, 0.000313], [-0.0019, -0.02023, -0.000011]],
+        [[0.0459, -0.40595, 0.003382], [0.0264, -0.25729, -0.001418], [0.0067, -0.16971, -0.000033], [0.002, -0.08137, -0.000036], [-0.0077, -0.03519, 0.000066]],
+        [[0.0671, -0.48186, 0.004121], [0.0402, -0.33101, 0.001664], [0.0102, -0.21707, 0.000228], [-0.0143, -0.11252, 0.000026], [-0.0132, -0.05059, 0.000034]],
+        [[0.0006, -0.58167, 0.002366], [0.0578, -0.47742, 0.00335], [0.0347, -0.35473, 0.001995], [-0.0437, -0.16759, -0.001711], [-0.0225, -0.0975, -0.000026]],
+        [[0.0318, -0.73085, -0.004007], [0.082, -0.60034, 0.003892], [0.0291, -0.42407, -0.001456], [-0.0291, -0.28287, 0.000934], [-0.0342, -0.15026, -0.000752]],
+        [[0.097, -0.9278, 0.012031], [0.0769, -0.80321, 0.007164], [-0.0211, -0.56593, 0], [0.0058, -0.3862, -0.003305], [-0.059, -0.26105, 0.000308]]
       ]
     }
-  }; // engine v17, 2000 attempts per cell, 2026-11-26
+  }; // engine v17, 2000 attempts per cell, 2026-11-27
   // @@END@@
 
   // ---------------------------------------------------------------- courses
@@ -375,6 +470,7 @@
   // course of n rings is the first n rings of a longer one (the simulator prices every length from one long run).
   function generate(seed, recipe, g, n) {
     const R = typeof recipe === 'string' ? BY[recipe] : recipe;
+    if (R.lay) return generateLay(seed, R, g, n);
     const C = config(R, g), rng = E.makeRng('special|' + seed + '|' + R.id + '|' + g);
     const hoops = [], mid = (E.Y_MIN + E.Y_MAX) / 2, half = (E.Y_MAX - E.Y_MIN) / 2;
     let x = C.firstX, prevY = START_Y;
@@ -427,6 +523,55 @@
     return def;
   }
 
+  // A course in one of the new layouts (LAYS). Its own function, so the twists before it build exactly the rings
+  // they always have. The same nine draws a ring as generate; a mix draws one more a ring from its own stream for
+  // what each ring is, and three for how it breathes, so ring i still never depends on n.
+  function generateLay(seed, R, g, n) {
+    const C = config(R, g), Ly = LAYS[R.lay], rng = E.makeRng('special|' + seed + '|' + R.id + '|' + g);
+    const mix = R.lay === 'mix', mk = mix ? E.makeRng('specialmix|' + seed + '|' + R.id + '|' + g) : null;
+    const pr = mix ? E.makeRng('specialpulse|' + seed + '|' + R.id + '|' + g) : null;
+    const hoops = [], gw = GATE_W + (Ly.wide0 || 0) - (GATE_TAPER + (Ly.taper || 0)) * g;
+    let x = C.firstX, prevY = START_Y, kind = MIX.PLAIN;
+    for (let i = 0; i < n; i++) {
+      const r1 = rng(), r2 = rng(), r3 = rng(), r4 = rng(), r5 = rng(), r6 = rng(), r7 = rng(), r8 = rng(), r9 = rng();
+      const k = Ly.group ? i % Ly.group : 0, linked = k > 0;
+      if (mk) { const m = mk(); kind = i === 0 ? MIX.PLAIN : (kind + 1 + Math.floor(m * (Ly.kinds - 1))) % Ly.kinds; }
+      let gap = C.firstX, y, amp = 0, period = 1, phase = 0, tilt = 0;
+      if (linked) { // hangs off the ring before it: forward a little and down
+        gap = (Ly.dx[0] + (Ly.dx[1] - Ly.dx[0]) * r9) * C.speed / 178; x += gap;
+        y = Math.min(E.Y_MAX, prevY + Ly.dy[0] + (Ly.dy[1] - Ly.dy[0]) * r1);
+      } else {
+        if (i > 0) { gap = C.spacing * (Ly.gap || 1) * (0.92 + 0.16 * r9); x += gap; }
+        if (kind === MIX.LIFT) { amp = Math.max(C.moveAmp, 44) * (0.75 + 0.25 * r3); period = C.periodBase * 1.3 * (0.85 + 0.3 * r4); phase = r5; }
+        else if (r2 < C.moveP) { amp = C.moveAmp * (0.75 + 0.25 * r3); period = C.periodBase * (0.85 + 0.3 * r4); phase = r5; }
+        if (Ly.band) y = E.Y_MIN + Ly.band * r1;
+        else y = i === 0 ? 320 + (r1 * 2 - 1) * 45 : Ly.group ? E.Y_MIN + 10 + (E.Y_MAX - (Ly.group - 1) * Ly.dy[1] - E.Y_MIN - 10) * r1 : prevY + (r1 * 2 - 1) * (Ly.drift || C.dy);
+        if (y < E.Y_MIN) y = E.Y_MIN + (E.Y_MIN - y) * 0.5;
+        if (y > E.Y_MAX) y = E.Y_MAX - (y - E.Y_MAX) * 0.5;
+        if (Ly.group) { const room = (Ly.group - 1) * Ly.dy[1]; if (y + amp > E.Y_MAX - room) y = E.Y_MAX - room - amp; } // room under it for its group
+        let maxUp = CLIMB_RATE * (gap / C.speed - DROP_TIME) - CLIMB_MARGIN;
+        if (maxUp < 30) maxUp = 30;
+        if (prevY - (y - amp) > maxUp) y = prevY - maxUp + amp;
+        if (y - amp < E.Y_MIN) y = E.Y_MIN + amp;
+        if (y + amp > E.Y_MAX) y = E.Y_MAX - amp;
+      }
+      const up = R.lay === 'rush' || kind === MIX.DOOR;
+      if (!linked && !up && r6 < C.tiltP) tilt = (r7 < 0.5 ? -1 : 1) * C.tiltMax * (0.6 + 0.4 * r8) * DEG;
+      let w = C.hoopW + (up ? gw : 0) + (linked ? Ly.wide || 0 : 0) - (kind === MIX.TIGHT ? 8 : 0);
+      if (w < W_MIN) w = W_MIN;
+      w = Math.round(w * 10) / 10;
+      const hp = { i, x, y0: y, w, amp, period, phase, tilt, c: E.dcos(tilt), s: E.dsin(tilt), cp: i === n - 1 };
+      if (up) { hp.v = true; hp.tilt = -90 * DEG; hp.c = 0; hp.s = -1; }
+      if (pr) { const a = pr(), b = pr(), c = pr(); if (kind === MIX.BREATHE) { hp.pw = Math.min(PULSE.w[0] + (PULSE.w[1] - PULSE.w[0]) * a, w - W_MIN); hp.pp = PULSE.p[0] + (PULSE.p[1] - PULSE.p[0]) * b; hp.pph = c; } }
+      if (kind === MIX.WALL && i > 0) hp.wb = true; // a wall stands in front of it
+      hoops.push(hp);
+      prevY = y;
+    }
+    const def = { seed: String(seed), di: GRADES[g][0], L: 0, special: R.id, grade: g, speed: C.speed, startY: START_Y, hoops, endX: x + C.spacing, maxTicks: E.TICK_HZ * Math.max(45, 20 + 3 * n) };
+    if (mix || R.lay === 'high') def.walls = walls({ ob: mix ? 'some' : 'tall' }, C, hoops, E.makeRng('specialwalls|' + seed + '|' + R.id + '|' + g));
+    return def;
+  }
+
   // The walls of a course, in order: the same ones between every two rings (so the first n rings of a longer course
   // have the same walls before and between them). Each is a slab for the engine, { x0, x1, y0, y1 }: it stands on
   // the floor and its top is y0. A wall's top is UP above the line from one ring to the next, so the ball has to
@@ -440,6 +585,7 @@
       const a = hoops[i], b = hoops[i + 1], gap = b.x - a.x;
       for (const at of L.at) {
         const r1 = rng(), r2 = rng(), f = at[0] + (at[1] - at[0]) * r1;
+        if (L.only && !b.wb) continue; // (an obstacle course has one only in front of some rings)
         const xm = Math.round(a.x + gap * f), x0 = xm - WALL_W / 2, x1 = xm + WALL_W / 2;
         const t1 = (x0 - E.PHYS.R - a.x) / C.speed, t2 = (b.x - x1 - E.PHYS.R) / C.speed; // the time before it and after it
         let y = a.y0 + (b.y0 - a.y0) * f - (L.up[0] + (L.up[1] - L.up[0]) * r2);
@@ -483,10 +629,10 @@
   }
   // Each prize's specials for a day, in order: PER_SLOT of them, the same for everyone. A player sees the first;
   // clearing it brings up the next (the owner asked for a cleared special to lock or make way for a new one), and
-  // after the last that prize is done until tomorrow. The first of each is the day's twist from the cycle above,
-  // except that one prize a day (they take turns) opens with a course with walls, also in turn, and has the twist
-  // it replaced next in line. The rest are every other twist, shuffled for the day and dealt round, so all of them
-  // come up somewhere each day and no two prizes ever show the same one.
+  // after the last that prize is done until tomorrow. One prize a day (they take turns) opens with a course with
+  // walls, also in turn, the next one along with one of the new rings, and the last with one of the new layouts;
+  // each has the day's ring twist from the cycle above next in line. The rest are every other twist, shuffled for
+  // the day and dealt round, so fifteen come up each day and no two prizes ever show the same one.
   function queuesFor(day) {
     const k = Math.floor((dayStart(day) - EPOCH) / DAY_MS), pos = ((k % CYCLE) + CYCLE) % CYCLE;
     const a = order(Math.floor(k / CYCLE)), mod = (v, m) => ((v % m) + m) % m;
@@ -494,6 +640,8 @@
     if (OBST.length) { const s = mod(k + Math.floor(k / OBST.length), SLOTS.length); q[s].unshift(OBST[mod(k, OBST.length)]); }
     // and the next prize along opens with one of the new-ring courses (engine v17), also in turn
     if (FX.length) { const s = mod(k + Math.floor(k / OBST.length) + 1, SLOTS.length); q[s].unshift(FX[mod(k, FX.length)]); }
+    // and the last one with one of the new layouts (LAY), also in turn
+    if (LAY.length) { const s = mod(k + Math.floor(k / OBST.length) + 2, SLOTS.length); q[s].unshift(LAY[mod(k, LAY.length)]); }
     const used = new Set([].concat(...q)), rest = RECIPES.filter((r) => !used.has(r)), r = E.makeRng('specialnext|' + k);
     for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); const t = rest[i]; rest[i] = rest[j]; rest[j] = t; }
     let s = 0;
@@ -641,7 +789,7 @@
   return {
     ENTRY, DAY_MS, START_Y, SLOTS, TARGET, N_MIN, N_MAX, N_IDEAL, GRADES, RECIPES, BY, ANCHORS, LEVEL_NAMES, GRID,
     D_MIN, D_MAX, PRIOR_MU, PRIOR_SD, START, DOWN, SLOT_MARGIN, UNLOCK, TABLES, STAKES, MAX_STAKE, skey, unlockFor, levelAt, tiersFor,
-    config, generate, gradeText, dayKey, dayStart, closesAt, specialsFor, queuesFor, CYCLE, PER_DAY, PER_SLOT, W_MIN, PLAIN, OBST, FX, WALLS, WALL_W, GATE_W, PULSE, walls,
+    config, generate, gradeText, dayKey, dayStart, closesAt, specialsFor, queuesFor, CYCLE, PER_DAY, PER_SLOT, W_MIN, PLAIN, OBST, FX, LAY, LAYS, WALLS, WALL_W, GATE_W, PULSE, walls,
     blank, addLevel, regular, startFor, levelOf, addSpecial, up, levelName, rating, courseFor, todayFor, missReg, clearP
   };
 });

@@ -583,7 +583,7 @@
       this.last = {
         key: s.key, theme: POTS.THEME_BY[s.theme].name, entrants: list.length, refunded: false, rolled: round9(r.carry),
         results: list.slice(0, POTS.PLACES.length).map((e) => ({ who: e.who, rings: e.rings, score: e.score, place: e.place, won: round9(r.pays[e.id] || 0) })),
-        me: s.me.attempts ? { place: mine ? mine.place : null, rings: mine ? mine.rings : 0, won } : null
+        me: s.me.attempts ? { place: mine ? mine.place : null, rings: mine ? mine.rings : 0, score: mine ? mine.score : 0, won } : null
       };
       const today = POTS.dayKey(now), sameDay = String(s.key).slice(0, 10) === today;
       const key = force && sameDay ? today + '#' + ((+String(s.key).split('#')[1] || 0) + 1) : today;
@@ -955,7 +955,7 @@
           key: j.key, seed: j.seed, theme: j.theme, rings: j.rings, legacy: !!j.legacy, fee: m(j.feeLamports), rake: j.rake, places: j.places,
           pool: m(j.poolLamports), carryIn: m(j.carryInLamports), entrants: j.entrants, attempts: j.attempts, closesAt: j.closesAt, cutoffMs: j.cutoffMs, simulated: false,
           board: j.board || [], marks: j.marks || [], leader: j.leader || null, me: j.me || null,
-          last: L ? { key: L.key, theme: L.theme, entrants: L.entrants, refunded: !!L.refunded, rolled: m(L.rolledLamports), results: (L.results || []).map((r) => ({ who: r.who, rings: r.rings, score: r.score, place: r.place, won: m(r.wonLamports) })), me: L.me ? { place: L.me.place, rings: L.me.rings, won: m(L.me.wonLamports) } : null } : null
+          last: L ? { key: L.key, theme: L.theme, entrants: L.entrants, refunded: !!L.refunded, rolled: m(L.rolledLamports), results: (L.results || []).map((r) => ({ who: r.who, rings: r.rings, score: r.score, place: r.place, won: m(r.wonLamports) })), me: L.me ? { place: L.me.place, rings: L.me.rings, score: L.me.score || 0, won: m(L.me.wonLamports) } : null } : null
         };
       },
       async state() { return this.view(await ServerBank.api('/api/pot')); },
@@ -1443,10 +1443,10 @@
     ui.potCap.classList.toggle('rank', run.mode === 'pot'); // a pot attempt shows where it would place, not an amount
     ui.potCap.classList.toggle('practice', practicing());
     if (practicing()) { ui.mult.textContent = fmtMult(run.total); ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = 'Practice'; potShown = 0; return; }
-    if (run.mode === 'pot') { // rings so far, and where that would place on today's board
+    if (run.mode === 'pot') { // points so far, and where that would place on today's board
       const pl = run.place || potPlace();
-      ui.mult.textContent = String(run.hoops);
-      ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = run.hoops ? ordinal(pl) + ' place' : run.ghostOf ? ringsText(run.ghostOf.rings) + ' to beat' : 'First on the board'; potShown = 0;
+      ui.mult.textContent = String(run.score);
+      ui.pot._cu = (ui.pot._cu || 0) + 1; ui.pot.textContent = run.hoops ? ordinal(pl) + ' place' : run.ghostOf ? pointsText(run.ghostOf.score) + ' to beat' : 'First on the board'; potShown = 0;
       return;
     }
     if (run.mode === 'duel') { // rings against rings: yours, then the rival's so far
@@ -1774,6 +1774,7 @@
   let potState = null, potBusy = false;
   const ordinal = (n) => n + ((n % 100 >= 11 && n % 100 <= 13) ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th');
   const ringsText = (n) => n + (n === 1 ? ' ring' : ' rings');
+  const pointsText = (n) => n + (n === 1 ? ' point' : ' points');
   async function refreshPot() {
     if (potBusy) return;
     potBusy = true;
@@ -1799,7 +1800,7 @@
   // the board: the best ten (and you, if you're further down)
   function potBoard(p, n) {
     const rows = p.board.slice(0, n), mine = p.me && p.me.best && !rows.some((b) => b.me) ? { who: 'You', rings: p.me.best.rings, score: p.me.best.score, place: p.me.place, me: true } : null;
-    const li = (b) => `<li class="${b.me ? 'me' : ''}${b.place <= 3 ? ' top' : ''}"><span class="pl">${ordinal(b.place)}</span><span class="who">${b.me ? 'You' : b.who}</span><span class="sc">${b.score}</span><b class="num">${b.rings}</b></li>`;
+    const li = (b) => `<li class="${b.me ? 'me' : ''}${b.place <= 3 ? ' top' : ''}"><span class="pl">${ordinal(b.place)}</span><span class="who">${b.me ? 'You' : b.who}</span><span class="sc">${ringsText(b.rings)}</span><b class="num">${b.score}</b></li>`;
     return rows.length ? `<ol class="pboard">${rows.map(li).join('')}${mine ? '<li class="gap" aria-hidden="true">···</li>' + li(mine) : ''}</ol>` : '';
   }
   function potHtml() {
@@ -1810,20 +1811,21 @@
     const play = me.blocked ? '<div class="empty">The pot isn’t available on this account.</div>'
       : left < (p.cutoffMs || POTS.CUTOFF_MS) ? '<div class="empty">This pot is about to close. The next one opens at midnight UTC.</div>'
       : `<button class="btn btn-primary" id="potPlay">${me.attempts ? 'Fly again' : 'Fly'} for ${fmtBet(p.fee)} SOL</button><div class="err" id="potErr" role="alert"></div>`;
-    const mine = me.best ? `<div class="pot-me${me.place <= 3 ? ' done' : ''}">${me.place <= 3 ? ICON.check : ICON.target}<div><b>${ordinal(me.place)} place · ${ringsText(me.best.rings)}</b><span>Your best of ${me.attempts} ${me.attempts === 1 ? 'attempt' : 'attempts'}, score ${me.best.score}. ${me.place <= 3 ? 'If it closed now, you’d take ' + fmtAmt(pays[me.place - 1]) + ' SOL.' : 'Get into the top three to win a share.'}</span></div></div>` : '';
+    const mine = me.best ? `<div class="pot-me${me.place <= 3 ? ' done' : ''}">${me.place <= 3 ? ICON.check : ICON.target}<div><b>${ordinal(me.place)} place · ${pointsText(me.best.score)}</b><span>Your best of ${me.attempts} ${me.attempts === 1 ? 'attempt' : 'attempts'}, ${ringsText(me.best.rings)}. ${me.place <= 3 ? 'If it closed now, you’d take ' + fmtAmt(pays[me.place - 1]) + ' SOL.' : 'Get into the top three to win a share.'}</span></div></div>` : '';
     const L = p.last;
-    const last = L ? `<div class="pot-last"><span class="k">Last pot${L.theme ? ' · ' + L.theme : ''}</span><span>${L.refunded ? 'Every entry came back' : L.results.length ? L.results.map((r) => ordinal(r.place) + ' ' + r.who + ' · ' + ringsText(r.rings) + ' · ' + fmtAmt(r.won) + ' SOL').join('<br>') : 'Nobody played it · ' + fmtAmt(L.rolled) + ' SOL rolled over'}${L.me ? (L.me.won > 0 ? '<br><b class="won">You came ' + ordinal(L.me.place) + ' and won ' + fmtAmt(L.me.won) + ' SOL</b>' : L.me.place ? '<br>You came ' + ordinal(L.me.place) : '') : ''}</span></div>` : '';
+    const last = L ? `<div class="pot-last"><span class="k">Last pot${L.theme ? ' · ' + L.theme : ''}</span><span>${L.refunded ? 'Every entry came back' : L.results.length ? L.results.map((r) => ordinal(r.place) + ' ' + r.who + ' · ' + pointsText(r.score) + ' · ' + fmtAmt(r.won) + ' SOL').join('<br>') : 'Nobody played it · ' + fmtAmt(L.rolled) + ' SOL rolled over'}${L.me ? (L.me.won > 0 ? '<br><b class="won">You came ' + ordinal(L.me.place) + ' and won ' + fmtAmt(L.me.won) + ' SOL</b>' : L.me.place ? '<br>You came ' + ordinal(L.me.place) : '') : ''}</span></div>` : '';
     return `<div class="pot-goal"><span class="pot-ic">${ICON.trophy}</span><div><b>${T ? T.name : 'Today’s course'}</b><span>${T ? T.blurb : ''} · ${p.rings} rings</span></div></div>
       <div class="sp-card"><canvas class="sp-course" id="potCourse" aria-hidden="true"></canvas><div class="sp-cap">The first 16 rings of today’s course. It’s the same for everyone, all day.</div></div>
       <div class="sp-prize pot"><span class="k">In the pot</span><div class="big"><span class="num">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></div></div>
       <div class="tiles places">${pays.map((v, i) => `<div><b>${fmtAmt(v)}</b><span>${ordinal(i + 1)} · ${Math.round(p.places[i] * 100)}%</span></div>`).join('')}</div>
       ${play}
       ${mine}
-      ${p.board.length ? `<div class="sec-h"><h3>Today’s board</h3><span class="sec-k">Rings</span></div>${potBoard(p, 10)}` : '<div class="empty">Nobody has flown today’s course yet.</div>'}
+      ${p.board.length ? `<div class="sec-h"><h3>Today’s board</h3><span class="sec-k">Points</span></div>${potBoard(p, 10)}` : '<div class="empty">Nobody has flown today’s course yet.</div>'}
       <div class="tiles"><div><b>${p.entrants}</b><span>Players</span></div><div><b>${p.attempts}</b><span>Attempts</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Closing'}</b><span>Left</span></div></div>
       ${rulesHtml([
         ['swish', `Fly today’s course as often as you like. Each attempt costs ${fmtBet(p.fee)} SOL and goes into the pot.`],
-        ['star', 'Your best attempt counts: the most rings, then the higher score.'],
+        ['star', 'Your best attempt counts: the highest score, then the most rings.'],
+        ['fire', 'A rim hit scores 1. A swish scores 2, and each swish in a row 1 more, up to 6.'],
         ['split', `At midnight UTC the best three split the pot: ${p.places.map((x) => Math.round(x * 100) + '%').join(', ')}.` + (p.carryIn > 0 ? ' This pot includes ' + fmtAmt(p.carryIn) + ' SOL rolled over.' : '')],
         ['rival', 'You race the leader’s best flight as a pale ball.'],
         ['cut', `The house keeps ${Math.round(p.rake * 100)}% of each entry.`]])}
@@ -1863,7 +1865,7 @@
       run.place = pl;
     }
     const b = run.myBest;
-    if (b && !run.told.pb && POTS.better({ rings: run.hoops, score: run.score }, b) && run.hoops > b.rings) { run.told.pb = 1; notice('n-pot', ICON.check, 'New best', 'Past your best of ' + ringsText(b.rings), true); }
+    if (b && !run.told.pb && run.score > b.score) { run.told.pb = 1; notice('n-pot', ICON.check, 'New best', 'Past your best of ' + pointsText(b.score), true); }
     setPot();
   }
   // the attempt is over: the bank replays it and says whether it's the player's best and where it stands
@@ -1881,15 +1883,15 @@
       run.serverSeed = r.serverSeed || run.potSeed;
       recordPot(r);
       const you = r.you, best = r.best, wait = REDUCED ? 200 : 650, top = r.place && r.place <= 3;
-      const sub = r.late ? 'The pot had closed before this flight came in' : r.improved ? ordinal(r.place) + ' place on today’s board · score ' + you.score : best ? 'Your best: ' + ringsText(best.rings) + ' · ' + ordinal(r.place) + ' place' : '';
+      const sub = r.late ? 'The pot had closed before this flight came in' : r.improved ? ordinal(r.place) + ' place on today’s board · ' + ringsText(you.rings) : best ? 'Your best: ' + pointsText(best.score) + ' · ' + ordinal(r.place) + ' place' : '';
       const title = r.improved ? (r.place === 1 ? 'In the lead' : 'New best') : how === 'clear' ? 'Course cleared' : BUST_TITLES[kind] || 'Missed';
       if (r.improved && top) { confetti(ball.x, ball.y - 30, 40); winFx(0.8); }
-      setTimeout(() => showResult(title, String(you.rings), r.improved && top ? 'win' : '', sub), r.improved && top ? 700 : wait);
+      setTimeout(() => showResult(title, String(you.score), r.improved && top ? 'win' : '', sub), r.improved && top ? 700 : wait);
     }).catch(netFail);
   }
   function recordPot(r) {
     stats.hoops += run.hoops; stats.swishes += run.swishes;
-    stats.history.unshift({ t: Date.now(), kind: 'pot', theme: run.theme, di: 0, bet: run.bet, payout: 0, level: 1, mult: 0, result: r.improved ? 'best' : 'done', rings: r.you.rings, place: r.place, seedHash: '', serverSeed: run.serverSeed, clientSeed: '', nonce: 0 });
+    stats.history.unshift({ t: Date.now(), kind: 'pot', theme: run.theme, di: 0, bet: run.bet, payout: 0, level: 1, mult: 0, result: r.improved ? 'best' : 'done', rings: r.you.rings, score: r.you.score, place: r.place, seedHash: '', serverSeed: run.serverSeed, clientSeed: '', nonce: 0 });
     stats.history.length = Math.min(stats.history.length, 30);
     // XP for the points, as in a special; the pot doesn't count toward missions or trophies (its entry counts as play)
     const before = lvlOf(profile.xp), steps = LV.stepsOf(profile.xp), xp = LV.specialXp(run.score, false);
@@ -2078,7 +2080,7 @@
     if (!p) return '';
     const T = p.theme, me = p.me || {}, open = !p.legacy && p.closesAt - Date.now() >= (p.cutoffMs || POTS.CUTOFF_MS);
     const act = me.blocked ? '<span class="pill off">Not available</span>' : !open ? '<span class="pill off">Closed</span>' : `<button class="pill go" id="chPot" aria-label="Fly today’s pot course for ${fmtBet(p.fee)} SOL">Fly ${fmtBet(p.fee)}</button>`;
-    const you = me.best ? `You: ${ordinal(me.place)} · ${ringsText(me.best.rings)}` : p.entrants ? p.entrants + (p.entrants === 1 ? ' player' : ' players') + ' in' : 'Nobody in yet';
+    const you = me.best ? `You: ${ordinal(me.place)} · ${pointsText(me.best.score)}` : p.entrants ? p.entrants + (p.entrants === 1 ? ' player' : ' players') + ' in' : 'Nobody in yet';
     return `<div class="cc pot"><div class="cc-h"><span class="cc-k">${ICON.trophy}Daily pot</span><span class="cc-t">Closes in ${leftOf(p.closesAt - Date.now())}<span class="chev">${ICON.chev}</span></span></div><button class="cc-open" data-page="pot" aria-label="Daily pot: ${fmtAmt(p.pool)} SOL. ${T ? T.name : ''}. Details"><span class="cc-big"><span class="num" data-count="${p.pool}">${fmtAmt(p.pool)}</span><span class="unit">SOL</span></span><span class="cc-g">${T ? T.name : 'Today’s course'}</span><span class="cc-s">${T ? T.blurb : ''} · the best three split it</span></button>
       ${p.board.length ? potBoard({ board: p.board.slice(0, 3), me: null }, 3).replace('class="pboard"', 'class="pboard mini"') : ''}
       <div class="cc-act"><span class="cc-v">${you}</span>${act}</div></div>`;
@@ -2236,7 +2238,7 @@
     if (run.mode === 'run') profile.lv[run.di][run.level - 1][0]++;
     setPips(run.st); setPot(); setStreakHud(); setHeat(run.streak);
     if (run.level > 1) { banner('Level ' + run.level, goalLine(), 1400); liveGoals(); }
-    showPrompt(KB ? (run.level === 1 ? 'Press Space to fly' : 'Press Space to go') : run.level === 1 ? 'Tap to fly' : 'Tap to go', pt ? (run.ghostOf ? (run.ghostOf.name === 'Leader' ? 'The leader’s best: ' + ringsText(run.ghostOf.rings) + '. Beat it.' : 'Your best: ' + ringsText(run.ghostOf.rings) + '. Beat it.') : 'Nobody has flown it yet. Set the mark.') : du ? (run.rival ? 'Get further than your rival to win ' + fmtAmt(run.prize) + ' SOL' : 'Fly as far as you can. The next player races your mark.') : sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL'
+    showPrompt(KB ? (run.level === 1 ? 'Press Space to fly' : 'Press Space to go') : run.level === 1 ? 'Tap to fly' : 'Tap to go', pt ? (run.ghostOf ? (run.ghostOf.name === 'Leader' ? 'The leader’s best: ' + pointsText(run.ghostOf.score) + '. Beat it.' : 'Your best: ' + pointsText(run.ghostOf.score) + '. Beat it.') : 'Nobody has flown it yet. Set the mark.') : du ? (run.rival ? 'Get further than your rival to win ' + fmtAmt(run.prize) + ' SOL' : 'Fly as far as you can. The next player races your mark.') : sp ? 'Clear all ' + def.hoops.length + ' rings to win ' + fmtAmt(run.prize) + ' SOL'
       : run.level === 1 ? (practicing() ? 'Free practice: nothing is at stake' : newPlayer() ? 'Drop down through each ring' : goalLine()) : '');
   }
 
@@ -2657,12 +2659,12 @@
     $('resTitle').textContent = title;
     if (rollTo != null) countUp($('resNum'), 0, rollTo, (x) => '+' + fmtAmt(x), 800); else { $('resNum')._cu = ($('resNum')._cu || 0) + 1; $('resNum').textContent = amount; }
     $('resAmount').className = 'big ' + cls;
-    $('resAmount').querySelector('.unit').textContent = run.mode === 'pot' ? (amount === '1' ? 'ring' : 'rings') : 'SOL'; // a pot attempt's number is its rings: the money comes at midnight
+    $('resAmount').querySelector('.unit').textContent = run.mode === 'pot' ? (amount === '1' ? 'point' : 'points') : 'SOL'; // a pot attempt's number is its score: the money comes at midnight
     $('resSub').textContent = sub;
     const sp = run.mode === 'special', du = run.mode === 'duel', pt = run.mode === 'pot', prac = practicing();
     ui.res.classList.toggle('practice', prac);
-    run.share = prac ? '' : shareText(pt ? ringsText(+amount) + (sub ? ' · ' + sub : '') : du ? title + (sub ? ' · ' + sub : '') : sp ? (cls === 'win' ? 'Cleared it' : title + ' at ring ' + Math.min(run.st ? run.st.hoops.length : 0, run.hoops + 1)) : cls !== 'loss' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
-    $('resStats').innerHTML = [[run.score, nb ? 'New best' : 'Score', nb], [run.hoops, 'Rings'], [run.best, 'Best streak']]
+    run.share = prac ? '' : shareText(pt ? pointsText(+amount) + (sub ? ' · ' + sub : '') : du ? title + (sub ? ' · ' + sub : '') : sp ? (cls === 'win' ? 'Cleared it' : title + ' at ring ' + Math.min(run.st ? run.st.hoops.length : 0, run.hoops + 1)) : cls !== 'loss' ? title + ' at ' + fmtMult(run.total) : title + ' on level ' + run.level);
+    $('resStats').innerHTML = (pt ? [[run.hoops, 'Rings'], [run.swishes, 'Swishes'], [run.best, 'Best streak']] : [[run.score, nb ? 'New best' : 'Score', nb], [run.hoops, 'Rings'], [run.best, 'Best streak']])
       .map(([v, k, hi]) => `<div${hi ? ' class="hi"' : ''}><b>${v}</b><span>${k}</span></div>`).join('');
     const spNow = sp && specState && specState.specials ? specState.specials[run.slot] : null;
     $('againT').textContent = prac ? 'Practice again' : pt ? 'Fly again' : du ? 'Duel again' : sp ? (cls === 'win' ? 'Play next' : 'Try again') : 'Play again';
@@ -3336,7 +3338,7 @@
     // the score, huge and quiet, behind everything (Flappy Dunk style); the pot sits in the HUD
     const bannerOn = performance.now() < bannerUntil;
     view.scoreA = lerp(view.scoreA == null ? 1 : view.scoreA, bannerOn ? 0 : CALL.busy ? 0.2 : 1, 1 - Math.exp(-dt * (bannerOn ? 21 : 7.7)));
-    if (phase !== 'lobby' && run.st && run.score > 0) {
+    if (phase !== 'lobby' && run.st && run.score > 0 && run.mode !== 'pot') {
       const p = view.pulse, best = profile.best[run.di], cy = offY + 205 * scale, cxm = (runL + runR) / 2, fa = view.scoreA;
       const col = run.newBest ? '245,197,66' : run.streak >= 5 ? heatText(1) : run.streak >= 3 ? heatText(0) : '255,255,255';
       const m = multSprite(String(run.score), col), k = (84 + p * 9) / 91;
@@ -4388,9 +4390,9 @@
       row('mission', 'purple', 'Missions', `Three at a time, new every day and every week, whatever you bet; finish them for the next round, up to ${MS.ROUNDS}. Their SOL unlocks once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week, more for later rounds; tap Claim to collect it.`) +
       row('medal', 'gold', 'Trophies', `Fifteen one-time goals. Each adds XP and pays a little SOL: claim it on the Trophies page once your bets cover it.`) +
       row('back', 'green', 'Rakeback', `Each level up pays back ${pctTxt(LV.LOSS)} of what you lost since the last one, net of what you won, plus a little of every bet. The strongest players get ${pctTxt(LV.LOSS_TOP)} of their run losses.`) +
-      row('trophy', 'gold', 'Special levels', `Pick a stake and clear every ring to win 2×, 3× or 5× it. A clear brings up a new one; some have walls to fly over, rings on their side or rings that breathe. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs.`) +
+      row('trophy', 'gold', 'Special levels', `Pick a stake and clear every ring to win 2×, 3× or 5× it. A clear brings up a new one; some have walls to fly over, rings on their side, rings that breathe or rings packed close. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs.`) +
       row('rival', 'purple', 'Duel', `Pick a stake and race a rival over the same rings. Whoever gets further takes 1.8× it.`) +
-      row('split', 'green', 'Daily pot', `One course for everyone each day. Fly it as often as you like; your best counts, and the best three split the pot.`) +
+      row('split', 'green', 'Daily pot', `One course for everyone each day. Fly it as often as you like; your best score counts, and the best three split the pot.`) +
       `</div>`;
   }
   // ---------------------------------------------------------------- the quick tour
@@ -4606,7 +4608,7 @@
     if (!stats.history.length) return `<div class="empty rich"><i>${ICON.chart}</i><span><b>No runs yet</b>Each run shows up here with how it ended and what it made.</span></div>`;
     const spName = (h) => (SP.BY[h.recipe] ? SP.BY[h.recipe].name : 'Special level');
     const duel = { won: 'Won a duel', lost: 'Lost a duel', draw: 'Drew a duel', waiting: 'Set a duel mark' };
-    const what = (h) => (h.kind === 'pot' ? (h.result === 'best' ? 'New best on the pot · ' : 'Pot attempt · ') + ringsText(h.rings || 0) + (h.place ? ' · ' + ordinal(h.place) : '') : h.kind === 'duel' ? (duel[h.result] || 'Duel') + ' · ' + h.rings + (h.rings === 1 ? ' ring' : ' rings') : h.kind === 'special' ? (h.result === 'won' ? 'Cleared ' + spName(h) + ' · ' + fmtMult(h.mult) : 'Missed ' + spName(h))
+    const what = (h) => (h.kind === 'pot' ? (h.result === 'best' ? 'New best on the pot · ' : 'Pot attempt · ') + (h.score != null ? pointsText(h.score) : ringsText(h.rings || 0)) + (h.place ? ' · ' + ordinal(h.place) : '') : h.kind === 'duel' ? (duel[h.result] || 'Duel') + ' · ' + h.rings + (h.rings === 1 ? ' ring' : ' rings') : h.kind === 'special' ? (h.result === 'won' ? 'Cleared ' + spName(h) + ' · ' + fmtMult(h.mult) : 'Missed ' + spName(h))
       : h.result === 'bust' ? 'Out on level ' + h.level : h.result === 'maxwin' ? 'Max win · ' + fmtMult(h.mult) : h.result === 'final' ? 'All ' + NL + ' levels · ' + fmtMult(h.mult) : 'Cashed out at ' + fmtMult(h.mult));
     return `<div class="runs">${stats.history.map((h) => {
         const p = h.payout - h.bet;
@@ -4697,7 +4699,7 @@
       requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[sc.recipe.id]) drawCourse(c, SP.generate('preview|' + day + '|' + slot, sc.recipe.id, k.course.grade, k.course.rings)); });
     }
     const ps = nav.page === 'pot' && potState && potState.seed && potState.theme ? potState : null;
-    if (ps) requestAnimationFrame(() => { const c = $('potCourse'); if (!c) return; const d = POTS.course(ps.seed, ps.theme.id); drawCourse(c, Object.assign({}, d, { hoops: d.hoops.slice(0, 16) })); });
+    if (ps) requestAnimationFrame(() => { const c = $('potCourse'); if (!c) return; const d = POTS.course(ps.seed, ps.theme.id), hs = d.hoops.slice(0, 16); drawCourse(c, Object.assign({}, d, { hoops: hs, walls: d.walls && d.walls.filter((wl) => wl.x1 < hs[hs.length - 1].x) })); });
     if (keepScroll) body.scrollTop = y;
   }
   function closePage(quiet) {
@@ -5005,7 +5007,7 @@
   function showPause(on) {
     const el = $('pauseCard');
     if (on) {
-      $('pauseSub').textContent = run.mode === 'pot' ? 'Daily pot · ring ' + (run.hoops + 1) + ' · ' + ordinal(run.place || potPlace()) + ' place'
+      $('pauseSub').textContent = run.mode === 'pot' ? 'Daily pot · ' + pointsText(run.score) + ' · ' + ordinal(run.place || potPlace()) + ' place'
         : run.mode === 'duel' ? 'Duel · ring ' + (run.hoops + 1) + ' · ' + fmtAmt(run.prize) + ' SOL to win'
         : run.mode === 'special' ? SP.BY[run.recipe].name + ' · ring ' + Math.min(run.st.hoops.length, run.hoops + 1) + ' of ' + run.st.hoops.length + ' · ' + fmtAmt(run.prize) + ' SOL to win'
         : practicing() ? 'Level ' + run.level + ' · practice' : 'Level ' + run.level + ' · ' + fmtSol(run.bet * run.total) + ' SOL pot';

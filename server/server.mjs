@@ -395,7 +395,7 @@ export async function createServer(CFG, log) {
     const e = u ? await t.potEntry(p.day, u.address) : null, T = POTS.THEME_BY[p.theme];
     return {
       key: p.day, theme: p.goal ? 'Challenge pot' : T ? T.name : '', entrants: p.entrants || 0, refunded: !!p.refunded, results: p.results || [],
-      rolledLamports: p.carryOut || 0, me: e ? { place: e.place || null, rings: e.best ? e.best.rings : 0, wonLamports: e.won || 0 } : null
+      rolledLamports: p.carryOut || 0, me: e ? { place: e.place || null, rings: e.best ? e.best.rings : 0, score: e.best ? e.best.score : 0, wonLamports: e.won || 0 } : null
     };
   }
   app.get('/api/pot', wrap(async (req) => {

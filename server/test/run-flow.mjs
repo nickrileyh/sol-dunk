@@ -135,7 +135,7 @@ function playTaps(seed, di, L, skill, salt) {
   check(b1.ghost && b1.ghost.name === 'Leader' && b1.ghost.rings === fa1.rings && JSON.stringify(b1.ghost.taps) === JSON.stringify(fa1.taps), 'pot: another player races the leader\'s ghost');
   const fb1 = flyPot(p0.seed, 'perfect', 'pb1'), rb1 = await Bc.api('/api/pot/finish', { runId: b1.runId, taps: fb1.taps });
   const bAhead = POTS.better(fb1, fa1);
-  check(rb1.place === (bAhead ? 1 : 2) && rb1.pot.marks.length === 2 && POTS.cmp({ rings: rb1.pot.marks[0][0], score: rb1.pot.marks[0][1] }, { rings: rb1.pot.marks[1][0], score: rb1.pot.marks[1][1] }) <= 0, 'pot: standings by rings, then score ' + JSON.stringify([fb1.rings, fa1.rings, rb1.place]));
+  check(rb1.place === (bAhead ? 1 : 2) && rb1.pot.marks.length === 2 && POTS.cmp({ rings: rb1.pot.marks[0][0], score: rb1.pot.marks[0][1] }, { rings: rb1.pot.marks[1][0], score: rb1.pot.marks[1][1] }) <= 0 && rb1.pot.marks[0][1] >= rb1.pot.marks[1][1], 'pot: standings by score, then rings ' + JSON.stringify([fb1.score, fa1.score, rb1.place]));
   const c1 = await C.api('/api/pot/start', {}); const rc1 = await C.api('/api/pot/finish', { runId: c1.runId, taps: [0] });
   check(rc1.place === 3 && rc1.you.rings === 0, 'pot: a flight with no rings still takes a place');
   const balsBefore = await Promise.all([A, Bc, C].map(async (x) => (await x.api('/api/me')).balance)), keyBefore = rc1.pot.key;
@@ -155,8 +155,20 @@ function playTaps(seed, di, L, skill, salt) {
   const t2 = POTS.settle(100, 0, POTS.standings([e3(9, 20, 'a'), e3(5, 9, 'b')]), true), t3 = POTS.settle(100, 0, POTS.standings([e3(1, 1, 'a')]), true);
   check(t2.pays.a === 56 && t2.pays.b === 33 && t3.pays.a === 90 && t3.carry === 0, 'pot: with fewer than three, the places filled share it all ' + JSON.stringify([t2.pays, t3.pays]));
   const t4 = POTS.settle(0, 40, [], true), t5 = POTS.standings([e3(3, 4, 'x'), e3(7, 1, 'y'), e3(7, 9, 'z'), e3(3, 4, 'w')]);
-  check(t4.carry === 40 && t5.map((e) => e.id + e.place).join() === 'z1,y2,x3,w3', 'pot: nobody in rolls it over; places tie on rings and score ' + JSON.stringify(t5.map((e) => e.id + e.place)));
+  check(t4.carry === 40 && t5.map((e) => e.id + e.place).join() === 'z1,x2,w2,y4', 'pot: nobody in rolls it over; places go by score, then rings, and tie on both ' + JSON.stringify(t5.map((e) => e.id + e.place)));
+  const t6 = POTS.standings([e3(30, 31, 'long'), e3(12, 52, 'swish'), e3(14, 52, 'more')]);
+  check(t6.map((e) => e.id).join() === 'more,swish,long' && POTS.better(e3(5, 40, 'a'), e3(20, 39, 'b')) && !POTS.better(e3(20, 39, 'b'), e3(5, 40, 'a')), 'pot: a run of swishes beats a longer flight of rim hits ' + JSON.stringify(t6.map((e) => e.id)));
   check(POTS.THEMES.length === 5 && new Set(POTS.THEMES.map((T) => T.id)).size === 5 && POTS.themeFor('2026-12-01').id !== POTS.themeFor('2026-12-02').id, 'pot: five themes, a new one each day');
+  {
+    const SPX = require(path.join(root, 'src/special.cjs')), names = new Set(SPX.RECIPES.map((r) => r.name));
+    check(POTS.THEMES.every((T) => !names.has(T.name) && !SPX.BY[T.id]) && POTS.RETIRED.every((T) => POTS.THEME_BY[T.id] && POTS.course('abc', T.id).hoops.length === POTS.RINGS), 'pot: its themes are its own, none a special level\'s, and the retired ones still build');
+    const by = (id) => POTS.course('0123456789abcdef0123456789abcdef', id), ok = (d) => d.hoops.length === POTS.RINGS && d.hoops.every((h) => h.y0 - h.amp >= E.Y_MIN - 1e-6 && h.y0 + h.amp <= E.Y_MAX + 1e-6);
+    const sa = by('streak'), gt = by('tour'), lg = by('lungs'), sc = by('steeple');
+    check(ok(sa) && sa.hoops.slice(1, 4).every((h) => !h.amp && h.w > sa.hoops[4].w) && sa.hoops[4].amp > 0, 'pot: Streak alley sets four still, wide rings before a tight one that moves');
+    check(ok(gt) && gt.hoops.slice(0, 8).every((h) => !h.v && !h.pw) && gt.hoops[9].v && gt.hoops.slice(16, 24).every((h) => h.pw > 0) && gt.hoops.slice(24).every((h) => h.amp > 0), 'pot: the Grand tour changes every eight rings');
+    check(ok(lg) && lg.hoops.every((h, i) => (i % 2 === 1) === !!h.v && (i % 2 === 1) === h.pw > 0), 'pot: Breathing doors makes every other ring a door that breathes');
+    check(ok(sc) && sc.walls && sc.walls.length === Math.floor((POTS.RINGS + 1) / 3) && sc.walls.every((w) => sc.hoops.some((h, i) => i % 3 === 2 && h.x > w.x1 && sc.hoops[i - 1].x < w.x0)), 'pot: Steeplechase stands a wall before every third ring ' + (sc.walls ? sc.walls.length : 0));
+  }
   const poor = client_(8801); await poor.signIn();
   check((await poor.api('/api/pot/start', {})).status === 400, 'pot: an attempt without the balance is refused');
   srv3.kill();
@@ -488,8 +500,9 @@ function playTaps(seed, di, L, skill, salt) {
     check(TRr.run(null, [{ outcomes: 'RRRRRR', clear: true }], { paid: true, total: 2.2, hard: true, nl: 8 }, 7).earned.join() === 'cp1,double,legend', 'trophies: a 2x cash-out and a Hard clear');
     check(TRr.LIST.reduce((n, t) => n + TRr.reward(t), 0) < 0.1 && TRr.RATE + require(path.join(root, 'src/missions.cjs')).RATE + require(path.join(root, 'src/levels.cjs')).VOL < 0.01, 'trophies: rewards are small, and with mission SOL and rakeback they stay under the 1% edge against a good player');
     // each prize's specials for a day: PER_SLOT of them in order, every twist somewhere, no twist under two prizes;
-    // one prize a day opens with a course with walls, and no opener comes back the next day
-    let prev = [], bad = 0, walled = 0, fxed = 0; const seen = {}, wallSlots = new Set(), fxSlots = new Set();
+    // one prize a day opens with a course with walls, the next with new rings and the last with a new layout, each
+    // with the day's ring twist next in line, and no opener comes back the next day
+    let prev = [], bad = 0, walled = 0, fxed = 0, laid = 0; const seen = {}, wallSlots = new Set(), fxSlots = new Set(), laySlots = new Set(), inQ = new Set();
     for (let d = 0; d < 120; d++) {
       const day = new Date(Date.UTC(2026, 10, 1) + d * 86400000).toISOString().slice(0, 10), q = SP.queuesFor(day), all = [].concat(...q).map((R) => R.id);
       const ids = SP.specialsFor(day).map((x) => x.recipe.id);
@@ -499,9 +512,13 @@ function playTaps(seed, di, L, skill, salt) {
       if (w.length === 1) { walled++; wallSlots.add(w[0]); }
       const fx = q.map((x, k) => (x[0].fx ? k : -1)).filter((k) => k >= 0);
       if (fx.length === 1 && fx[0] !== w[0]) { fxed++; fxSlots.add(fx[0]); }
-      ids.forEach((id) => { seen[id] = (seen[id] || 0) + 1; }); prev = ids;
+      const ly = q.map((x, k) => (x[0].lay ? k : -1)).filter((k) => k >= 0);
+      if (ly.length === 1 && ly[0] !== w[0] && ly[0] !== fx[0]) { laid++; laySlots.add(ly[0]); }
+      if (q.some((x) => x[1].ob || x[1].fx || x[1].lay)) bad++; // the day's ring twists come next
+      ids.forEach((id) => { seen[id] = (seen[id] || 0) + 1; }); all.forEach((id) => inQ.add(id)); prev = ids;
     }
-    check(SP.RECIPES.length === 18 && SP.PLAIN.length === 12 && SP.OBST.length === 3 && SP.FX.length === 3 && bad === 0 && Object.keys(seen).length === 18, 'specials: eighteen twists, fifteen different ones in a day\'s three queues of five, and no opener two days running ' + JSON.stringify([bad, Object.keys(seen).length]));
+    check(SP.RECIPES.length === 23 && SP.PLAIN.length === 12 && SP.OBST.length === 3 && SP.FX.length === 3 && SP.LAY.length === 5 && bad === 0 && inQ.size === 23, 'specials: twenty-three twists, fifteen different ones in a day\'s three queues of five, the day\'s ring twists second, and no opener two days running ' + JSON.stringify([bad, inQ.size]));
+    check(laid === 120 && laySlots.size === 3 && SP.LAY.every((R) => seen[R.id] === 24), 'specials: the last prize a day opens with a new layout, in turn');
     check(fxed === 120 && fxSlots.size === 3 && SP.FX.every((R) => seen[R.id] === 40), 'specials: another prize a day opens with a new-ring course (sideways or breathing rings), in turn');
     check(walled === 120 && wallSlots.size === 3 && SP.OBST.every((R) => seen[R.id] === 40), 'specials: one prize a day opens with a wall course, the prizes and the three courses taking turns');
     const dq = SP.queuesFor('2026-11-20'), w2 = SP.specialsFor('2026-11-20', [2, 0, SP.PER_SLOT + 3]);
@@ -516,6 +533,22 @@ function playTaps(seed, di, L, skill, salt) {
       check(pu.hoops.every((h) => h.pw > 0 && h.w - h.pw >= SP.W_MIN && h.pp > 0) && E.hoopW(pu.hoops[0], 0) !== E.hoopW(pu.hoops[0], pu.hoops[0].pp / 4), 'breathing rings: each breathes, never tighter than the narrowest ring');
       const sdl = SP.generate('g1', 'side', 3, 20).hoops;
       check(sd.hoops.every((h, i) => h.x === sdl[i].x && h.y0 === sdl[i].y0 && h.w === sdl[i].w), 'gates: the same rings at any length');
+    }
+    { // the new layouts: doors packed close, hops, falls in threes, the top band behind walls, and something new at every ring
+      const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length, gaps = (d) => d.hoops.slice(1).map((h, i) => h.x - d.hoops[i].x);
+      let off = [];
+      for (let k = 0; k < 20; k++) for (const g of [0, 4, 9]) {
+        const seed = 'l' + k, fg = mean(gaps(SP.generate(seed, 'gauntlet', g, 12)));
+        const ru = SP.generate(seed, 'rush', g, 12), ho = SP.generate(seed, 'hop', g, 12), fa = SP.generate(seed, 'falls', g, 12), hi = SP.generate(seed, 'high', g, 12), mx = SP.generate(seed, 'mix', g, 12);
+        if (!(ru.hoops.every((h) => h.v) && mean(gaps(ru)) < 0.6 * fg && !ru.walls)) off.push('rush' + g);
+        if (!(ho.hoops.every((h) => !h.v && !h.pw) && mean(gaps(ho)) < 0.65 * fg && !ho.walls)) off.push('hop' + g);
+        if (!fa.hoops.every((h, i) => i % 3 === 0 || (h.y0 > fa.hoops[i - 1].y0 + 40 && h.x - fa.hoops[i - 1].x < 0.5 * fg && !h.amp))) off.push('falls' + g);
+        if (!(hi.hoops.every((h) => h.y0 - h.amp <= E.Y_MIN + 60 + 1e-6) && hi.walls && hi.walls.length === 11)) off.push('high' + g);
+        if (mx.hoops.some((h, i) => i && ((h.v && mx.hoops[i - 1].v) || (h.pw && mx.hoops[i - 1].pw) || (h.wb && mx.hoops[i - 1].wb))) || !mx.walls || mx.walls.length !== mx.hoops.filter((h) => h.wb).length) off.push('mix' + g);
+      }
+      const mixAll = [].concat(...Array.from({ length: 20 }, (_, k) => SP.generate('l' + k, 'mix', 4, 12).hoops));
+      check(!off.length && mixAll.some((h) => h.v) && mixAll.some((h) => h.pw > 0) && mixAll.some((h) => h.wb) && mixAll.some((h) => h.amp >= 33), 'layouts: Gate rush, Bunny hop, Waterfall, High wire and the Obstacle course build their own rings ' + off.join());
+      check(SP.generate('l1', 'rush', 0, 2).hoops[1].w > SP.generate('l1', 'side', 0, 2).hoops[1].w && SP.generate('l1', 'rush', 9, 2).hoops[1].w < SP.generate('l1', 'side', 9, 2).hoops[1].w, 'layouts: Gate rush\'s doors start wider than others and end tighter');
     }
     { // walls: in order, between the rings, the same at any length, and passable; a ball that flies into one is out
       const a = SP.generate('w1', 'walls', 3, 8), b = SP.generate('w1', 'walls', 3, 20), plain = SP.generate('w1', 'gauntlet', 3, 8);

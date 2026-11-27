@@ -140,7 +140,7 @@ async def main():
                 await page.wait_for_timeout(1800); await page.screenshot(path=OUT + 'pot.png')
                 pv = call(base, '/api/pot', None, token); me4 = call(base, '/api/me', None, token)
                 unit = await page.evaluate("document.querySelector('#resAmount .unit').textContent")
-                if not (pv['me']['attempts'] == 1 and pv['me']['best'] is not None and unit in ('ring', 'rings') and me4['balance'] == me3['balance'] - 50_000_000): fails.append('the pot attempt did not go through: ' + json.dumps(pv.get('me'))[:200] + ' ' + unit)
+                if not (pv['me']['attempts'] == 1 and pv['me']['best'] is not None and unit in ('point', 'points') and me4['balance'] == me3['balance'] - 50_000_000): fails.append('the pot attempt did not go through: ' + json.dumps(pv.get('me'))[:200] + ' ' + unit)
             else: fails.append('no pot card on Challenges')
             if csp: fails.append('content security policy violations: ' + ' | '.join(csp[:3]))
             if errs: fails.append('page errors: ' + ' | '.join(errs[:3]))

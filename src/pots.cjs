@@ -7,11 +7,13 @@
  * and never takes a side, so the pot earns the same from every player however skilled.
  *
  * The course is about 40 rings that start wide and still and get harder ring by ring (the duel's course, src/duel.cjs,
- * so the time between rims never shrinks), with the day's theme on top: rings that stand on their side to be flown
- * straight through, rings that breathe wider and tighter, every ring moving (engine v17). Hardly anyone sees the last
- * ring, so attempts rank: more rings first, then the higher score (the game's own: a rim hit 1, a swish more with
- * each swish in a row). Players level on both share their places. With fewer than three players the places they
- * fill share the whole pot in the same proportions. Nobody in it: the pot rolls into the next day's.
+ * so the time between rims never shrinks), with the day's theme on top. The themes are the pot's own: the owner asked
+ * for the pot not to use the challenges' levels (it can use the same kinds of ring, set out its own way): runs of
+ * wide rings to build a streak on, a tour that changes every eight rings, every ring moving, doors that breathe, and
+ * walls to fly over. Attempts rank by score (the owner asked for score, not rings: the game's own, a rim hit 1 and a
+ * swish 2, plus 1 for each swish in a row before it, up to 6), then by rings; players level on both share their
+ * places. So a long streak of swishes beats a longer flight of rim hits. With fewer than three players the places
+ * they fill share the whole pot in the same proportions. Nobody in it: the pot rolls into the next day's.
  *
  * Attempts are judged only from the replay of the player's taps on the day's course (the server's own), never from
  * the client's word.
@@ -33,15 +35,27 @@
   const RINGS = 40;               // the course's length
   const CUTOFF_MS = 4 * 60000;    // no new attempt this close to the end of the day, so every flight is in before it closes
 
-  // The themes take turns, one a day: what the day's course has on top of its rings. Ring 0 is always plain.
+  // The themes take turns, one a day: what the day's course has on top of its rings (src/duel.cjs, generate's feat).
+  // None is a special level's twist. Ring 0 is always plain.
+  const stage = (i) => Math.min(4, Math.floor(i / 8)); // the grand tour's stages, eight rings each
   const THEMES = [
+    { id: 'streak', name: 'Streak alley', blurb: 'Four wide rings to build a streak on, then a tight one that moves',
+      wide: (i) => (i % 5 === 4 ? -10 : 6), still: (i) => i % 5 !== 4 && i < 20, move: (i) => i % 5 === 4 }, // (still only for the first half: still all the way, pros flew all of it 43% of the time)
+    { id: 'tour', name: 'Grand tour', blurb: 'Something new every eight rings: doors, breathing rings, moving doors, then all of them',
+      up: (i) => (stage(i) === 1 && i % 2 === 1) || (stage(i) === 3 && i % 2 === 0) || (stage(i) === 4 && i % 3 === 0),
+      pulse: (i) => stage(i) === 2 || (stage(i) === 4 && i % 3 === 1), move: (i) => stage(i) >= 3 },
+    { id: 'storm', name: 'The storm', blurb: 'Every ring moves, and every fourth stands on its side', up: (i) => i % 4 === 3, moveAll: true },
+    { id: 'lungs', name: 'Breathing doors', blurb: 'Every other ring a door that breathes wider and tighter', up: (i) => i % 2 === 1, pulse: (i) => i % 2 === 1 },
+    { id: 'steeple', name: 'Steeplechase', blurb: 'A wall to fly over before every third ring', wall: (i) => i % 3 === 2 }
+  ];
+  // themes from before, kept so a pot that opened with one still builds its course (they're no longer dealt)
+  const RETIRED = [
     { id: 'doors', name: 'Side doors', blurb: 'Every third ring stands on its side', up: (i) => i % 3 === 2 },
     { id: 'switch', name: 'Switchback', blurb: 'A flat ring, then one on its side, all the way', up: (i) => i % 2 === 1 },
     { id: 'heart', name: 'Heartbeat', blurb: 'The rings breathe wider and tighter', pulse: (i) => i >= 2 },
-    { id: 'storm', name: 'The storm', blurb: 'Every ring moves, and every fourth stands on its side', up: (i) => i % 4 === 3, moveAll: true },
     { id: 'mix', name: 'Everything', blurb: 'Sideways rings, breathing rings, moving and leaning ones', up: (i) => i % 4 === 2, pulse: (i) => i % 4 === 0 && i > 0 }
   ];
-  const THEME_BY = Object.fromEntries(THEMES.map((t) => [t.id, t]));
+  const THEME_BY = Object.fromEntries(THEMES.concat(RETIRED).map((t) => [t.id, t]));
 
   // a small seeded generator (mulberry32), for the demo's simulated field
   function rng(seedStr) {
@@ -69,12 +83,12 @@
   // the day's course: the same for everyone who plays it
   function course(seed, theme, n) {
     const T = typeof theme === 'string' ? THEME_BY[theme] : theme;
-    return D().generate('pot|' + seed, n || RINGS, { prefix: 'pot', up: T.up, pulse: T.pulse, moveAll: T.moveAll });
+    return D().generate('pot|' + seed, n || RINGS, { prefix: 'pot', up: T.up, pulse: T.pulse, moveAll: T.moveAll, move: T.move, wide: T.wide, still: T.still, wall: T.wall });
   }
 
-  // attempts rank by rings, then score; level on both is a tie
-  const cmp = (a, b) => (a.rings !== b.rings ? b.rings - a.rings : b.score - a.score);
-  const same = (a, b) => a.rings === b.rings && a.score === b.score;
+  // attempts rank by score, then rings; level on both is a tie
+  const cmp = (a, b) => (a.score !== b.score ? b.score - a.score : b.rings - a.rings);
+  const same = (a, b) => a.score === b.score && a.rings === b.rings;
   const better = (a, b) => !b || cmp(a, b) < 0;
   // The standings: entries [{ id, rings, score, ... }] best first, each with its place (1 for the best; ties share
   // the place of the first of them).
@@ -112,5 +126,5 @@
   // what each place would take of it now
   const placePays = (pool) => PLACES.map((p) => pool * p);
 
-  return { RAKE, ENTRY, DAY_MS, PLACES, RINGS, CUTOFF_MS, THEMES, THEME_BY, rng, dayKey, dayStart, closesAt, themeFor, course, cmp, same, better, standings, placeOf, settle, poolOf, placePays };
+  return { RAKE, ENTRY, DAY_MS, PLACES, RINGS, CUTOFF_MS, THEMES, RETIRED, THEME_BY, rng, dayKey, dayStart, closesAt, themeFor, course, cmp, same, better, standings, placeOf, settle, poolOf, placePays };
 });

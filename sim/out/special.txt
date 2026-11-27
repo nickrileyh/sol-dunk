@@ -1,6 +1,6 @@
-(the three wall courses measured on engine v16, the other twelve from their saved curves: they play tap for tap as on v15)
-special levels, engine v16: 2000 attempts of 24 rings per twist, grade and skill (211 s)
-fit of the chance of passing 1-24 rings: off by 0.3 points on average, 4.0 at most (biglittle grade 7 pro at 2 rings)
+(engine v17: the five new layouts measured, Gate rush again after its doors changed; the other eighteen twists from their saved curves, which play tap for tap as before)
+special levels, engine v17: 2000 attempts of 24 rings per twist, grade and skill (22 s)
+fit of the chance of passing 1-24 rings: off by 0.3 points on average, 7.8 at most (falls grade 6 pro at 2 rings)
 
 chance of clearing 12 rings, by grade (Easy 1, 3, 5, Hard 3, 4, 5, 6, 8, and two steps past Hard 8), for novice / casual / average / good / pro
   gauntlet   19/36/60/78/89  13/28/49/73/87   4/11/25/54/78    2/8/18/47/74    1/4/12/35/63     0/2/6/23/52     0/1/3/14/36      0/0/0/4/13       0/0/0/1/4       0/0/0/0/1
@@ -18,6 +18,14 @@ chance of clearing 12 rings, by grade (Easy 1, 3, 5, Hard 3, 4, 5, 6, 8, and two
   walls      16/36/55/75/89  11/26/47/69/88   4/14/31/61/82   4/12/27/57/84    2/9/20/47/78    1/4/13/39/70     0/2/8/25/55     0/0/2/10/30      0/0/1/3/15       0/0/0/1/5
   hurdles    10/24/43/70/88   6/17/34/63/85    2/7/18/45/75    1/6/15/42/74    1/3/10/30/60     0/2/5/21/50     0/0/2/13/35      0/0/1/4/14       0/0/0/1/5       0/0/0/0/1
   fortress    9/24/43/68/85   5/18/35/62/82    2/7/17/45/74    1/6/14/40/73     0/3/9/32/63     0/1/5/21/49     0/1/3/13/38      0/0/0/4/14       0/0/0/1/4       0/0/0/0/1
+  side        4/18/43/78/96   3/13/35/72/94    1/7/26/63/90    1/4/18/53/84    0/3/13/45/78     0/2/9/35/73     0/1/6/27/63     0/0/2/13/44      0/0/0/5/24       0/0/0/1/8
+  switch     14/35/62/86/97   8/28/52/80/96   4/16/38/71/93   3/10/28/62/88    1/7/22/52/83    1/5/14/42/76     1/2/9/33/64     0/1/3/15/41      0/0/1/6/24       0/0/0/2/9
+  pulse      36/60/78/94/99  24/44/67/86/96   9/23/44/72/90   6/16/33/65/86   4/10/23/53/81    2/6/16/40/68    1/3/10/28/56     0/1/2/11/29      0/0/1/3/14       0/0/0/1/5
+  rush        9/31/58/86/98   4/20/48/78/96   2/13/34/70/94    2/9/27/63/89    0/5/21/53/83    0/3/12/43/76     0/1/7/31/65     0/0/2/16/48      0/0/0/4/22       0/0/0/0/4
+  hop       36/61/80/95/100  24/45/66/87/97  10/23/41/70/90    4/9/19/41/72    2/6/11/27/56     1/3/8/18/43     1/2/4/11/27       0/0/1/2/9       0/0/0/1/2       0/0/0/0/0
+  falls      28/42/57/77/92  22/37/53/75/90  16/30/46/67/86  13/21/34/51/69   9/18/29/48/65   6/15/23/43/61   6/13/20/37/54    3/7/13/26/39     1/3/5/10/17       0/1/1/3/5
+  high       19/38/56/75/90  12/30/47/71/88   5/15/31/58/82   4/14/28/57/86    3/8/21/50/78    1/5/14/36/66     1/3/8/27/55     0/1/2/10/30      0/0/1/3/15       0/0/0/1/6
+  mix        19/42/64/85/95  13/30/55/79/92   6/17/36/66/89   4/12/29/59/85    2/8/20/48/78    1/4/13/38/66     1/2/8/26/54     0/1/2/10/30      0/0/1/4/14       0/0/0/1/4
 
 wrote the tables into src/special.cjs
 
@@ -37,68 +45,121 @@ expected return of the course set for levels 3 / 4 / 4.5, for 2×, 3×, 5× (ove
   walls        88% (4,13)    88% (7,8)   88% (7,16)  |   85% (6,11)   82% (7,13)   86% (8,13)  |    88% (7,9)   85% (8,11)    89% (9,9)
   hurdles      90% (2,12)   88% (5,14)    85% (7,8)  |   89% (4,12)   87% (6,14)   87% (7,12)  |   89% (4,17)   84% (7,11)   76% (8,11)
   fortress     87% (3,11)   87% (5,14)    85% (7,8)  |   87% (4,13)   84% (6,16)   83% (7,12)  |   88% (6,10)   85% (7,11)   90% (7,16)
+  side         85% (4,13)   88% (7,12)   88% (8,17)  |   81% (6,12)   81% (8,11)   86% (9,11)  |   90% (7,10)   86% (8,15)   83% (9,15)
+  switch       84% (5,12)   88% (7,11)   84% (8,13)  |   89% (6,13)   89% (8,10)   86% (9,10)  |   87% (7,11)    83% (9,9)   85% (9,15)
+  pulse        87% (5,11)   89% (6,17)   86% (7,13)  |   84% (6,12)   86% (7,12)   84% (8,12)  |   79% (7,10)   81% (8,11)   90% (8,16)
+  rush         85% (5,12)   90% (7,13)   88% (8,14)  |   85% (6,13)   83% (8,10)    85% (9,8)  |   79% (7,12)   85% (8,14)   85% (9,13)
+  hop          88% (3,11)   87% (5,12)   89% (6,11)  |   89% (4,11)   80% (6,12)    80% (7,9)  |   84% (6,10)    85% (7,9)   85% (7,12)
+  falls        86% (5,12)   90% (7,10)   89% (7,14)  |   87% (7,11)    88% (8,8)   85% (8,10)  |    85% (8,9)   87% (8,12)   87% (8,15)
+  high         88% (4,14)    82% (7,9)   87% (7,15)  |   80% (6,12)   83% (7,13)   87% (8,13)  |   83% (6,16)   88% (8,11)   79% (9,12)
+  mix          90% (4,13)    89% (7,8)   90% (7,16)  |   86% (6,11)   82% (7,13)   84% (8,12)  |   82% (6,16)   84% (8,11)   84% (8,16)
 
 4. return on the course set for each skill's level, and on a new player's course (1500 fresh attempts each; target 90%)
 prize  twist      skill     its own level: grade, rings, est. -> played     new player's: grade, rings, est. -> played
-2×     walls      novice     0   6   81% ->   87%                   0  14   90% ->   22%
-2×     walls      casual     0  10   87% ->   82%                   0  14   90% ->   62%
-2×     walls      average    1  13   89% ->   89%                   0  14   90% ->  100%
-2×     walls      good       4  13   88% ->   89%                   0  14   90% ->  146%
-2×     walls      pro        7   8   88% ->   90%                   0  14   90% ->  174%
-2×     walls      perfect    7   8   88% ->  166%                   0  14   90% ->  189%
-3×     hurdles    novice     0   7   78% ->   81%                   1  12   88% ->   16%
-3×     hurdles    casual     0  11   82% ->   85%                   1  12   88% ->   48%
-3×     hurdles    average    1  14   85% ->   84%                   1  12   88% ->  101%
-3×     hurdles    good       4  12   89% ->   94%                   1  12   88% ->  191%
-3×     hurdles    pro        6  14   87% ->   83%                   1  12   88% ->  255%
-3×     hurdles    perfect    6  14   87% ->  229%                   1  12   88% ->  299%
-5×     fortress   novice     0   9   86% ->   77%                   2  11   85% ->   14%
-5×     fortress   casual     1  12   88% ->   91%                   2  11   85% ->   36%
-5×     fortress   average    2  12   85% ->   81%                   2  11   85% ->  100%
-5×     fortress   good       6  10   88% ->   90%                   2  11   85% ->  248%
-5×     fortress   pro        7  11   85% ->   75%                   2  11   85% ->  383%
-5×     fortress   perfect    7  11   85% ->  294%                   2  11   85% ->  500%
+2×     hop        novice     0  10   85% ->   91%                   2  10   86% ->   29%
+2×     hop        casual     1  13   85% ->   80%                   2  10   86% ->   56%
+2×     hop        average    2  11   88% ->   90%                   2  10   86% ->  100%
+2×     hop        good       3  11   88% ->   85%                   2  10   86% ->  150%
+2×     hop        pro        5  12   87% ->   87%                   2  10   86% ->  183%
+2×     hop        perfect    5  12   87% ->  175%                   2  10   86% ->  200%
+3×     high       novice     0   9   88% ->   84%                   2  12   81% ->   18%
+3×     high       casual     1  12   90% ->   85%                   2  12   81% ->   45%
+3×     high       average    3  12   85% ->   88%                   2  12   81% ->   91%
+3×     high       good       6  12   80% ->   70%                   2  12   81% ->  178%
+3×     high       pro        7  13   83% ->   86%                   2  12   81% ->  239%
+3×     high       perfect    7  13   83% ->  216%                   2  12   81% ->  300%
+5×     rush       novice     0   9   79% ->   87%                   3  14   85% ->    5%
+5×     rush       casual     1  13   87% ->   92%                   3  14   85% ->   33%
+5×     rush       average    3  16   90% ->   84%                   3  14   85% ->  106%
+5×     rush       good       7  12   79% ->   76%                   3  14   85% ->  281%
+5×     rush       pro        8  14   85% ->   85%                   3  14   85% ->  425%
+5×     rush       perfect    8  14   85% ->  223%                   3  14   85% ->  489%
 
 5. return as the level settles: 125 new players per row, each playing one special 40 times
    (a clear raises its level by 0.37 / 0.70 / 1.37 for 2× / 3× / 5×, a miss lowers it by 0.3; new players start at 1.8)
    honest: starting at 1.8, as if their unlock runs showed nothing; regular: 5 regular runs on Easy first
    (each until it busts); sandbag: starting at 1.8, with the first 6 attempts lost on purpose
 prize  how      skill      attempts 1-5   6-15  16-40    all   level after
-2×     honest   novice         32%    68%    77%    69%    -0.2
-2×     honest   casual         60%    83%    87%    83%     0.9
-2×     honest   average        98%    89%    88%    89%     1.7
-2×     honest   good          134%   101%    91%    99%     3.0
-2×     honest   pro           162%   117%    90%   105%     3.8
-2×     regular  novice         38%    63%    76%    68%    -0.2
-2×     regular  casual         67%    78%    87%    82%     0.8
-2×     regular  average        88%    86%    90%    89%     1.8
-2×     regular  good          101%    90%    90%    92%     2.9
-2×     regular  pro           112%    93%    90%    94%     3.9
-2×     sandbag  good            0%   142%   102%    99%     3.0
-2×     sandbag  pro             0%   162%   105%   106%     3.9
-3×     honest   novice         31%    63%    77%    68%    -0.0
-3×     honest   casual         59%    81%    89%    83%     1.0
-3×     honest   average        93%    90%    91%    91%     1.9
-3×     honest   good          143%   104%    89%   100%     3.1
-3×     honest   pro           203%    99%    93%   108%     3.9
-3×     regular  novice         24%    75%    77%    70%    -0.1
-3×     regular  casual         68%    81%    88%    83%     1.0
-3×     regular  average        94%    88%    90%    90%     1.9
-3×     regular  good          105%    91%    91%    93%     3.1
-3×     regular  pro           116%    93%    94%    97%     4.0
-3×     sandbag  good            0%   165%    92%    99%     3.0
-3×     sandbag  pro             0%   192%    95%   107%     3.8
-5×     honest   novice         20%    69%    75%    67%     0.1
-5×     honest   casual         59%    85%    88%    84%     1.1
-5×     honest   average       105%    90%    92%    93%     2.2
-5×     honest   good          159%    94%    92%   101%     3.2
-5×     honest   pro           210%   108%   102%   117%     4.0
-5×     regular  novice         22%    70%    77%    68%     0.2
-5×     regular  casual         65%    78%    89%    84%     1.1
-5×     regular  average        93%    93%    85%    88%     1.8
-5×     regular  good          115%    92%    92%    95%     3.2
-5×     regular  pro           128%   102%   101%   105%     4.0
-5×     sandbag  good            0%   176%    92%   102%     3.3
-5×     sandbag  pro             0%   203%   103%   115%     4.1
+2×     honest   novice         31%    68%    85%    74%    -0.0
+2×     honest   casual         63%    80%    90%    84%     1.0
+2×     honest   average        94%    92%    89%    91%     1.9
+2×     honest   good          140%    98%    92%    99%     3.0
+2×     honest   pro           172%   112%    92%   107%     4.0
+2×     regular  novice         36%    68%    84%    74%    -0.1
+2×     regular  casual         66%    80%    90%    85%     1.1
+2×     regular  average        89%    90%    90%    90%     2.0
+2×     regular  good           98%    93%    91%    92%     3.0
+2×     regular  pro           110%    94%    91%    94%     3.9
+2×     sandbag  good            0%   148%    97%    98%     2.9
+2×     sandbag  pro             0%   170%   102%   106%     3.9
+3×     honest   novice         27%    69%    79%    70%    -0.0
+3×     honest   casual         56%    86%    87%    83%     0.9
+3×     honest   average        99%    85%    94%    92%     2.1
+3×     honest   good          146%   100%    90%    99%     3.0
+3×     honest   pro           196%   101%    92%   107%     3.9
+3×     regular  novice         30%    71%    81%    72%     0.1
+3×     regular  casual         65%    78%    88%    83%     0.9
+3×     regular  average        93%    90%    88%    89%     1.8
+3×     regular  good          104%    92%    91%    93%     3.1
+3×     regular  pro           112%    93%    92%    95%     4.0
+3×     sandbag  good            0%   164%    93%    99%     3.0
+3×     sandbag  pro             0%   190%    95%   107%     3.9
+5×     honest   novice         20%    66%    79%    68%     0.1
+5×     honest   casual         66%    80%    92%    86%     1.3
+5×     honest   average       102%    96%    89%    93%     2.1
+5×     honest   good          173%    94%    91%   102%     3.3
+5×     honest   pro           221%   100%    98%   114%     4.1
+5×     regular  novice         22%    69%    76%    68%     0.0
+5×     regular  casual         55%    88%    90%    85%     1.3
+5×     regular  average        90%    92%    90%    90%     2.1
+5×     regular  good          114%    95%    89%    94%     3.2
+5×     regular  pro           130%   100%    96%   101%     4.0
+5×     sandbag  good            0%   178%    89%   100%     3.1
+5×     sandbag  pro             0%   202%   100%   113%     4.1
 
-time 376 s
+
+steps 4 and 5 from the first measurement of the new layouts, for Waterfall at 3× and the Obstacle course at 5× (their tables are unchanged since)
+4. return on the course set for each skill's level, and on a new player's course (1500 fresh attempts each; target 90%)
+prize  twist      skill     its own level: grade, rings, est. -> played     new player's: grade, rings, est. -> played
+3×     falls      novice     0  12   83% ->   79%                   4  11   88% ->   38%
+3×     falls      casual     2  13   83% ->   82%                   4  11   88% ->   60%
+3×     falls      average    4  12   87% ->   88%                   4  11   88% ->   96%
+3×     falls      good       7  11   87% ->   86%                   4  11   88% ->  155%
+3×     falls      pro        8   8   88% ->   87%                   4  11   88% ->  215%
+3×     falls      perfect    8   8   88% ->  157%                   4  11   88% ->  299%
+5×     mix        novice     0  13   84% ->   88%                   4  12   83% ->   13%
+5×     mix        casual     2  12   84% ->   88%                   4  12   83% ->   29%
+5×     mix        average    4  13   86% ->   76%                   4  12   83% ->   97%
+5×     mix        good       6  16   82% ->   83%                   4  12   83% ->  236%
+5×     mix        pro        8  11   84% ->   82%                   4  12   83% ->  386%
+5×     mix        perfect    8  11   84% ->  317%                   4  12   83% ->  498%
+
+5. return as the level settles: 125 new players per row, each playing one special 40 times
+   (a clear raises its level by 0.37 / 0.70 / 1.37 for 2× / 3× / 5×, a miss lowers it by 0.3; new players start at 1.8)
+   honest: starting at 1.8, as if their unlock runs showed nothing; regular: 5 regular runs on Easy first
+   (each until it busts); sandbag: starting at 1.8, with the first 6 attempts lost on purpose
+prize  how      skill      attempts 1-5   6-15  16-40    all   level after
+3×     honest   novice         50%    67%    84%    75%     0.4
+3×     honest   casual         79%    80%    86%    84%     1.1
+3×     honest   average        90%    94%    90%    91%     1.9
+3×     honest   good          139%    98%    93%   100%     3.0
+3×     honest   pro           173%   114%    96%   110%     3.9
+3×     regular  novice         39%    70%    80%    73%     0.1
+3×     regular  casual         69%    83%    87%    83%     1.0
+3×     regular  average        91%    93%    88%    90%     1.9
+3×     regular  good          104%    97%    91%    94%     3.1
+3×     regular  pro           105%    98%    97%    98%     3.8
+3×     sandbag  good            0%   157%    96%    99%     3.0
+3×     sandbag  pro             0%   178%   103%   109%     3.8
+5×     honest   novice         21%    73%    78%    70%     0.1
+5×     honest   casual         55%    89%    90%    85%     1.2
+5×     honest   average       110%    89%    90%    92%     2.1
+5×     honest   good          162%   101%    90%   102%     3.2
+5×     honest   pro           214%   105%   102%   117%     4.0
+5×     regular  novice         21%    72%    82%    72%     0.3
+5×     regular  casual         58%    84%    90%    85%     1.2
+5×     regular  average        92%    95%    88%    90%     2.0
+5×     regular  good          118%    86%    92%    94%     3.2
+5×     regular  pro           123%   100%   101%   103%     4.0
+5×     sandbag  good            0%   176%    92%   101%     3.2
+5×     sandbag  pro             0%   210%    99%   114%     4.0
