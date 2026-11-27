@@ -1510,6 +1510,14 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
 .cc .stake.sm .stake-k { font-size: 14px; }
 .cc .stake.sm + .spr { box-shadow: none; }
 .sp-prize .x + .x { margin-top: 2px; }
+
+/* ---------- finishing touches ----------
+   The owner asked for more improvements. */
+/* a challenge row shows its twist in full (up to three lines), not cut off with an ellipsis */
+.spr-t span { -webkit-line-clamp: 3; }
+.spr-t b { white-space: normal; overflow-wrap: anywhere; }
+/* a page's subtitle lines wrap evenly, so a word like "rings" isn't left alone on its own line */
+.sp-blurb, .sp-cap, .vsub, .pot-goal span { text-wrap: balance; }
 </style>
 </head>
 <body class="hud-lobby">
@@ -5617,7 +5625,7 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
       ${wait}
       <div class="tiles"><div><b>${t.w}</b><span>Won today</span></div><div><b>${t.l}</b><span>Lost today</span></div><div><b>${d.rings}</b><span>Rings</span></div></div>
       ${rulesHtml([
-        ['swish', 'Pick your stake. You both stake the same and fly the same course. It gets harder with every ring.'],
+        ['stake', 'Pick your stake. You both stake the same and fly the same course. It gets harder with every ring.'],
         ['star', 'More rings wins. Level on rings, the better score wins; level on both, the pot is split.'],
         ['rival', 'Your rival flies beside you as a pale ball.'],
         ['cut', `The winner takes ${xText(2 * (1 - d.rake))}× their stake: the house keeps ${Math.round(d.rake * 100)}% of each.`]])}
@@ -5697,7 +5705,7 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
       <p class="foot">Clear it and the next course is harder. Miss and it gets a little easier.</p>
       ${rulesHtml([
         ['swish', `Pick your stake and win ${c.x}× it for clearing every ring. Miss one and the stake is gone.`],
-        ['level', 'Each stake keeps its own level, so a big stake’s course is set by how you play at that stake.'],
+        ['stake', 'Each stake keeps its own level, so a big stake’s course is set by how you play at that stake.'],
         SP.BY[c.recipe.id] && SP.BY[c.recipe.id].ob ? ['wall', 'Touch a wall and the attempt ends.'] : null,
         ['next', `Clear it and a new special takes its place${c.next ? ` (next: ${c.next.name})` : ''}: ${c.of || SP.PER_SLOT} a day for each prize.`],
         ['level', `Your level settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your stakes.`],
@@ -8057,7 +8065,8 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
     rival: '<circle cx="8.4" cy="12" r="4.8"/><circle cx="16.6" cy="12" r="4.8" opacity=".5"/>',
     level: '<path d="M4 19.4h4.6v-4.6h4.6v-4.6h4.6V5.6"/><path d="m15.6 7.6 2.2-2.2 2.2 2.2"/>',
     split: '<circle cx="12" cy="6.2" r="2.8"/><path d="M12 9v4.2M12 13.2l-5.6 5.4M12 13.2l5.6 5.4"/>',
-    next: '<path d="M4.6 12h12.6M13 7.6l4.4 4.4-4.4 4.4"/><path d="M20.2 6.4v11.2" opacity=".55"/>'
+    next: '<path d="M4.6 12h12.6M13 7.6l4.4 4.4-4.4 4.4"/><path d="M20.2 6.4v11.2" opacity=".55"/>',
+    stake: '<ellipse cx="12" cy="7" rx="6.6" ry="2.6"/><path d="M5.4 7v4.6c0 1.4 3 2.6 6.6 2.6s6.6-1.2 6.6-2.6V7"/><path d="M5.4 11.6v4.8c0 1.4 3 2.6 6.6 2.6s6.6-1.2 6.6-2.6v-4.8" opacity=".55"/>'
   };
   // A page's rules as a card of short rows, each with a glyph, under "How it works" (they were one grey paragraph).
   const rulesHtml = (rows, head = 'How it works') => `${head ? `<div class="sec-h"><h3>${head}</h3></div>` : ''}<div class="rules">${rows.filter(Boolean).map(([ic, t]) => `<div class="rl"><span class="rl-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${HOW_ICON[ic]}</svg></span><p>${t}</p></div>`).join('')}</div>`;

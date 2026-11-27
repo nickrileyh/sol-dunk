@@ -1501,3 +1501,11 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
 .cc .stake.sm .stake-k { font-size: 14px; }
 .cc .stake.sm + .spr { box-shadow: none; }
 .sp-prize .x + .x { margin-top: 2px; }
+
+/* ---------- finishing touches ----------
+   The owner asked for more improvements. */
+/* a challenge row shows its twist in full (up to three lines), not cut off with an ellipsis */
+.spr-t span { -webkit-line-clamp: 3; }
+.spr-t b { white-space: normal; overflow-wrap: anywhere; }
+/* a page's subtitle lines wrap evenly, so a word like "rings" isn't left alone on its own line */
+.sp-blurb, .sp-cap, .vsub, .pot-goal span { text-wrap: balance; }
