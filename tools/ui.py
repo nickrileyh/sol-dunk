@@ -133,6 +133,7 @@ async def main():
         await page.click('#tabPlay'); await page.wait_for_timeout(400)
         before = await page.evaluate("JSON.stringify([__solDunk.missions().weekly.map((c) => c.p), __solDunk.profile.career])")
         await page.evaluate("__solDunk.profile.tot.streak = 1; __solDunk.stats.best = 0.5")  # records this run will beat
+        await page.evaluate("window.__notes = []; new MutationObserver(() => { const t = document.querySelector('#notice .nt'); if (t && document.getElementById('notice').classList.contains('show')) window.__notes.push(t.textContent + ' · ' + document.querySelector('#notice .ns').textContent); }).observe(document.getElementById('notice'), { attributes: true })")
         await page.click('#playBtn'); await page.wait_for_timeout(900)
         await page.evaluate("__solDunk.autoplay('perfect'); __solDunk.tap()"); await page.wait_for_timeout(1500)
         check(not await vis('#tabbar') or await page.evaluate("getComputedStyle(document.getElementById('tabbar')).opacity") == '0', 'the tab bar hides during a run')
@@ -162,11 +163,22 @@ async def main():
         # a new record gets a ticket on the result card, and Stats lists the records
         rec = await page.evaluate("[__solDunk.run.prog && __solDunk.run.prog.records, __solDunk.profile.tot, __solDunk.stats.best]")
         check(rec[0] and len(rec[0]) == 1 and rec[0][0].startswith('New record') and rec[1]['streak'] > 1, f'beating the longest streak and the best cash-out makes one new-records ticket {rec}')
+        notes = await page.evaluate("window.__notes")
+        check(sum(1 for n in notes if n.startswith('New record · 2 swishes in a row, past your 1')) == 1, f'passing the longest streak shows one New record notice in the run {notes}')
         await page.click('#tabProfile'); await page.wait_for_timeout(400)
         await page.click('#pBody [data-page="stats"]'); await page.wait_for_timeout(450)
         recs = await page.evaluate("[...document.querySelectorAll('#pgBody .rec b')].map((b) => b.textContent)")
         check(len(recs) == 4 and recs[0] == str(rec[1]['streak']) and recs[3] == (str(rec[1]['perfect']) if rec[1]['perfect'] else '–'), f'Stats shows four records, the longest streak first {recs}')
         await page.click('#pgBack'); await page.wait_for_timeout(400)
+        # a trophy not won yet that can be counted toward shows how far along it is; the profile card says what's next
+        await page.click('#pBody [data-page="trophies"]'); await page.wait_for_timeout(450)
+        tp = await page.evaluate("[...document.querySelectorAll('#pgBody .tro')].map((t) => [t.querySelector('b').textContent, t.classList.contains('got'), (t.querySelector('.tro-p small') || {}).textContent || '', t.querySelectorAll('.tro-pm i.on').length])")
+        col = next(t for t in tp if t[0] == 'Swish collector')
+        check(col[1] or (col[2] == f"{rec[1]['swish']} / 100" and col[3] == min(4, rec[1]['swish'] * 5 // 100)), f'Swish collector shows how far along it is {col}')
+        check(all(not t[2] for t in tp if t[1] or t[0] in ('Clean', 'Checkpoint', 'Moving target', 'Perfect level', 'Angles', 'Legendary', 'Champion')), 'only trophies not won that can be counted show progress')
+        await page.click('#pgBack'); await page.wait_for_timeout(400)
+        nx = await page.evaluate("(document.querySelector('#pBody .pnext') || {}).textContent || ''")
+        check(nx.startswith('Level ') and ' unlocks the ' in nx, f'the player card says what the next level unlocks ({nx})')
         await page.click('#tabPlay'); await page.wait_for_timeout(400)
         # items earned under the newer unlock list are handed out on load
         await page.evaluate("""(() => { const p = JSON.parse(localStorage.getItem('soldunk.profile')); p.xp = 3000; p.owned = ['ball:classic', 'wing:angel', 'flame:fire']; p.fresh = []; localStorage.setItem('soldunk.profile', JSON.stringify(p)); })()""")

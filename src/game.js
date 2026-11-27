@@ -113,7 +113,8 @@
     if (!Array.isArray(p.fresh)) p.fresh = [];
     p.fresh = p.fresh.filter((k) => /^(ball|wing|trail):/.test(k));
     p.ach = p.ach || {}; p.tot = Object.assign({ swish: 0, perfect: 0 }, p.tot || {});
-    if (p.tot.streak == null) p.tot.streak = p.ach.streak10 ? 10 : p.ach.nova5 ? 5 : p.ach.fire3 ? 3 : 0; // the longest swish streak (records from before start at what their trophies show)
+    if (p.tot.streak == null) p.tot.streak = p.ach.streak10 ? 10 : p.ach.nova5 ? 5 : p.ach.fire3 ? 3 : 0;
+    if (p.tot.rbest == null) p.tot.rbest = p.ach.streak10 ? 10 : p.ach.nova5 ? 5 : p.ach.fire3 ? 3 : 0; // the same, in regular runs only (the streak trophies' progress) // the longest swish streak (records from before start at what their trophies show)
     p.eq = Object.assign({ ball: 'classic', wing: 'angel', trail: 'classic' }, p.eq || {});
     delete p.eq.flame; delete p.eq.rim; delete p.eq.court;
     p.card = Object.assign({ name: '', emblem: 'ball', color: 0, title: 'rookie' }, p.card || {});
@@ -1624,6 +1625,8 @@
       if (profile.ach[a.id] || run.told[a.id] || a.id === 'double' || a.id === 'swish100' || !a.test(r)) continue;
       run.told[a.id] = 1; notice('n-ach', troIcon(a.id), a.name, a.desc + ' · +' + a.xp + ' XP');
     }
+    // passing the longest swish streak on record (Stats lists it); not on a first run, which has no record to pass
+    if (!run.told.rec && profile.tot.streak > 0 && run.best > profile.tot.streak) { run.told.rec = 1; notice('n-rec', ICON.star, 'New record', run.best + ' swishes in a row, past your ' + profile.tot.streak); }
   }
   // the next goal, shown under each level's banner: the mission nearest done
   function goalLine() {
@@ -2567,7 +2570,7 @@
     const prevBest = profile.best[di], newBest = run.score > prevBest;
     if (newBest) profile.best[di] = run.score;
     profile.deep[di] = Math.max(profile.deep[di], run.level);
-    profile.tot.swish += run.swishes; profile.tot.streak = Math.max(profile.tot.streak, run.best); profile.tot.perfect += run.perfect;
+    profile.tot.swish += run.swishes; profile.tot.streak = Math.max(profile.tot.streak, run.best); profile.tot.rbest = Math.max(profile.tot.rbest, run.best); profile.tot.perfect += run.perfect;
     const runXp = LV.runXp(r);
     let xp = runXp;
     const achs = ACH.filter((a) => !profile.ach[a.id] && a.test(r));
@@ -4528,10 +4531,19 @@
       if (x.earned) return `<em class="tx wait"><b>${fmtBet(x.reward)} SOL</b>Bet ${more(x.more)} more</em>`;
       return `<em class="tx two"><b>+${a.xp} XP</b>${fmtBet(x.reward)} SOL</em>`;
     };
+    // how far toward a trophy not won yet, where that can be counted from the records (the rest are one moment)
+    const toward = (a) => {
+      const t = profile.tot, bestScore = Math.max(0, ...profile.best), g = {
+        fire3: [t.rbest, 3], nova5: [t.rbest, 5], streak10: [t.rbest, 10], deep4: [stats.deepest, 4], deep6: [stats.deepest, 6],
+        score50: [bestScore, 50], swish100: [t.swish, 100], double: [stats.best, 2, fmtMult(stats.best || 1) + ' / 2×'] }[a.id];
+      if (!g || profile.ach[a.id] || !(g[0] > 0)) return '';
+      const f = Math.min(1, g[0] / g[1]), lit = Math.min(4, Math.floor(f * 5));
+      return `<span class="tro-p" role="img" aria-label="${g[2] || g[0] + ' of ' + g[1]}"><small class="num">${g[2] || Math.min(g[0], g[1]) + ' / ' + g[1]}</small><span class="tro-pm">${[0, 1, 2, 3, 4].map((k) => `<i${k < lit ? ' class="on"' : ''}></i>`).join('')}</span></span>`;
+    };
     return `<p class="vsub">Each adds XP and pays a little SOL. Every 1 SOL you bet opens ${fmtBet(tv.rate)} SOL of it to claim.</p>
       <div class="tro-sum" aria-hidden="true"><b class="num">${got}<small> / ${ACH.length}</small></b><span class="tro-seg">${ACH.map((a) => `<i${profile.ach[a.id] ? ' class="on"' : ''}></i>`).join('')}</span></div>
       <p class="tro-sol"><span>${fmtBet(tv.claimed)} of ${fmtBet(total)} SOL claimed</span>${open > 0 ? `<b>${fmtBet(open)} SOL to claim</b>` : next > 0 ? `<span>Next: bet ${more(next)} SOL more</span>` : ''}</p>
-      <div class="trophies">${ACH.map((a) => { const on = profile.ach[a.id] || (T[a.id] && T[a.id].earned); return `<div class="tro${on ? ' got' : ''}"><span class="ti">${troIcon(a.id)}</span><b>${a.name}</b><span>${a.desc}</span>${foot(a)}</div>`; }).join('')}</div>`;
+      <div class="trophies">${ACH.map((a) => { const on = profile.ach[a.id] || (T[a.id] && T[a.id].earned); return `<div class="tro${on ? ' got' : ''}"><span class="ti">${troIcon(a.id)}</span><b>${a.name}</b><span>${a.desc}</span>${on ? '' : toward(a)}${foot(a)}</div>`; }).join('')}</div>`;
   }
   // claim one trophy's SOL (the bank checks it: earned, not claimed, and covered by what's been bet)
   let claimingTrophy = false;
@@ -4938,6 +4950,13 @@
   const playerName = () => profile.card.name || 'Player';
   // Profile, top to bottom: who you are (card, level), how you play (stats, with trophies and recent runs a tap
   // away), settings (wallet, sound, vibration) and help (how to play, odds & fairness).
+  // the player card's last line: what the next level up unlocks in the Locker (nothing past the last one)
+  function nextUnlockHtml(l) {
+    const at = UNLOCKS.filter((u) => u.lvl > l).reduce((m, u) => Math.min(m, u.lvl), Infinity);
+    if (!isFinite(at)) return '';
+    const names = UNLOCKS.filter((u) => u.lvl === at).map(itemName);
+    return `<span class="pnext">${ICON.shirt}<span>Level ${at} unlocks the ${names.join(' and the ')}</span></span>`;
+  }
   function renderProfileView() {
     const v = lvlOf(profile.xp), T = TITLE_BY[profile.card.title] || TITLES[0];
     const got = ACH.filter((a) => profile.ach[a.id]).length, fresh = profile.fresh.length > 0;
@@ -4945,7 +4964,7 @@
     $('pBody').innerHTML = `<div class="vcol"><h2 class="vtitle">Profile</h2><div class="dk-cols"><div class="dk-col">
       <button class="pcard" id="pfCard" aria-label="Edit your player card" style="${avStyle(profile.card.color)}"><span class="pav" style="${avStyle(profile.card.color)}">${emblemSvg(profile.card.emblem)}</span>
         <span class="pid"><span class="pname">${esc(playerName())}</span><span class="ptitle">${ICON.medal}${T.name}</span>
-          <span class="plv"><span>Level ${v.l}</span><span class="num">${v.into} / ${v.need} XP</span></span><span class="pxp"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></span></span>
+          <span class="plv"><span>Level ${v.l}</span><span class="num">${v.into} / ${v.need} XP</span></span><span class="pxp"><i style="width:${(v.into / v.need * 100).toFixed(1)}%"></i></span>${nextUnlockHtml(v.l)}</span>
         <span class="chev">${ICON.chev}</span></button>${rakeHtml(v)}
       <div class="menu-list"><button id="pfLocker"><span class="mi mi-locker">${ICON.shirt}</span><span class="mn">Locker</span><span class="mv">${fresh ? '<i class="dot" aria-label="New items"></i>' : ''}</span><span class="chev">${ICON.chev}</span></button>${row('trophies', ICON.medal, 'Trophies', (tview().open > 0 ? '<i class="dot gap" aria-label="SOL to claim"></i>' : '') + got + ' of ' + ACH.length)}${row('stats', ICON.chart, 'Stats', stats.runs === 1 ? '1 run' : stats.runs + ' runs')}</div>
       </div><div class="dk-col"><div class="menu-list">${row('wallet', ICON.wallet, 'Wallet', fmtBal(bank.balance()) + ' SOL')}${row('settings', ICON.gear, 'Settings')}</div>
