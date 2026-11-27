@@ -2646,7 +2646,9 @@
       for (let i = 0; i < 6; i++) { const a = rnd(0, Math.PI * 2), sp = rnd(40, 130); spawn({ x: hx, y: hy + 4, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.5 - 20, life: 0.4, max: 0.4, size: rnd(1.2, 2.2), color: '#cdbcf2', kind: 0, drag: 2.4 }); }
     }
     if (m != null) {
-      const label = (o === 'S' ? streakName(streak) : 'Rim') + (pts ? ' +' + pts : '');
+      // a ring that sets off a callout (3, 5, every 5th from 10) shows only its points: the callout says the rest
+      const called = o === 'S' && (streak === 3 || streak === 5 || (streak >= 10 && streak % 5 === 0));
+      const label = called ? '+' + pts : (o === 'S' ? streakName(streak) : 'Rim') + (pts ? ' +' + pts : '');
       const col = o === 'S' ? (streak >= 5 ? heatHex(1, 'inner') : streak >= 3 ? heatHex(0, 'inner') : '#ffffff') : 'rgba(222,230,255,0.75)';
       // up and behind the ball's path, so the label never sits on the ball
       floatText(hx - 10, hy - 70, label, null, col, o === 'S' ? 19 + Math.min(streak, 5) * 1.1 : 17);

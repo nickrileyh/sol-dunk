@@ -1368,3 +1368,44 @@ body.desk.kb.hud-play #keys { left: 14px; bottom: 12px; padding: 12px 14px 12px 
    and the frame of heat sit over all of it */
 body.desk:not(.hud-lobby) #hud { width: min(100%, max(var(--runw, var(--col)), 400px)); }
 body.desk #heatFrame, body.desk #heatPulse { width: min(100%, var(--runw, var(--col))); }
+
+/* ---------- polish pass ----------
+   Small things all over (the owner asked to polish up every aspect of the app). */
+/* text: no stranded last words in short paragraphs; the game's purple for selections and the caret */
+.vsub, .prose, .how p, .sp-cap, .tour-tx { text-wrap: pretty; }
+.vtitle, .card-title, .sec-h h3 { text-wrap: balance; }
+::selection { background: rgba(153, 69, 255, 0.45); color: #fff; }
+input { caret-color: var(--accent-hi); }
+/* toast: between runs it's a banner at the very top, on one line where it fits, instead of a box across the page's title */
+.hud-lobby #toast { top: calc(var(--safe-t) + 8px); display: flex; align-items: center; justify-content: center; width: max-content; max-width: min(calc(100% - 24px), 400px); min-height: 44px; padding: 10px 20px; border-radius: 22px;
+  background: #1d1830; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 12px 32px rgba(0, 0, 0, 0.55); line-height: 1.3; text-wrap: balance; transform: translate(-50%, -16px); }
+.hud-lobby #toast.show { transform: translate(-50%, 0); }
+/* rakeback's Claim: a key the height of a pill, not of the panel */
+.rk-b { align-self: center; height: 38px; min-height: 0; }
+/* a trophy not yet earned: what it pays stays readable */
+.tro .tx.two, .tro .tx.two b { color: var(--label-2); }
+/* short phones: the result card reaches up over the HUD's second row, so the level and the pot step back while it's up */
+@media (max-height: 719px) {
+  .hud-left .lvl, #potCap { transition: opacity 0.2s; }
+  .hud-play:has(#result:not(.hide)) .hud-left .lvl, .hud-play:has(#result:not(.hide)) #potCap, .hud-play:has(#result:not(.hide)) #potDelta { opacity: 0; }
+}
+/* the smallest phones (320 wide): a special's name and twist wrap in full instead of being cut off */
+@media (max-width: 359px) {
+  .spr-open { grid-template-columns: 42px minmax(0, 1fr); column-gap: 9px; }
+  .spr-x { width: 42px; height: 39px; font-size: 15.5px; }
+  .spr-t b { white-space: normal; }
+  .spr-t span { display: block; -webkit-line-clamp: unset; }
+}
+/* short windows (a phone on its side, a small browser window): the arena's window gives way so Play is always in reach,
+   and a card taller than the screen scrolls inside itself instead of losing its buttons off the edge */
+@media (max-height: 620px) {
+  .card { max-height: calc(100% - var(--safe-t) - var(--safe-b) - 16px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  .card::-webkit-scrollbar { display: none; }
+}
+@media (max-height: 520px) {
+  body:not(.desk) .home .hero { min-height: 0; margin: 8px 0; }
+}
+@media (max-height: 470px) {
+  body:not(.desk) .home .hero { flex: 0 0 0; margin: 0; border-radius: 0; box-shadow: 0 0 0 100vmax var(--bg); }
+  body:not(.desk) #lobby .controls { margin-block: auto; }
+}

@@ -23,7 +23,7 @@ def call(base, path, body=None, token=None):
 
 async def main():
     port = free_port(); base = f'http://127.0.0.1:{port}'
-    env = dict(os.environ, MOCK_CHAIN='1', PORT=str(port), DATA_DIR=tempfile.mkdtemp(prefix='soldunk-srv-'), LOG_LEVEL='warn', SPECIAL_UNLOCK_LAMPORTS='0')
+    env = dict(os.environ, MOCK_CHAIN='1', PORT=str(port), DATA_DIR=tempfile.mkdtemp(prefix='soldunk-srv-'), LOG_LEVEL='warn', SPECIAL_UNLOCK_LAMPORTS='0', MISSION_DAY_LAMPORTS='5000000')  # 0.005 SOL: one small run unlocks mission SOL
     srv = subprocess.Popen(['node', os.path.join(ROOT, 'server', 'server.mjs')], env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, start_new_session=True)
     fails = []
     try:
@@ -95,6 +95,17 @@ async def main():
             if ph == 'checkpoint' and not (me['balance'] / 1e9 >= 2 - 1e-9): fails.append(f"cashing out a cleared level should pay at least the bet back: {me['balance'] / 1e9}")
             runs = call(base, '/api/missions', None, token)
             if not isinstance(runs.get('daily'), list): fails.append('missions did not come back from the server')
+            # mission SOL the run released waits for a claim: the result card's ticket claims it through the server
+            ready = runs.get('readyLamports', 0)
+            if ph == 'checkpoint' and not ready: fails.append('the perfect run released no mission SOL to claim')
+            if ready:
+                if not await page.query_selector('#msChip'): fails.append('no Claim ticket for mission SOL on the result card')
+                else:
+                    await page.wait_for_timeout(700); await page.click('#msChip'); await page.wait_for_timeout(1500)
+                    me1, m1 = call(base, '/api/me', None, token), call(base, '/api/missions', None, token)
+                    if me1['balance'] != me['balance'] + ready or m1['readyLamports'] != 0: fails.append(f"claiming mission SOL should pay {ready} lamports once: {me['balance']} -> {me1['balance']}, ready {m1['readyLamports']}")
+                    if abs(await bal() - me1['balance'] / 1e9) > 1e-9: fails.append("the page's balance after the claim is not the server's")
+                    me = me1
             # withdraw from the Wallet page
             await page.wait_for_timeout(700); await page.click('#lobbyBtn'); await page.wait_for_timeout(700)
             await page.click('#tabProfile'); await page.wait_for_timeout(400)
@@ -125,6 +136,6 @@ async def main():
         os.killpg(srv.pid, signal.SIGTERM)
         try: srv.wait(timeout=15)
         except Exception: os.killpg(srv.pid, signal.SIGKILL)
-    print('server flow:', 'FAIL ' + '; '.join(fails) if fails else 'ok (wallet sign-in, a verified run, cash-out, withdrawal and a duel mark under the page\'s security policy)')
+    print('server flow:', 'FAIL ' + '; '.join(fails) if fails else 'ok (wallet sign-in, a verified run, cash-out, a mission SOL claim, a withdrawal and a duel mark under the page\'s security policy)')
     sys.exit(1 if fails else 0)
 asyncio.run(main())
