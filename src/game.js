@@ -111,6 +111,7 @@
     if (!Array.isArray(p.fresh)) p.fresh = [];
     p.fresh = p.fresh.filter((k) => /^(ball|wing|trail):/.test(k));
     p.ach = p.ach || {}; p.tot = Object.assign({ swish: 0, perfect: 0 }, p.tot || {});
+    if (p.tot.streak == null) p.tot.streak = p.ach.streak10 ? 10 : p.ach.nova5 ? 5 : p.ach.fire3 ? 3 : 0; // the longest swish streak (records from before start at what their trophies show)
     p.eq = Object.assign({ ball: 'classic', wing: 'angel', trail: 'classic' }, p.eq || {});
     delete p.eq.flame; delete p.eq.rim; delete p.eq.court;
     p.card = Object.assign({ name: '', emblem: 'ball', color: 0, title: 'rookie' }, p.card || {});
@@ -1880,7 +1881,7 @@
     stats.history.length = Math.min(stats.history.length, 30);
     // XP for the points, as in a special; the pot doesn't count toward missions or trophies (its entry counts as play)
     const before = lvlOf(profile.xp), steps = LV.stepsOf(profile.xp), xp = LV.specialXp(run.score, false);
-    profile.tot.swish += run.swishes; profile.xp += xp;
+    profile.tot.swish += run.swishes; profile.tot.streak = Math.max(profile.tot.streak, run.best); profile.xp += xp;
     if (LV.stepsOf(profile.xp) > steps) bank.rakeback.levelUp();
     run.prog = { xp, runXp: xp, before, after: lvlOf(profile.xp), newBest: false, prevBest: 0, achs: [], dailies: [], weeklies: [], careers: [], chapter: null, unlocks: grantUnlocks(), paid: [] };
     saveAll(); setBalance();
@@ -2492,7 +2493,7 @@
     stats.history.length = Math.min(stats.history.length, 30);
     // XP for the points, as in a special; a duel doesn't count toward missions, trophies or the pot
     const before = lvlOf(profile.xp), steps = LV.stepsOf(profile.xp), xp = LV.specialXp(run.score, r.status === 'won');
-    profile.tot.swish += run.swishes; profile.xp += xp;
+    profile.tot.swish += run.swishes; profile.tot.streak = Math.max(profile.tot.streak, run.best); profile.xp += xp;
     if (LV.stepsOf(profile.xp) > steps) bank.rakeback.levelUp();
     run.prog = { xp, runXp: xp, before, after: lvlOf(profile.xp), newBest: false, prevBest: 0, achs: [], dailies: [], weeklies: [], careers: [], chapter: null, unlocks: grantUnlocks(), paid: [] };
     saveAll(); setBalance();
@@ -2525,12 +2526,13 @@
     stats.history.length = Math.min(stats.history.length, 30);
     // XP for the points; the special doesn't count toward missions, trophies or the pot
     const before = lvlOf(profile.xp), steps = LV.stepsOf(profile.xp), xp = LV.specialXp(run.score, won);
-    profile.tot.swish += run.swishes; profile.xp += xp;
+    profile.tot.swish += run.swishes; profile.tot.streak = Math.max(profile.tot.streak, run.best); profile.xp += xp;
     if (LV.stepsOf(profile.xp) > steps) bank.rakeback.levelUp();
     run.prog = { xp, runXp: xp, before, after: lvlOf(profile.xp), newBest: false, prevBest: 0, achs: [], dailies: [], weeklies: [], careers: [], chapter: null, unlocks: grantUnlocks(), paid: [] };
     saveAll(); setBalance();
   }
   function record(payout, result, missions) {
+    const was = { streak: profile.tot.streak, mult: stats.best }; // the records this run may beat (Stats lists them)
     stats.returned = round9(stats.returned + payout);
     stats.hoops += run.hoops; stats.swishes += run.swishes;
     stats.deepest = Math.max(stats.deepest, run.level);
@@ -2538,6 +2540,11 @@
     stats.history.unshift({ t: Date.now(), di: run.di, bet: run.bet, payout, level: run.level, mult: payout > 0 ? run.total : 0, result, seedHash: run.seedHash, serverSeed: run.serverSeed, clientSeed: run.clientSeed, nonce: run.nonce });
     stats.history.length = Math.min(stats.history.length, 30);
     run.prog = progress(payout, missions);
+    // a new record gets a ticket on the result card (not a first one: every first run would set them all)
+    const rec = [];
+    if (was.streak > 0 && run.best > was.streak) rec.push(run.best + ' in a row');
+    if (was.mult > 0 && payout > 0 && run.total > was.mult) rec.push(fmtMult(run.total) + ' cash-out');
+    run.prog.records = rec.length === 1 ? ['New record · ' + rec[0].replace(' in a row', ' swishes in a row')] : rec.length ? ['New records · ' + rec.join(' · ')] : [];
     saveAll(); setBalance();
   }
 
@@ -2551,7 +2558,7 @@
     const prevBest = profile.best[di], newBest = run.score > prevBest;
     if (newBest) profile.best[di] = run.score;
     profile.deep[di] = Math.max(profile.deep[di], run.level);
-    profile.tot.swish += run.swishes; profile.tot.perfect += run.perfect;
+    profile.tot.swish += run.swishes; profile.tot.streak = Math.max(profile.tot.streak, run.best); profile.tot.perfect += run.perfect;
     const runXp = LV.runXp(r);
     let xp = runXp;
     const achs = ACH.filter((a) => !profile.ach[a.id] && a.test(r));
@@ -2731,6 +2738,7 @@
     }, 250));
     if (up) xpTimers.push(setTimeout(() => {
       box.classList.add('up'); $('xpLvl').textContent = 'Level up! You\'re level ' + a.l;
+      hudAnim($('xpLvl'), 'pop', [{ transform: 'scale(1)' }, { transform: 'scale(1.14)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: REDUCED ? 1 : 520, easing: 'cubic-bezier(.3,1.5,.5,1)' });
       const w = (a.into / a.need * 100).toFixed(1) + '%';
       fill.style.transition = 'none'; fill.style.width = w;
       hudAnim(fill, 'fill', [{ width: '0%' }, { width: w }], { duration: REDUCED ? 1 : 600, easing: EASE_OUT });
@@ -2750,6 +2758,7 @@
       if (pr.dailies.length && mv.daily.every((c) => c.done)) g.push(['daily', ICON.check, 'All of today\'s missions done']);
       if (pr.weeklies.length && mv.weekly.every((c) => c.done)) g.push(['daily', ICON.check, 'All of this week\'s missions done']);
     }
+    g.unshift(...(pr.records || []).map((t) => ['ach', ICON.star, t])); // a new record leads: it's this run's moment
     pr.unlocks.forEach((u) => g.push(['unlock', '', 'New ' + itemName(u), u]));
     pr.achs.forEach((x) => g.push(['ach', troIcon(x.id), x.name + ' · +' + x.xp + ' XP · ' + fmtBet(x.sol) + ' SOL to claim']));
     if (pr.chapter != null) g.push(['ach', ICON.flag, 'Chapter ' + (pr.chapter + 1) + ' done · ' + CAREER[pr.chapter].name]);
@@ -4452,9 +4461,15 @@
     }
     return `<p class="vsub">Every ring you pass multiplies your bet. A swish multiplies it more than a rim hit, and a swish streak more still.</p>
       <div class="seg odds-seg" id="oddsSeg" role="group" aria-label="Tier">${E.DIFFS.map((d, i) => `<button data-t="${i}" aria-pressed="${i === di}">${d.name}</button>`).join('')}</div>
+      <div class="tiles two odds-tiles"><div><b>${TOP[di]}<i>×</i></b><span>Best possible win</span></div><div><b>${Math.round(PAY.AVG_RTP[di][0] * 100)}<i>%</i></b><span>Back at checkpoint 1</span></div></div>
       <div class="tbl"><table><thead><tr><th>Level</th><th class="r">Rim</th><th class="r">Swish</th><th class="r">5+ streak</th><th class="r">Total</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>
-      <div class="prose"><p><b>Rim</b>, <b>Swish</b> and <b>5+ streak</b> are what one ring multiplies your bet by on that level. <b>Total</b> is what your bet is multiplied by once you clear the level, from every ring a rim hit to every one a swish.</p>
-      <p>${D.name} pays up to <b>${TOP[di]}×</b> your bet. An average player who cashes out at the first checkpoint gets back about ${Math.round(PAY.AVG_RTP[di][0] * 100)}% of their bet over time, and less the deeper they go. Skilled players do better.</p></div>
+      <div class="sec-h"><h3>Reading the table</h3></div>
+      ${rulesHtml([
+        ['rim', '<b>Rim</b>: what one ring multiplies your bet by when the ball touches the rim on that level.'],
+        ['swish', '<b>Swish</b>: what a clean swish multiplies it by. Each swish in a row pays a little more.'],
+        ['fire', '<b>5+ streak</b>: a swish with five or more in a row, the most one ring pays.'],
+        ['level', '<b>Total</b>: what your bet is multiplied by once you clear the level, from every ring a rim hit to every one a swish.'],
+        ['star', `An average player who cashes out at the first checkpoint gets back about ${Math.round(PAY.AVG_RTP[di][0] * 100)}% of their bet over time, and less the deeper they go. Skilled players do better.`]], null)}
       <div class="sec-h"><h3>Fairness</h3></div>
       ${fairHtml()}`;
   }
@@ -4541,8 +4556,16 @@
       ${formHtml()}
       <div class="sec-h"><h3>Best scores</h3></div>
       <div class="bests">${E.DIFFS.map((D, i) => `<div><b>${profile.best[i] || '–'}</b><span>${D.name}</span><span class="deep" aria-hidden="true">${Array.from({ length: NL }, (_, k) => `<i${k < (profile.deep[i] || 0) ? ' class="on"' : ''}></i>`).join('')}</span><em>${profile.deep[i] ? 'Reached level ' + profile.deep[i] : 'Not played yet'}</em></div>`).join('')}</div>
+      <div class="sec-h"><h3>Records</h3></div>
+      ${recordsHtml()}
       <div class="sec-h"><h3>Recent runs</h3>${stats.history.length ? '<span>Newest first</span>' : ''}</div>
       ${runsHtml()}`;
+  }
+  // the player's records across every run: a tile each, with a glyph on a graphite key like the rule rows
+  function recordsHtml() {
+    const t = profile.tot, n = (v) => (v ? v.toLocaleString('en-US') : '–');
+    const tile = (ic, v, label) => `<div class="rec"><span class="rl-ic" aria-hidden="true"><svg viewBox="0 0 24 24">${HOW_ICON[ic]}</svg></span><span class="rec-t"><b class="num">${v}</b><span>${label}</span></span></div>`;
+    return `<div class="recs">${tile('fire', n(t.streak), 'Longest streak')}${tile('stake', stats.best ? fmtMult(stats.best) : '–', 'Best cash-out')}${tile('swish', n(t.swish), 'Swishes in all')}${tile('star', n(t.perfect), 'Perfect levels')}</div>`;
   }
   // the last runs at a glance: one segment each, oldest first, lit green for a run that came out ahead
   function formHtml() {

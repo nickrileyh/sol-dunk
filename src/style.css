@@ -1509,3 +1509,32 @@ body.desk.kb.hud-play.inwin #keys { left: 26px; bottom: 24px; padding: 0; border
 .spr-t b { white-space: normal; overflow-wrap: anywhere; }
 /* a page's subtitle lines wrap evenly, so a word like "rings" isn't left alone on its own line */
 .sp-blurb, .sp-cap, .vsub, .pot-goal span { text-wrap: balance; }
+/* ---------- more changes ----------
+   The owner asked for more changes. */
+/* Stats: the player's records, a tile each, with a glyph on a graphite key like the rule rows */
+.recs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.rec { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 11px; align-items: center; min-width: 0; padding: 12px; border-radius: 18px;
+  background: var(--surface); border: 1px solid var(--hair); border-top-color: rgba(255, 255, 255, 0.12); }
+.rec .rl-ic { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--surface-2); color: var(--label-2); }
+.rec .rl-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.rec-t { min-width: 0; }
+.rec-t b { display: block; font-family: var(--font-round); font-size: 20px; font-weight: 700; line-height: 1.2; color: var(--label); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rec-t span { display: block; margin-top: 1px; font-size: 12px; font-weight: 600; color: var(--label-2); }
+/* Odds & fairness: the mode's best win and what an average player gets back sit over the table */
+.odds-tiles { margin: 12px 0; }
+/* rows and bars wrap into even lines, so a word like "wins" or "rewards" isn't left on a line of its own */
+.spr-t span, .mn-h span { text-wrap: balance; }
+/* short windows (a phone on its side): a card over the court sits under the HUD's top row, so the HUD steps back while one is up */
+@media (max-height: 520px) {
+  body:not(.desk) #hud { transition: opacity 0.2s; }
+  body:not(.desk):has(#checkpoint:not(.hide), #result:not(.hide), #pauseCard:not(.hide)) #hud { opacity: 0; pointer-events: none; }
+}
+/* the result card: "Level up! You're level 5" pops as the meter refills */
+#xpLvl { display: inline-block; transform-origin: left center; }
+/* a desktop's reading column has room for the four records in a row */
+body.desk .recs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* the smallest phones: the records drop their glyphs, so each label stays on one line */
+@media (max-width: 359px) {
+  .rec { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; }
+  .rec .rl-ic { display: none; }
+}

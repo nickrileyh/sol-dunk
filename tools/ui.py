@@ -132,6 +132,7 @@ async def main():
         # a run: pause card, then mission progress afterwards
         await page.click('#tabPlay'); await page.wait_for_timeout(400)
         before = await page.evaluate("JSON.stringify([__solDunk.missions().weekly.map((c) => c.p), __solDunk.profile.career])")
+        await page.evaluate("__solDunk.profile.tot.streak = 1; __solDunk.stats.best = 0.5")  # records this run will beat
         await page.click('#playBtn'); await page.wait_for_timeout(900)
         await page.evaluate("__solDunk.autoplay('perfect'); __solDunk.tap()"); await page.wait_for_timeout(1500)
         check(not await vis('#tabbar') or await page.evaluate("getComputedStyle(document.getElementById('tabbar')).opacity") == '0', 'the tab bar hides during a run')
@@ -158,6 +159,15 @@ async def main():
         check(car['p'][0] > 0 or car['ch'] > 0, f"career progress recorded {car}")
         await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
         check(await tab() == 'play' and await vis('#lobby'), 'Change bet returns to the Play tab')
+        # a new record gets a ticket on the result card, and Stats lists the records
+        rec = await page.evaluate("[__solDunk.run.prog && __solDunk.run.prog.records, __solDunk.profile.tot, __solDunk.stats.best]")
+        check(rec[0] and len(rec[0]) == 1 and rec[0][0].startswith('New record') and rec[1]['streak'] > 1, f'beating the longest streak and the best cash-out makes one new-records ticket {rec}')
+        await page.click('#tabProfile'); await page.wait_for_timeout(400)
+        await page.click('#pBody [data-page="stats"]'); await page.wait_for_timeout(450)
+        recs = await page.evaluate("[...document.querySelectorAll('#pgBody .rec b')].map((b) => b.textContent)")
+        check(len(recs) == 4 and recs[0] == str(rec[1]['streak']) and recs[3] == (str(rec[1]['perfect']) if rec[1]['perfect'] else '–'), f'Stats shows four records, the longest streak first {recs}')
+        await page.click('#pgBack'); await page.wait_for_timeout(400)
+        await page.click('#tabPlay'); await page.wait_for_timeout(400)
         # items earned under the newer unlock list are handed out on load
         await page.evaluate("""(() => { const p = JSON.parse(localStorage.getItem('soldunk.profile')); p.xp = 3000; p.owned = ['ball:classic', 'wing:angel', 'flame:fire']; p.fresh = []; localStorage.setItem('soldunk.profile', JSON.stringify(p)); })()""")
         await page.reload(); await page.wait_for_timeout(1200)
@@ -170,6 +180,7 @@ async def main():
         await page.click('#tabPlay'); await page.wait_for_timeout(400)
         # a free practice run: nothing is bet, recorded or earned
         bal0, runs0, xp0 = await page.evaluate("[__solDunk.bal(), __solDunk.stats.runs, __solDunk.profile.xp]")
+        tot0 = await page.evaluate("JSON.stringify(__solDunk.profile.tot)")
         check(await page.evaluate("document.getElementById('practiceBtn').textContent") == 'Practice for free', 'a Practice for free link under the Play button')
         await page.click('#practiceBtn'); await page.wait_for_timeout(900)
         check(await page.evaluate('__solDunk.mode()') == 'practice' and await page.evaluate('__solDunk.bal()') == bal0, 'practice starts a run without taking a bet')
@@ -186,6 +197,7 @@ async def main():
         check(t.startswith('Practice'), f'the practice result says so ({t})')
         b1, r1, x1 = await page.evaluate("[__solDunk.bal(), __solDunk.stats.runs, __solDunk.profile.xp]")
         check(b1 == bal0 and r1 == runs0 and x1 == xp0, f'practice changes no balance, run count or XP ({bal0}->{b1}, {runs0}->{r1}, {xp0}->{x1})')
+        check(await page.evaluate("JSON.stringify(__solDunk.profile.tot)") == tot0, 'nor the records')
         check(await page.evaluate("document.getElementById('againT').textContent") == 'Practice again' and await page.evaluate("getComputedStyle(document.getElementById('shareBtn')).display") == 'none', 'its result offers Practice again and no share')
         await page.click('#lobbyBtn'); await page.wait_for_timeout(500)
         await page.click('#tabProfile'); await page.wait_for_timeout(400)
