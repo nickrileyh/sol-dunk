@@ -4366,8 +4366,8 @@
       row('mission', 'purple', 'Missions', `Three at a time, new every day and every week, whatever you bet. Their SOL unlocks once you've bet ${fmtBet(mview().base.day)} SOL that day or ${fmtBet(mview().base.week)} SOL that week; tap Claim to collect it.`) +
       row('medal', 'gold', 'Trophies', `Fifteen one-time goals. Each adds XP and pays a little SOL: claim it on the Trophies page once your bets cover it.`) +
       row('back', 'green', 'Rakeback', `Every bet sets a little SOL aside for you: ${Math.round(LV.RATE * 100)}% of the house's cut. Level up to claim it.`) +
-      row('trophy', 'gold', 'Special levels', `Pay the entry and clear every ring to win 2×, 3× or 5× it. A clear brings up a new one; some have walls to fly over, rings on their side or rings that breathe. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs.`) +
-      row('rival', 'purple', 'Duel', `Race a rival over the same rings. Whoever gets further takes the pot.`) +
+      row('trophy', 'gold', 'Special levels', `Pick a stake and clear every ring to win 2×, 3× or 5× it. A clear brings up a new one; some have walls to fly over, rings on their side or rings that breathe. They open after ${fmtBet(specState && specState.unlock ? specState.unlock.need : SP.UNLOCK * SP.ENTRY)} SOL of regular runs.`) +
+      row('rival', 'purple', 'Duel', `Pick a stake and race a rival over the same rings. Whoever gets further takes 1.8× it.`) +
       row('split', 'green', 'Daily pot', `One course for everyone each day. Fly it as often as you like; your best counts, and the best three split the pot.`) +
       `</div>`;
   }
