@@ -106,6 +106,20 @@
   const DOWN = 0.3;                       // a miss lowers that special's level by this much; a clear raises it by up(x)
   const SLOT_MARGIN = 0.5;                // a new special starts at most this far below the player's level in another
   const UNLOCK = 10;                      // the specials open once a player has bet this many entries in regular runs
+  // Stakes (the owner asked for the challenges to be multipliers of a stake the player picks): the prize is the stake
+  // times the special's multiple. Each stake keeps its own level at each prize, so every amount is the fixed-entry
+  // staircase above and the same 90% holds at each; what happens at one stake never moves another's level, so losing
+  // on purpose at a small stake can't make a big stake's course easier, and waiting for a stake's level to be low
+  // doesn't help (it only moves when that stake is played). A stake's level starts where the player's levels already
+  // are: the highest at that prize at any stake, or at another prize less SLOT_MARGIN, never lower than START. A stake
+  // opens once the player's regular-run bets reach UNLOCK of it (UNLOCK entries for the smaller ones), as the specials
+  // open at UNLOCK entries. (Tried first and dropped: one level per prize, moved by stake ÷ the biggest stake played,
+  // with stakes rising a quarter at a time. A player who staked big only while their level sat low got back up to
+  // 140%: sim/stakes.cjs.)
+  // MAX_STAKE: the most a player can stake by default (the server's SPECIAL_MAX_STAKE_LAMPORTS). A strong player who
+  // hides their skill in regular runs starts a new stake at START and wins more than 90% while that stake's level climbs
+  // to them (sim/stakes.cjs), so that head start grows with the stake; raise it once accounts are verified.
+  const STAKES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1], MAX_STAKE = 0.2;
 
   // @@TABLES@@ written by node sim/special.cjs --write, for each bot on the ANCHORS. Don't edit by hand.
   // reg[tier][level - 1] = ln(per-ring miss rate) per anchor; sp[recipe][grade] = [a, b, c] per anchor, with
@@ -519,12 +533,30 @@
 
   // A player's record: rings passed and missed on each regular level (r, 'tier|level': [passed, missed]), their level
   // in each special (d, by slot; null until they first play it), and for show how many rings and attempts.
-  const blank = () => ({ r: {}, d: SLOTS.map(() => null), rings: 0, tries: 0 });
+  // d is the level at the ENTRY stake (the only one before stakes), k the others: k[slot]['0.1'] for 0.1 SOL.
+  const blank = () => ({ r: {}, d: SLOTS.map(() => null), k: SLOTS.map(() => ({})), rings: 0, tries: 0 });
   const norm = (Rt) => {
     if (!Rt || !Rt.r) return blank();
     if (!Array.isArray(Rt.d)) Rt.d = SLOTS.map(() => null);
+    if (!Array.isArray(Rt.k)) Rt.k = SLOTS.map(() => ({}));
     return Rt;
   };
+  // a stake's key in k (null for ENTRY, whose level is d), and the regular-run bets (SOL) that open it
+  const skey = (stake) => (stake == null || Math.abs(stake - ENTRY) < 1e-9 ? null : String(Math.round(stake * 1e6) / 1e6));
+  const unlockFor = (stake) => Math.round(UNLOCK * Math.max(ENTRY, stake == null ? ENTRY : stake) * 1e9) / 1e9;
+  // the player's level at a prize and stake, or null if they haven't played it
+  function levelAt(Rt, slot, stake) {
+    const key = skey(stake);
+    if (key == null) return Rt && Array.isArray(Rt.d) && Rt.d[slot] != null ? Rt.d[slot] : null;
+    const m = Rt && Array.isArray(Rt.k) && Rt.k[slot];
+    return m && m[key] != null ? m[key] : null;
+  }
+  // every level the player has: [slot, level]
+  function eachLevel(Rt, f) {
+    if (!Rt) return;
+    if (Array.isArray(Rt.d)) Rt.d.forEach((v, k) => { if (v != null) f(k, v); });
+    if (Array.isArray(Rt.k)) Rt.k.forEach((m, k) => { if (m) for (const key in m) if (m[key] != null) f(k, m[key]); });
+  }
   // a regular level the bank verified (with any bet: it can only raise where a special's level starts)
   function addLevel(Rt, di, L, passes, missed) {
     Rt = norm(Rt);
@@ -543,22 +575,24 @@
     const m = w.reduce((a, v, i) => a + v * GRID[i], 0) / sum, sd = Math.sqrt(w.reduce((a, v, i) => a + v * (GRID[i] - m) ** 2, 0) / sum);
     return { m, sd };
   }
-  // where a special's level starts: START, or more if regular runs (the middle of their rating) or the player's level
-  // in another special (less SLOT_MARGIN) show more. It leans high: starting a player too high costs them a few misses
-  // while their level comes down; starting a strong one too low hands them wins while it climbs.
+  // where a special's level starts (at a stake the player hasn't played there): START, or more if regular runs (the
+  // middle of their rating) show more, or their level at another stake of this special, or in another special (less
+  // SLOT_MARGIN). It leans high: starting a player too high costs them a few misses while their level comes down;
+  // starting a strong one too low hands them wins while it climbs.
   function startFor(Rt, slot) {
     let d = START;
     if (Rt && Rt.r) d = Math.max(d, regular(Rt).m);
-    if (Rt && Array.isArray(Rt.d)) Rt.d.forEach((v, k) => { if (k !== slot && v != null) d = Math.max(d, v - SLOT_MARGIN); });
+    eachLevel(Rt, (k, v) => { d = Math.max(d, k === slot ? v : v - SLOT_MARGIN); });
     return clamp(d);
   }
-  // the player's level in a special now
-  const levelOf = (Rt, slot) => (Rt && Array.isArray(Rt.d) && Rt.d[slot] != null ? Rt.d[slot] : startFor(Rt, slot));
-  // an attempt at a special is over: up after a clear, down after a miss
-  function addSpecial(Rt, slot, won, rings) {
-    const d = levelOf(Rt, slot);
+  // the player's level in a special now, at a stake (ENTRY if none)
+  const levelOf = (Rt, slot, stake) => { const v = levelAt(Rt, slot, stake); return v != null ? v : startFor(Rt, slot); };
+  // an attempt at a special is over: that stake's level goes up after a clear, down after a miss
+  function addSpecial(Rt, slot, won, rings, stake) {
+    const d = levelOf(Rt, slot, stake), key = skey(stake);
     Rt = norm(Rt);
-    Rt.d[slot] = Math.round(clamp(d + (won ? up(SLOTS[slot]) : -DOWN)) * 1e4) / 1e4;
+    const v = Math.round(clamp(d + (won ? up(SLOTS[slot]) : -DOWN)) * 1e4) / 1e4;
+    if (key == null) Rt.d[slot] = v; else Rt.k[slot][key] = v;
     Rt.tries++; Rt.rings += rings | 0;
     return Rt;
   }
@@ -566,7 +600,8 @@
   function rating(Rt) {
     const g = regular(Rt);
     return { s: Math.round(g.m * 100) / 100, sd: Math.round(g.sd * 100) / 100, name: levelName(g.m), rings: Rt && Rt.rings ? Rt.rings : 0, tries: Rt && Rt.tries ? Rt.tries : 0,
-      levels: SLOTS.map((x, k) => Math.round(levelOf(Rt, k) * 100) / 100) };
+      levels: SLOTS.map((x, k) => Math.round(levelOf(Rt, k) * 100) / 100),
+      stakes: SLOTS.map((x, k) => STAKES.map((st) => Math.round(levelOf(Rt, k, st) * 100) / 100)) };
   }
 
   // ---------------------------------------------------------------- the course for a level
@@ -588,16 +623,24 @@
   }
   // the day's three for a player (or for someone new): each course set for the player's level in that special; chance
   // is how often a player at that level clears it
-  function todayFor(Rt, day, wins) {
+  function todayFor(Rt, day, wins, stake, stakes) {
     return specialsFor(day, wins).map(({ slot, x, recipe, at, of, done, next }) => {
-      const d = levelOf(Rt, slot), c = courseFor(d, recipe.id, x);
-      return { slot, x, recipe: recipe.id, g: c.g, n: c.n, chance: c.chance, rtp: c.rtp, level: Math.round(d * 100) / 100, levelName: levelName(d), at, of, done, next: next ? next.id : null };
+      const d = levelOf(Rt, slot, stake), c = courseFor(d, recipe.id, x);
+      return { slot, x, recipe: recipe.id, g: c.g, n: c.n, chance: c.chance, rtp: c.rtp, level: Math.round(d * 100) / 100, levelName: levelName(d), at, of, done, next: next ? next.id : null,
+        tiers: tiersFor(Rt, slot, recipe.id, x, stakes) };
+    });
+  }
+  // the course at each stake for a special (stakes in SOL; STAKES by default)
+  function tiersFor(Rt, slot, recipe, x, stakes) {
+    return (stakes || STAKES).map((st) => {
+      const d = levelOf(Rt, slot, st), c = courseFor(d, recipe, x);
+      return { stake: st, g: c.g, n: c.n, chance: c.chance, level: Math.round(d * 100) / 100, levelName: levelName(d) };
     });
   }
 
   return {
     ENTRY, DAY_MS, START_Y, SLOTS, TARGET, N_MIN, N_MAX, N_IDEAL, GRADES, RECIPES, BY, ANCHORS, LEVEL_NAMES, GRID,
-    D_MIN, D_MAX, PRIOR_MU, PRIOR_SD, START, DOWN, SLOT_MARGIN, UNLOCK, TABLES,
+    D_MIN, D_MAX, PRIOR_MU, PRIOR_SD, START, DOWN, SLOT_MARGIN, UNLOCK, TABLES, STAKES, MAX_STAKE, skey, unlockFor, levelAt, tiersFor,
     config, generate, gradeText, dayKey, dayStart, closesAt, specialsFor, queuesFor, CYCLE, PER_DAY, PER_SLOT, W_MIN, PLAIN, OBST, FX, WALLS, WALL_W, GATE_W, PULSE, walls,
     blank, addLevel, regular, startFor, levelOf, addSpecial, up, levelName, rating, courseFor, todayFor, missReg, clearP
   };

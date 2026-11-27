@@ -2,7 +2,7 @@
 Plays three duels with different bots so a win, a loss and stopping once past a rival who's out all come up."""
 import asyncio, json
 from playwright.async_api import async_playwright
-from _paths import URL, CHROME
+from _paths import URL, CHROME, SHOTS
 fails = []
 def check(ok, msg):
     if not ok: fails.append(msg); print('  FAIL', msg)
@@ -62,6 +62,26 @@ async def main():
         await page.click('#fairVerify'); await page.wait_for_timeout(300)
         fo = await page.inner_text('#fairOut')
         check('Duel course' in fo, 'the latest duel checks against its committed seed: ' + fo.replace('\n', ' | ')[:120])
+        # stakes: the duel's stepper picks what both players stake; the winner takes 1.8x it
+        await page.click('#pgBack'); await page.wait_for_timeout(300); await page.click('#tabChallenges'); await page.wait_for_timeout(500)
+        await page.click('#cBody [data-page="duel"]'); await page.wait_for_timeout(500)
+        d = await ev('__solDunk.duel()')
+        check([x['stake'] for x in d['stakes']] == [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1] and all(abs(x['prize'] - 1.8 * x['stake']) < 1e-9 for x in d['stakes']), 'the duel\'s stakes, the winner taking 1.8x: ' + json.dumps(d['stakes']))
+        await page.click('#pgBody [data-stake="du"] .stake-b[data-d="1"]'); await page.wait_for_timeout(300)
+        body = await page.inner_text('#pgBody')
+        check(await ev('__solDunk.prefs.duStake') == 0.1 and '0.18' in body and 'Play for 0.1 SOL' in body and '1.8× your 0.1 SOL stake' in body, 'stepping up to 0.1: the winner takes 0.18 and Play says 0.1')
+        await page.screenshot(path=SHOTS + '/duel_stake.png')
+        bal0 = await ev('__solDunk.bal()')
+        await page.click('#duPlay'); await page.wait_for_timeout(1300)
+        hp = await ev("document.getElementById('hudPot').textContent")
+        check(abs(await ev('__solDunk.bal()') - (bal0 - 0.1)) < 1e-9 and abs(float(hp) - 0.18) < 1e-6, 'a 0.1 SOL duel takes 0.1 and the HUD shows the 0.18 it wins: ' + hp)
+        await ev("__solDunk.autoplay('perfect'); __solDunk.tap()")
+        for i in range(900):
+            if await ev('__solDunk.phase()') == 'over': break
+            await page.wait_for_timeout(100)
+        await page.wait_for_timeout(1900); await ev("__solDunk.autoplay(null)")
+        L = (await ev('__solDunk.duel()'))['last']
+        check(abs(L['payout'] - {'won': 0.18, 'lost': 0, 'draw': 0.09}[L['status']]) < 1e-9 and abs(await ev('__solDunk.bal()') - (bal0 - 0.1 + L['payout'])) < 1e-9, f'a 0.1 SOL duel {L["status"]} pays {L["payout"]}')
         check(not errs, 'no page errors: ' + str(errs))
         print('duel flow:', 'all checks passed' if not fails else f'{len(fails)} check(s) failed')
         await b.close()

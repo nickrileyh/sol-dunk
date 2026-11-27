@@ -360,6 +360,26 @@ function playTaps(seed, di, L, skill, salt) {
     check(none.status === 200 && none.claimedLamports === 0 && none.balance === b0 + readyTotal, 'missions: claim all with nothing ready pays nothing');
   }
   check(sp2.day !== sp1.day && sp2.specials.every((x) => x.me.tries === 0) && sp2.me.skill.tries === tries, 'the special tallies reset on a new day; the rating stays');
+  // stakes: the player picks one of the stakes on offer; the prize is the stake times the multiple, and each stake keeps
+  // its own level at each prize (so one stake's attempts never move another's course)
+  {
+    const SL = sp2.stakes.map((x) => x.stakeLamports), played = sp2.me.playedLamports;
+    check(JSON.stringify(SL) === JSON.stringify(SP.STAKES.filter((x) => x <= SP.MAX_STAKE + 1e-9).map((x) => Math.round(x * 1e9))) && sp2.stakes.every((x) => x.unlockLamports === Math.max(unlock, Math.round(SP.UNLOCK * x.stakeLamports)) && x.open === (played >= x.unlockLamports)),
+      'stakes: the stakes on offer, each open once regular runs reach ten of it ' + JSON.stringify(sp2.stakes));
+    check(sp2.specials.every((x) => x.tiers.length === SL.length && x.tiers.every((k, i) => k.stakeLamports === SL[i] && k.prizeLamports === Math.floor(SL[i] * x.x)) && JSON.stringify(x.tiers.find((k) => k.stakeLamports === sfee).course) === JSON.stringify(x.course)),
+      'stakes: every special has a course and a prize at each stake, the entry\'s as before');
+    const b0 = (await M.api('/api/me')).balance, closed = sp2.stakes.find((x) => !x.open);
+    const odd = await M.api('/api/special/start', { clientSeed: 'odd1x', slot: 1, stakeLamports: 30_000_000 });
+    const shut = closed ? await M.api('/api/special/start', { clientSeed: 'shut1x', slot: 1, stakeLamports: closed.stakeLamports }) : { status: 400, error: 'regular runs' };
+    check(odd.status === 400 && shut.status === 400 && /regular runs/.test(shut.error || '') && (await M.api('/api/me')).balance === b0, 'stakes: a stake not on offer and one not open yet are refused, nothing debited: ' + [odd.error, shut.error].join(' / '));
+    const before = (await M.api('/api/special')).me.skill.stakes[1], small = 10_000_000;
+    const s1 = await M.api('/api/special/start', { clientSeed: 'stk1x', slot: 1, stakeLamports: small });
+    const t1 = sp2.specials[1].tiers.find((k) => k.stakeLamports === small);
+    check(s1.status === 200 && s1.feeLamports === small && s1.prizeLamports === Math.floor(small * 3) && s1.balance === b0 - small && s1.grade === t1.course.grade && s1.rings === t1.course.rings, 'stakes: a 0.01 SOL attempt debits 0.01 and plays that stake\'s course for 3x ' + JSON.stringify([s1.status, s1.error, s1.prizeLamports]));
+    const f1 = await M.api('/api/special/finish', { runId: s1.runId, taps: [0] }); // one tap: out at the first ring
+    const after = f1.special.me.skill.stakes[1], i1 = SL.indexOf(small), i5 = SL.indexOf(sfee);
+    check(f1.status === 'lost' && f1.balance === b0 - small && Math.abs(after[i1] - (before[i1] - SP.DOWN)) < 1e-6 && after[i5] === before[i5], 'stakes: a miss at 0.01 lowers only the 0.01 level at that prize ' + JSON.stringify([before[i1], after[i1], before[i5], after[i5]]));
+  }
   const poorS = client_(8802); await poorS.signIn();
   check((await poorS.api('/api/special/start', { clientSeed: 'poor1', slot: 0 })).status === 400, 'special entry without balance refused');
   srv4.kill();
@@ -556,6 +576,25 @@ function playTaps(seed, di, L, skill, salt) {
     srvW.kill();
     const poor = client_(8812); await poor.signIn();
     check((await poor.api('/api/duel/start', { clientSeed: 'poor1' })).status === 400, 'duel: no entry without the balance');
+    // stakes: both players stake the same, so a mark is only raced by someone at its stake
+    {
+      const big = 100_000_000, vs = await X.api('/api/duel');
+      check(JSON.stringify(vs.stakes.map((x) => x.stakeLamports)) === JSON.stringify(DU.STAKES.filter((x) => x <= DU.MAX_STAKE + 1e-9).map((x) => Math.round(x * 1e9))) && vs.stakes.every((x) => x.prizeLamports === DU.pot(x.stakeLamports)),
+        'duel stakes: the stakes on offer, the winner taking 1.8x ' + JSON.stringify(vs.stakes.map((x) => [x.stakeLamports, x.prizeLamports])));
+      check((await X.api('/api/duel/start', { clientSeed: 'stkOdd', stakeLamports: 30_000_000 })).status === 400, 'duel stakes: a stake not on offer is refused');
+      const xm = await X.api('/api/duel/start', { clientSeed: 'stkX1', stakeLamports: big });
+      check(xm.status === 200 && xm.feeLamports === big && xm.prizeLamports === DU.pot(big) && xm.rival === null, 'duel stakes: a 0.1 SOL mark ' + JSON.stringify([xm.status, xm.error]));
+      await X.api('/api/duel/finish', { runId: xm.runId, taps: [0] });
+      const vy = await Y.api('/api/duel');
+      check(vy.stakes.find((x) => x.stakeLamports === big).waiting === 1 && (await X.api('/api/duel')).stakes.find((x) => x.stakeLamports === big).waiting === 0, 'duel stakes: other players see a rival waiting at 0.1 SOL (not the mark\'s own player)');
+      const ys = await Y.api('/api/duel/start', { clientSeed: 'stkY1', stakeLamports: 20_000_000 });
+      check(ys.status === 200 && ys.rival === null && ys.seed !== xm.seed, 'duel stakes: a 0.02 SOL entry doesn\'t race the 0.1 SOL mark');
+      await Y.api('/api/duel/finish', { runId: ys.runId, taps: [0] });
+      const yb = await bal(Y), yr = await Y.api('/api/duel/start', { clientSeed: 'stkY2', stakeLamports: big });
+      check(yr.status === 200 && yr.seed === xm.seed && yr.rival && yr.balance === yb - big, 'duel stakes: a 0.1 SOL entry races the 0.1 SOL mark ' + JSON.stringify([yr.status, yr.error]));
+      const fy = flyBot(yr.seed, 'perfect', 'stky'), ry = await Y.api('/api/duel/finish', { runId: yr.runId, taps: fy.taps });
+      check(ry.status === 'won' && ry.payoutLamports === DU.pot(big) && ry.balance === yb - big + DU.pot(big), 'duel stakes: the winner takes 1.8x the stake ' + JSON.stringify([ry.status, ry.payoutLamports]));
+    }
     srvD.kill();
   }
 

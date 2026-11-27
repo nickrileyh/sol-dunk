@@ -29,6 +29,11 @@ export function loadConfig(env = process.env) {
   const mainnet = network === 'mainnet-beta';
   const sol = (x) => Math.round(x * LAMPORTS);
   const specialEntry = num('SPECIAL_ENTRY_LAMPORTS', sol(SP.ENTRY));
+  // the stakes a player can pick: the rules' list up to the cap (the default stake always among them)
+  const stakes = (all, top, dflt) => [...new Set([...all.map(sol).filter((x) => x <= top), dflt])].sort((a, b) => a - b);
+  const specialMaxStake = num('SPECIAL_MAX_STAKE_LAMPORTS', sol(SP.MAX_STAKE));
+  const duelEntry = num('DUEL_ENTRY_LAMPORTS', sol(DU.ENTRY));
+  const duelMaxStake = num('DUEL_MAX_STAKE_LAMPORTS', sol(DU.MAX_STAKE));
   const publicUrl = (env.PUBLIC_URL || '').replace(/\/$/, '');
 
   const CFG = {
@@ -106,10 +111,12 @@ export function loadConfig(env = process.env) {
     // game
     potEntry: num('POT_ENTRY_LAMPORTS', sol(POTS.ENTRY)),
     potTheme: mock ? env.POT_THEME || '' : '',             // tests only: force the pot's theme
-    specialEntry,
+    specialEntry,                                         // the stake a special starts at (and the only one before stakes)
+    specialStakes: stakes(SP.STAKES, specialMaxStake, specialEntry), // each keeps its own level per prize (src/special.cjs)
     specialUnlock: num('SPECIAL_UNLOCK_LAMPORTS', Math.round(SP.UNLOCK * specialEntry)),
     specialRecipe: mock ? env.SPECIAL_RECIPE || '' : '',   // tests only: force every slot's twist
-    duelEntry: num('DUEL_ENTRY_LAMPORTS', sol(DU.ENTRY)),   // what each player pays into a duel
+    duelEntry,                                            // the stake a duel starts at
+    duelStakes: stakes(DU.STAKES, duelMaxStake, duelEntry), // both players stake the same: a mark is raced at its stake
     duelWaitMs: num('DUEL_WAIT_MS', DU.WAIT_MS),           // a mark nobody takes on is refunded after this long
     specialDayTries: num('SPECIAL_DAY_TRIES', 0),          // attempts at each special per player per day (0 = no limit)
     missionNeed: { day: num('MISSION_DAY_LAMPORTS', sol(MS.NEED.day)), week: num('MISSION_WEEK_LAMPORTS', sol(MS.NEED.week)) },

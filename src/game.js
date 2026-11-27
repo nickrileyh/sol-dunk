@@ -660,34 +660,42 @@
       const day = SP.dayKey(Date.now()), t = store.get('special', null);
       return t && t.day === day && Array.isArray(t.tries) ? t : { day, tries: [0, 0, 0], wins: [0, 0, 0] };
     },
+    // the stakes on offer (the owner asked to pick how much to play with): each opens at SP.unlockFor of regular runs,
+    // and each keeps its own level at each prize
+    stakes() { return SP.STAKES.filter((x) => x <= SP.MAX_STAKE + 1e-9); },
     view() {
-      const day = SP.dayKey(Date.now()), t = this.tally();
-      const unlock = { need: round9(SP.UNLOCK * this.fee), played: stats.runPlayed || 0 };
+      const day = SP.dayKey(Date.now()), t = this.tally(), played = stats.runPlayed || 0;
+      const unlock = { need: round9(SP.UNLOCK * this.fee), played }, list = this.stakes();
       return {
         day, fee: this.fee, closesAt: SP.closesAt(day), target: SP.TARGET, unlock,
+        stakes: list.map((st) => ({ stake: st, need: SP.unlockFor(st), open: played + 1e-9 >= SP.unlockFor(st) })),
         // each prize is on the special after the ones cleared today; all cleared, it's done until tomorrow
-        specials: SP.todayFor(profile.skill, day, t.wins).map((c) => {
+        specials: SP.todayFor(profile.skill, day, t.wins, this.fee, list).map((c) => {
           const R = SP.BY[c.recipe], N = c.next && !c.done ? SP.BY[c.next] : null;
           return { slot: c.slot, x: c.x, prize: round9(this.fee * c.x), recipe: { id: R.id, name: R.name, blurb: R.blurb }, at: c.at, of: c.of, done: c.done, next: N ? { id: N.id, name: N.name } : null,
-            course: { grade: c.g, rings: c.n, chance: c.chance, level: c.level, levelName: c.levelName }, me: { tries: t.tries[c.slot] || 0, wins: t.wins[c.slot] || 0 } };
+            course: { grade: c.g, rings: c.n, chance: c.chance, level: c.level, levelName: c.levelName }, me: { tries: t.tries[c.slot] || 0, wins: t.wins[c.slot] || 0 },
+            tiers: c.tiers.map((k) => ({ stake: k.stake, prize: round9(k.stake * c.x), course: { grade: k.g, rings: k.n, chance: k.chance, level: k.level, levelName: k.levelName } })) };
         }),
         me: { blocked: false, skill: SP.rating(profile.skill), locked: unlock.played + 1e-9 < unlock.need }
       };
     },
-    start(slot) {
-      const v = this.view(), sp = v.specials[slot];
+    start(slot, stake) {
+      const v = this.view(), sp = v.specials[slot], st = stake == null ? v.fee : stake, k = v.stakes.find((x) => Math.abs(x.stake - st) < 1e-9);
       if (!sp) throw new Error('There’s no such special level today');
       if (v.me.locked) throw new Error('Bet ' + fmtBet(v.unlock.need) + ' SOL in regular runs to unlock the special levels.');
+      if (!k) throw new Error('Pick one of the stakes on offer.');
+      if (!k.open) throw new Error('Bet ' + fmtBet(k.need) + ' SOL in regular runs to stake ' + fmtBet(st) + ' SOL.');
       if (sp.done) throw new Error(`You’ve cleared all ${sp.of} of today’s ${sp.x}× specials. New ones come at midnight UTC.`);
-      if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
-      wallet.balance = round9(wallet.balance - v.fee);
-      DemoRake.add('special', v.fee);
-      const ready = DemoMissions.play(v.fee);
+      if (wallet.balance + 1e-12 < st) throw new Error('Not enough demo SOL for that stake.');
+      const tier = sp.tiers.find((x) => Math.abs(x.stake - st) < 1e-9);
+      wallet.balance = round9(wallet.balance - st);
+      DemoRake.add('special', st);
+      const ready = DemoMissions.play(st);
       const t = this.tally(); t.tries[slot]++; store.set('special', t);
       const serverSeed = randomHex(32), clientSeed = randomHex(8), nonce = wallet.nonce++;
-      const c = this.cur = { serverSeed, clientSeed, nonce, slot, recipe: sp.recipe.id, g: sp.course.grade, n: sp.course.rings, fee: v.fee, prize: sp.prize, day: v.day, seed: deriveLevelSeed(serverSeed, clientSeed, nonce, 'special') };
+      const c = this.cur = { serverSeed, clientSeed, nonce, slot, recipe: sp.recipe.id, g: tier.course.grade, n: tier.course.rings, fee: st, prize: tier.prize, day: v.day, seed: deriveLevelSeed(serverSeed, clientSeed, nonce, 'special') };
       saveAll();
-      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, seed: c.seed, slot, recipe: c.recipe, grade: c.g, rings: c.n, chance: sp.course.chance, x: sp.x, fee: v.fee, prize: c.prize, missions: { ready }, special: this.view() };
+      return { seedHash: hex(sha256(utf8(serverSeed))), clientSeed, nonce, seed: c.seed, slot, recipe: c.recipe, grade: c.g, rings: c.n, chance: tier.course.chance, x: sp.x, fee: st, prize: c.prize, missions: { ready }, special: this.view() };
     },
     finish(taps) {
       const c = this.cur;
@@ -698,7 +706,7 @@
         wallet.balance = round9(wallet.balance + c.prize);
         const t = this.tally(); if (t.day === c.day) { t.wins[c.slot]++; store.set('special', t); }
       }
-      profile.skill = SP.addSpecial(profile.skill, c.slot, won, r.outcomes.length); // that special's level moves
+      profile.skill = SP.addSpecial(profile.skill, c.slot, won, r.outcomes.length, c.fee); // that special's level at that stake moves
       saveAll();
       return { status: won ? 'won' : 'lost', payout: won ? c.prize : 0, serverSeed: c.serverSeed, outcomes: r.outcomes, special: this.view() };
     }
@@ -717,12 +725,15 @@
       return t;
     },
     view() {
-      const t = this.tally(), fee = DU.ENTRY;
-      return { demo: true, fee, prize: DU.pot(Math.round(fee * 1e9)) / 1e9, rake: DU.RAKE, rings: DU.RINGS, today: { w: t.w, l: t.l, d: t.d }, last: t.last || null, waiting: [] };
+      const t = this.tally(), fee = DU.ENTRY, pz = (x) => DU.pot(Math.round(x * 1e9)) / 1e9;
+      return { demo: true, fee, prize: pz(fee), rake: DU.RAKE, rings: DU.RINGS, today: { w: t.w, l: t.l, d: t.d }, last: t.last || null, waiting: [],
+        stakes: DU.STAKES.filter((x) => x <= DU.MAX_STAKE + 1e-9).map((st) => ({ stake: st, prize: pz(st), waiting: 0 })) };
     },
-    start() {
-      const v = this.view();
-      if (wallet.balance + 1e-12 < v.fee) throw new Error('Not enough demo SOL for the entry.');
+    start(stake) {
+      const v0 = this.view(), want = stake == null ? v0.fee : stake, tier = v0.stakes.find((x) => Math.abs(x.stake - want) < 1e-9);
+      if (!tier) throw new Error('Pick one of the stakes on offer.');
+      if (wallet.balance + 1e-12 < want) throw new Error('Not enough demo SOL for that stake.');
+      const v = { ...v0, fee: want, prize: tier.prize };
       wallet.balance = round9(wallet.balance - v.fee);
       DemoRake.add('pot', v.fee);
       const ready = DemoMissions.play(v.fee);
@@ -797,10 +808,10 @@
     trophies: { view: () => DemoTrophies.view(), async state() { return DemoTrophies.view(); }, async claim(id) { return DemoTrophies.claim(id); } },
     special: {
       async state() { return DemoSpecial.view(); },
-      async start(slot) { return DemoSpecial.start(slot); },
+      async start(slot, stake) { return DemoSpecial.start(slot, stake); },
       async finish(taps) { return DemoSpecial.finish(taps); }
     },
-    duel: { async state() { return DemoDuel.view(); }, async start() { return DemoDuel.start(); }, async finish(taps, stop) { return DemoDuel.finish(taps, stop); } }
+    duel: { async state() { return DemoDuel.view(); }, async start(stake) { return DemoDuel.start(stake); }, async finish(taps, stop) { return DemoDuel.finish(taps, stop); } }
   };
 
   // Real SOL: talks to server/server.mjs. Only active when SOL_DUNK_CONFIG.serverUrl is set.
@@ -891,13 +902,15 @@
         return {
           day: j.day, fee: j.feeLamports / L, closesAt: j.closesAt, target: j.target,
           unlock: { need: (j.unlockLamports || 0) / L, played: ((j.me && j.me.playedLamports) || 0) / L },
-          specials: j.specials.map((x) => ({ slot: x.slot, x: x.x, prize: x.prizeLamports / L, recipe: x.recipe, course: x.course, me: x.me })),
+          stakes: (j.stakes || [{ stakeLamports: j.feeLamports, unlockLamports: j.unlockLamports, open: true }]).map((x) => ({ stake: x.stakeLamports / L, need: x.unlockLamports / L, open: !!x.open })),
+          specials: j.specials.map((x) => ({ slot: x.slot, x: x.x, prize: x.prizeLamports / L, recipe: x.recipe, course: x.course, me: x.me, at: x.at, of: x.of, done: x.done, next: x.next,
+            tiers: (x.tiers || []).map((k) => ({ stake: k.stakeLamports / L, prize: k.prizeLamports / L, course: k.course })) })),
           me: j.me || { blocked: false, skill: null, locked: true }
         };
       },
       async state() { return this.view(await ServerBank.api('/api/special')); },
-      async start(slot) {
-        const clientSeed = randomHex(8), j = await ServerBank.api('/api/special/start', { clientSeed, slot });
+      async start(slot, stake) {
+        const clientSeed = randomHex(8), j = await ServerBank.api('/api/special/start', { clientSeed, slot, stakeLamports: stake == null ? undefined : Math.round(stake * 1e9) });
         ServerBank.specId = j.runId;
         return { seedHash: j.serverSeedHash, clientSeed, nonce: j.nonce, seed: j.seed, slot: j.slot, recipe: j.recipe, grade: j.grade, rings: j.rings, chance: j.chance, x: j.prizeLamports / j.feeLamports, fee: j.feeLamports / 1e9, prize: j.prizeLamports / 1e9, missions: ServerBank.mfrom(j.missions), special: this.view(j.special) };
       },
@@ -909,11 +922,13 @@
     duel: {
       view(j) {
         const L = 1e9, f = (x) => (x ? { ...x, payout: (x.payoutLamports || 0) / L } : null);
-        return { demo: false, fee: j.feeLamports / L, prize: j.prizeLamports / L, rake: j.rake, rings: j.rings, today: j.today || { w: 0, l: 0, d: 0 }, last: f(j.last), waiting: j.waiting || [], blocked: !!j.blocked };
+        return { demo: false, fee: j.feeLamports / L, prize: j.prizeLamports / L, rake: j.rake, rings: j.rings, today: j.today || { w: 0, l: 0, d: 0 }, last: f(j.last), blocked: !!j.blocked,
+          waiting: (j.waiting || []).map((w) => ({ ...w, stake: (w.stakeLamports || j.feeLamports) / L })),
+          stakes: (j.stakes || [{ stakeLamports: j.feeLamports, prizeLamports: j.prizeLamports, waiting: 0 }]).map((x) => ({ stake: x.stakeLamports / L, prize: x.prizeLamports / L, waiting: x.waiting || 0 })) };
       },
       async state() { return this.view(await ServerBank.api('/api/duel')); },
-      async start() {
-        const j = await ServerBank.api('/api/duel/start', { clientSeed: randomHex(8) });
+      async start(stake) {
+        const j = await ServerBank.api('/api/duel/start', { clientSeed: randomHex(8), stakeLamports: stake == null ? undefined : Math.round(stake * 1e9) });
         ServerBank.duelId = j.runId;
         return { seedHash: j.serverSeedHash, clientSeed: j.clientSeed, nonce: j.nonce, seed: j.seed, fee: j.feeLamports / 1e9, prize: j.prizeLamports / 1e9, rival: j.rival || null, missions: ServerBank.mfrom(j.missions), duel: this.view(j.duel) };
       },
@@ -1884,18 +1899,19 @@
     const t = d.today, L = d.last, rings = (n) => n + (n === 1 ? ' ring' : ' rings');
     const how = (x) => (x.status === 'won' ? `<b class="won">you won ${fmtSol(x.payout)} SOL</b>` : x.status === 'draw' ? 'a draw, the pot was split' : x.status === 'refunded' ? 'nobody took it on, so the entry came back' : 'your rival got further');
     const last = L ? `<div class="pot-last"><span class="k">Last duel</span><span>You ${rings(L.you.rings)}${L.rival ? ' · rival ' + L.rival.rings : ''} · ${how(L)}</span></div>` : '';
-    const wait = d.waiting && d.waiting.length ? `<div class="pot-me">${ICON.target}<div><b>${d.waiting.length === 1 ? 'Your mark is waiting' : d.waiting.length + ' marks are waiting'}</b><span>${d.waiting.map((w) => rings(w.rings)).join(', ')}. The next player to enter races it. If nobody does within 24 hours, the entry comes back.</span></div></div>` : '';
+    const st = duStake(), k = duTier(st);
+    const wait = d.waiting && d.waiting.length ? `<div class="pot-me">${ICON.target}<div><b>${d.waiting.length === 1 ? 'Your mark is waiting' : d.waiting.length + ' marks are waiting'}</b><span>${d.waiting.map((w) => rings(w.rings) + (w.stake ? ' at ' + fmtBet(w.stake) + ' SOL' : '')).join(', ')}. The next player to enter at that stake races it. If nobody does within 24 hours, the stake comes back.</span></div></div>` : '';
     return `<div class="pot-goal"><span class="pot-ic">${ICON.versus}</span><div><b>Race a rival over the same rings</b><span>Whoever gets further takes the pot</span></div></div>
       <div class="du-vs" aria-hidden="true"><span class="du-b you"></span><span class="du-n">You</span><span class="du-line"></span><span class="du-n">Rival</span><span class="du-b"></span></div>
-      <div class="sp-prize pot"><span class="k">The winner takes</span><div class="big"><span class="num">${fmtAmt(d.prize)}</span><span class="unit">SOL</span></div></div>
-      <button class="btn btn-primary" id="duPlay">Play for ${fmtBet(d.fee)} SOL</button><div class="err" id="duErr" role="alert"></div>
+      <div class="sp-prize pot"><span class="k">The winner takes</span><div class="big"><span class="num">${fmtAmt(k.prize)}</span><span class="unit">SOL</span></div><span class="x">${xText(k.prize / st)}× your ${fmtBet(st)} SOL stake${k.waiting ? ` · ${k.waiting === 1 ? 'a rival is' : k.waiting + ' rivals are'} waiting at it` : ''}</span></div>
+      ${stakeHtml('du', st, duStakes())}<button class="btn btn-primary" id="duPlay">Play for ${fmtBet(st)} SOL</button><div class="err" id="duErr" role="alert"></div>
       ${wait}
       <div class="tiles"><div><b>${t.w}</b><span>Won today</span></div><div><b>${t.l}</b><span>Lost today</span></div><div><b>${d.rings}</b><span>Rings</span></div></div>
       ${rulesHtml([
-        ['swish', `You both pay ${fmtBet(d.fee)} SOL and fly the same course. It gets harder with every ring.`],
+        ['swish', 'Pick your stake. You both stake the same and fly the same course. It gets harder with every ring.'],
         ['star', 'More rings wins. Level on rings, the better score wins; level on both, the pot is split.'],
         ['rival', 'Your rival flies beside you as a pale ball.'],
-        ['cut', `The house keeps ${Math.round(d.rake * 100)}% of each entry.`]])}
+        ['cut', `The winner takes ${xText(2 * (1 - d.rake))}× their stake: the house keeps ${Math.round(d.rake * 100)}% of each.`]])}
       ${last}
       ${d.demo ? '<div class="pot-demo"><p>Demo: your rival is the game’s autopilot, set near your level. With real SOL you race another player’s flight.</p></div>' : ''}`;
   }
@@ -1913,6 +1929,37 @@
     if (phase === 'lobby') { if (nav.page === 'special') renderPage(true); if (nav.tab === 'challenges') renderChallenges(true); }
   }
   const oneIn = (p) => (p > 0 ? 'about 1 in ' + Math.max(1, Math.round(1 / p)) : '–');
+  // Stakes (the owner asked for the challenges to be multipliers of a stake the player picks): the specials' stake and
+  // the duel's are kept in prefs. A special's stake has to be open (bet enough in regular runs) and each keeps its own
+  // level, so each has its own course; a duel is raced against a mark at the same stake.
+  const near = (a, b) => Math.abs(a - b) < 1e-9, xText = (m) => String(+m.toFixed(2));
+  function spStakes() { return (specState && specState.stakes && specState.stakes.length && specState.stakes) || [{ stake: (specState && specState.fee) || SP.ENTRY, need: 0, open: true }]; }
+  function spStake() { // the picked stake, or the biggest open one under it
+    const L = spStakes(), want = prefs.spStake || (specState && specState.fee) || SP.ENTRY, ok = L.filter((x) => x.open);
+    return (ok.filter((x) => x.stake <= want + 1e-9).pop() || ok[0] || L[0]).stake;
+  }
+  const spTier = (c, st) => (c.tiers || []).find((k) => near(k.stake, st)) || { stake: st, prize: c.prize, course: c.course };
+  function duStakes() { return (duelState && duelState.stakes && duelState.stakes.length && duelState.stakes) || [{ stake: (duelState && duelState.fee) || DU.ENTRY, prize: (duelState && duelState.prize) || 0, waiting: 0 }]; }
+  function duStake() { const L = duStakes(), want = prefs.duStake || (duelState && duelState.fee) || DU.ENTRY; return (L.filter((x) => x.stake <= want + 1e-9).pop() || L[0]).stake; }
+  const duTier = (st) => duStakes().find((k) => near(k.stake, st)) || duStakes()[0];
+  // the stake stepper: − amount +, through the stakes on offer (a locked one, or one over the balance, stops it)
+  function stakeHtml(kind, st, list, small) {
+    const i = list.findIndex((k) => near(k.stake, st)), up = list[i + 1], bal = bank.balance();
+    const canUp = !!up && up.open !== false && up.stake <= bal + 1e-9;
+    const note = up && up.open === false ? `Bet ${fmtBet(up.need)} SOL in regular runs to stake ${fmtBet(up.stake)} SOL` : '';
+    return `<div class="stake${small ? ' sm' : ''}" data-stake="${kind}"><span class="stake-k">Stake</span><span class="stake-c"><button class="round stake-b" data-d="-1" aria-label="Smaller stake"${i > 0 ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12"/></svg></button><span class="stake-v"><b class="num">${fmtBet(st)}</b><span class="unit">SOL</span></span><button class="round stake-b" data-d="1" aria-label="Bigger stake"${canUp ? '' : ' disabled'}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12h12M12 6v12"/></svg></button></span></div>${note && !small ? `<p class="stake-note">${note}</p>` : ''}`;
+  }
+  function wireStakes(root, redraw) {
+    root.querySelectorAll('[data-stake] .stake-b').forEach((b) => b.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const kind = b.closest('[data-stake]').dataset.stake, d = +b.dataset.d;
+      const L = kind === 'du' ? duStakes() : spStakes().filter((k) => k.open !== false), cur = kind === 'du' ? duStake() : spStake();
+      const i = L.findIndex((k) => near(k.stake, cur)), nx = L[Math.max(0, Math.min(L.length - 1, i + d))];
+      if (!nx || (d > 0 && nx.stake > bank.balance() + 1e-9)) return;
+      if (kind === 'du') prefs.duStake = nx.stake; else prefs.spStake = nx.stake;
+      saveAll(); Sound.click(); redraw();
+    }));
+  }
   // a special's page (nav.sp): a sketch of the course set for the player, the prize, Play, today's tallies, the level
   // it's set for and the rules
   function specialHtml() {
@@ -1920,31 +1967,33 @@
     const c = s && s.specials ? s.specials[nav.sp] || s.specials[0] : null;
     if (!c) return '<div class="empty">The special levels aren’t available right now. Try again in a moment.</div>';
     const left = s.closesAt - Date.now(), pct = Math.round((s.target || SP.TARGET) * 100);
+    const st = spStake(), k = spTier(c, st), locked = s.me && s.me.locked;
     const play = s.me && s.me.blocked ? '<div class="empty">The special levels aren’t available on this account.</div>'
       : c.done ? `<div class="group sp-lock sp-done"><b>All ${c.of} cleared today</b><p>You’ve cleared every ${c.x}× special for today. New ones come in ${left > 0 ? leftText(left) : 'a moment'}.</p></div>`
-      : s.me && s.me.locked ? `<div class="group sp-lock">${unlockRow(s)}<p>Your regular runs also set the level you start at.</p></div>`
-      : `<button class="btn btn-primary" id="spPlay">Play for ${fmtBet(s.fee)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
+      : locked ? `<div class="group sp-lock">${unlockRow(s)}<p>Your regular runs also set the level you start at.</p></div>`
+      : `${stakeHtml('sp', st, spStakes())}<button class="btn btn-primary" id="spPlay">Play for ${fmtBet(st)} SOL</button><div class="err" id="spErr" role="alert"></div>`;
     return `<div class="sp-card">
-        <div class="sp-head"><div class="sp-blurb">${c.recipe.blurb} · ${c.course.rings} rings</div></div>
+        <div class="sp-head"><div class="sp-blurb">${c.recipe.blurb} · ${k.course.rings} rings</div></div>
         <canvas class="sp-course" id="spCourse" aria-hidden="true"></canvas>
         <div class="sp-cap">A sample course. Every attempt gets a new one from its own seed.</div>
       </div>
-      <div class="sp-prize"><span class="k">Clear every ring to win</span><div class="big"><span class="num">${fmtAmt(c.prize)}</span><span class="unit">SOL</span></div><span class="x">${c.x}× your ${fmtBet(s.fee)} SOL entry</span></div>
+      <div class="sp-prize"><span class="k">Clear every ring to win</span><div class="big"><span class="num">${fmtAmt(k.prize)}</span><span class="unit">SOL</span></div><span class="x">${c.x}× your ${fmtBet(st)} SOL stake</span></div>
       ${play}
       <div class="tiles"><div><b>${c.me.tries}</b><span>Tries today</span></div><div><b>${Math.min(c.me.wins, c.of || c.me.wins)}<i> / ${c.of || 1}</i></b><span>Cleared today</span></div><div><b class="sm">${left > 0 ? leftText(left) : 'Soon'}</b><span>New specials</span></div></div>
       <div class="sec-h"><h3>Set for you</h3></div>
       <div class="group sp-odds">
-        <div class="row"><span>Your level</span><b>${c.course.levelName || SP.levelName(c.course.level)}</b></div>
-        <div class="row"><span>Players at your level clear it</span><b>${oneIn(c.course.chance)}</b></div>
+        <div class="row"><span>Your level at ${fmtBet(st)} SOL</span><b>${k.course.levelName || SP.levelName(k.course.level)}</b></div>
+        <div class="row"><span>Players at your level clear it</span><b>${oneIn(k.course.chance)}</b></div>
       </div>
       <p class="foot">Clear it and the next course is harder. Miss and it gets a little easier.</p>
       ${rulesHtml([
-        ['swish', 'Clear every ring to win the prize. Miss one and the entry is gone.'],
+        ['swish', `Pick your stake and win ${c.x}× it for clearing every ring. Miss one and the stake is gone.`],
+        ['level', 'Each stake keeps its own level, so a big stake’s course is set by how you play at that stake.'],
         SP.BY[c.recipe.id] && SP.BY[c.recipe.id].ob ? ['wall', 'Touch a wall and the attempt ends.'] : null,
         ['next', `Clear it and a new special takes its place${c.next ? ` (next: ${c.next.name})` : ''}: ${c.of || SP.PER_SLOT} a day for each prize.`],
-        ['level', `Your level settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your entries.`],
+        ['level', `Your level settles where you clear it ${oneIn(SP.TARGET / c.x)}, so over time you get back about ${pct}% of your stakes.`],
         ['clock', 'New specials every day at midnight UTC.'],
-        ['mission', `They open once you’ve bet ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs. Their rings don’t count toward missions or the pot.`]])}`;
+        ['mission', `They open once you’ve bet ${fmtBet((s.unlock && s.unlock.need) || SP.UNLOCK * s.fee)} SOL in regular runs, and bigger stakes as you bet more. Their rings don’t count toward missions.`]])}`;
   }
   // a sketch of a course: the rings in order, how wide each is, how far it bobs, and the green finish
   function drawCourse(el, def) {
@@ -1989,12 +2038,12 @@
   function specialCard() {
     const s = specState;
     if (!s || !s.specials) return '';
-    const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked, locked = !blocked && s.me && s.me.locked;
+    const left = s.closesAt - Date.now(), blocked = s.me && s.me.blocked, locked = !blocked && s.me && s.me.locked, st = spStake();
     const act = (c) => (blocked ? '<span class="pill off">Not available</span>' : locked ? '<span class="pill off">Locked</span>' : c.done ? '<span class="pill ok">Cleared</span>'
-      : `<button class="pill go" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(s.fee)} SOL">Play ${fmtBet(s.fee)}</button>`);
-    const rows = s.specials.map((c) => `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(c.prize)} SOL, ${c.done ? c.of : c.at} of ${c.of} cleared today. Details"><span class="spr-k"><span class="spr-x">${c.x}×</span><span class="spr-dots" aria-hidden="true">${Array.from({ length: c.of || 0 }, (x, i) => `<i${i < (c.done ? c.of : c.at) ? ' class="on"' : ''}></i>`).join('')}</span></span><span class="spr-t"><b>${c.recipe.name}</b><span>${c.course.rings} rings · ${c.recipe.blurb}</span></span></button>
-      <div class="spr-act"><span class="spr-win">${c.done ? `All ${c.of} cleared today` : `Win <b class="num">${fmtAmt(c.prize)}</b> SOL`}</span>${act(c)}</div></div>`).join('');
-    return `<div class="cc sp sp-cc"><div class="cc-h"><span class="cc-k">${ICON.star}Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftOf(left) : 'New soon'}</span></div>${locked ? unlockRow(s) : ''}${rows}</div>`;
+      : `<button class="pill go" data-slot="${c.slot}" id="chSpPlay${c.slot}" aria-label="Play ${c.recipe.name} for ${fmtBet(st)} SOL">Play ${fmtBet(st)}</button>`);
+    const rows = s.specials.map((c) => { const k = spTier(c, st); return `<div class="spr"><button class="spr-open" data-page="special" data-slot="${c.slot}" aria-label="${c.recipe.name}, win ${fmtAmt(k.prize)} SOL, ${c.done ? c.of : c.at} of ${c.of} cleared today. Details"><span class="spr-k"><span class="spr-x">${c.x}×</span><span class="spr-dots" aria-hidden="true">${Array.from({ length: c.of || 0 }, (x, i) => `<i${i < (c.done ? c.of : c.at) ? ' class="on"' : ''}></i>`).join('')}</span></span><span class="spr-t"><b>${c.recipe.name}</b><span>${k.course.rings} rings · ${c.recipe.blurb}</span></span></button>
+      <div class="spr-act"><span class="spr-win">${c.done ? `All ${c.of} cleared today` : `Win <b class="num">${fmtAmt(k.prize)}</b> SOL`}</span>${act(c)}</div></div>`; }).join('');
+    return `<div class="cc sp sp-cc"><div class="cc-h"><span class="cc-k">${ICON.star}Today’s specials</span><span class="cc-t">${left > 0 ? 'New in ' + leftOf(left) : 'New soon'}</span></div>${locked ? unlockRow(s) : blocked ? '' : stakeHtml('sp', st, spStakes(), true)}${rows}</div>`;
   }
   // the specials open once the player has bet SP.UNLOCK entries in regular runs: how far along they are
   function unlockRow(s) {
@@ -2006,10 +2055,10 @@
   function duelCard() {
     const d = duelState;
     if (!d || d.blocked) return '';
-    const t = d.today, rec = t.w + t.l + t.d ? `${t.w} won · ${t.l} lost today` : 'One on one';
-    return `<div class="cc du"><div class="cc-h"><span class="cc-k">${ICON.versus}Duel</span><span class="cc-t">${rec}</span></div>
-      <div class="spr"><button class="spr-open" data-page="duel" aria-label="Duel: race a rival over the same rings, win ${fmtAmt(d.prize)} SOL. Details"><span class="spr-x">1v1</span><span class="spr-t"><b>Race a rival</b><span>Same rings · further wins</span></span></button>
-      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(d.prize)}</b> SOL</span><button class="pill go" id="chDuel" aria-label="Play a duel for ${fmtBet(d.fee)} SOL">Play ${fmtBet(d.fee)}</button></div></div></div>`;
+    const t = d.today, rec = t.w + t.l + t.d ? `${t.w} won · ${t.l} lost today` : 'One on one', st = duStake(), k = duTier(st);
+    return `<div class="cc du"><div class="cc-h"><span class="cc-k">${ICON.versus}Duel</span><span class="cc-t">${rec}</span></div>${stakeHtml('du', st, duStakes(), true)}
+      <div class="spr"><button class="spr-open" data-page="duel" aria-label="Duel: race a rival over the same rings, win ${fmtAmt(k.prize)} SOL. Details"><span class="spr-x">${xText(k.prize / st)}×</span><span class="spr-t"><b>Race a rival</b><span>${k.waiting ? (k.waiting === 1 ? 'A rival is waiting' : k.waiting + ' rivals waiting') + ' at this stake' : 'Same rings · further wins'}</span></span></button>
+      <div class="spr-act"><span class="spr-win">Win <b class="num">${fmtAmt(k.prize)}</b> SOL</span><button class="pill go" id="chDuel" aria-label="Play a duel for ${fmtBet(st)} SOL">Play ${fmtBet(st)}</button></div></div></div>`;
   }
   function potCard() {
     const p = potState;
@@ -2054,6 +2103,7 @@
     document.querySelectorAll('#cBody .spr .pill[data-slot]').forEach((b) => b.addEventListener('click', () => startSpecial(+b.dataset.slot)));
     on('chPot', () => startPot());
     on('chDuel', () => startDuel());
+    wireStakes($('cBody'), () => renderChallenges(true));
   }
 
   // ---------------------------------------------------------------- run flow
@@ -2084,7 +2134,7 @@
     run.busy = true;
     let r;
     try {
-      r = await bank.special.start(slot);
+      r = await bank.special.start(slot, spStake());
       Object.assign(run, { mode: 'special', slot: r.slot, recipe: r.recipe, g: r.grade, n: r.rings, x: r.x, prize: r.prize, di: SP.GRADES[r.grade][0], bet: r.fee, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.seed }, RUN_FRESH);
       run.log = []; run.told = {}; run.share = '';
       if (r.special) specState = r.special;
@@ -2106,7 +2156,7 @@
     run.busy = true;
     let r;
     try {
-      r = await bank.duel.start();
+      r = await bank.duel.start(duStake());
       Object.assign(run, { mode: 'duel', recipe: null, rival: r.rival, prize: r.prize, di: 0, bet: r.fee, level: 1, total: 1, streak: 0, best: 0, hoops: 0, swishes: 0, rims: 0, seedHash: r.seedHash, clientSeed: r.clientSeed, nonce: r.nonce, serverSeed: '', levelSeed: r.seed }, RUN_FRESH);
       run.log = []; run.told = {}; run.share = '';
       if (r.duel) duelState = r.duel;
@@ -4525,6 +4575,7 @@
     const on = (id, fn) => { const el = $(id); if (el) el.addEventListener('click', fn); };
     if (kind === 'special') on('spPlay', () => startSpecial(nav.sp));
     if (kind === 'duel') on('duPlay', () => startDuel());
+    if (kind === 'special' || kind === 'duel') wireStakes($('pgBody'), () => renderPage(true));
     if (kind === 'pot') {
       on('potPlay', () => startPot());
       on('potClose', async () => { if (!bank.pot.closeNow) return; const last = potState && potState.last; potState = await bank.pot.closeNow(); setBalance(); renderPotRow(); refreshPot(); });
@@ -4597,7 +4648,8 @@
     const sc = nav.page === 'special' && specState && specState.specials && specState.specials[nav.sp];
     if (sc) {
       const day = specState.day, slot = sc.slot;
-      requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[sc.recipe.id]) drawCourse(c, SP.generate('preview|' + day + '|' + slot, sc.recipe.id, sc.course.grade, sc.course.rings)); });
+      const k = spTier(sc, spStake()); // the course at the picked stake
+      requestAnimationFrame(() => { const c = $('spCourse'); if (c && SP.BY[sc.recipe.id]) drawCourse(c, SP.generate('preview|' + day + '|' + slot, sc.recipe.id, k.course.grade, k.course.rings)); });
     }
     const ps = nav.page === 'pot' && potState && potState.seed && potState.theme ? potState : null;
     if (ps) requestAnimationFrame(() => { const c = $('potCourse'); if (!c) return; const d = POTS.course(ps.seed, ps.theme.id); drawCourse(c, Object.assign({}, d, { hoops: d.hoops.slice(0, 16) })); });

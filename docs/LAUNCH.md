@@ -104,7 +104,10 @@ Set `NETWORK=mainnet-beta` and the closed-beta values from `.env.example`:
 | `WITHDRAW_DAY_TOTAL_LAMPORTS` | 20 SOL | the circuit breaker: past it, withdrawals wait for you |
 | `BIG_WIN_LAMPORTS` | 2 SOL | a payout this big holds that player's withdrawals until you've looked |
 | `SPECIAL_DAY_TRIES` | 20 | limits how fast a strong newcomer can farm the special levels |
-| `DUEL_ENTRY_LAMPORTS` | 50000000 (0.05 SOL) | each player's entry into a duel; the winner takes 90% of both |
+| `SPECIAL_MAX_STAKE_LAMPORTS` | 200000000 (0.2 SOL) | the biggest stake a player can pick at the special levels (from 0.01 SOL; each also needs ten of it in regular-run bets). A strong player who hides their skill gets a head start at each stake, about 6.6 stakes' worth per prize per account (`node sim/stakes.cjs --net`), so raise it only once accounts are verified |
+| `SPECIAL_ENTRY_LAMPORTS` | 50000000 (0.05 SOL) | the stake a special starts at |
+| `DUEL_ENTRY_LAMPORTS` | 50000000 (0.05 SOL) | the stake a duel starts at; the winner takes 90% of both stakes |
+| `DUEL_MAX_STAKE_LAMPORTS` | 1000000000 (1 SOL) | the biggest stake a player can pick in a duel (the house can't lose on one; a mark is raced only at its stake) |
 | `POT_ENTRY_LAMPORTS` | 50000000 (0.05 SOL) | each attempt at the daily pot; all of it goes into the pot, and the house keeps 10% at the close |
 
 **How max bets follow the bankroll.** Free bankroll = hot + cold balances − everything owed (player balances, open

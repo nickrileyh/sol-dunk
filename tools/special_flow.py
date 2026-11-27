@@ -176,6 +176,31 @@ async def main():
         await page.click('#tabProfile'); await page.wait_for_timeout(300)
         await page.click('#pBody [data-page="stats"]'); await page.wait_for_timeout(300)
         await page.click('#pgBack'); await page.wait_for_timeout(400)
+        # stakes: the card's stepper picks the stake (a stake opens at ten of it in regular runs: 0.5 SOL opens 0.05 and
+        # under, not 0.1); every row wins its multiple of it, and an attempt debits it and plays that stake's course
+        await page.click('#tabChallenges'); await page.wait_for_timeout(500)
+        st = (await spec())['stakes']
+        check([x['stake'] for x in st] == [0.01, 0.02, 0.05, 0.1, 0.2] and [x['open'] for x in st] == [True, True, True, False, False], 'the stakes on offer, open up to what the regular runs cover: ' + json.dumps(st))
+        up_off = await page.evaluate("document.querySelector('#cBody [data-stake=\"sp\"] .stake-b[data-d=\"1\"]').disabled")
+        check(up_off, 'the + key stops at the biggest open stake')
+        await page.click('#cBody [data-stake="sp"] .stake-b[data-d="-1"]'); await page.wait_for_timeout(300)
+        await page.click('#cBody [data-stake="sp"] .stake-b[data-d="-1"]'); await page.wait_for_timeout(300)
+        rows = await page.evaluate("[document.querySelector('#cBody [data-stake=\"sp\"] .stake-v').innerText, ...[...document.querySelectorAll('#cBody .sp-cc .spr .spr-win')].map((e) => e.innerText), document.getElementById('chSpPlay0') ? document.getElementById('chSpPlay0').innerText : '']")
+        sp3 = await spec()
+        check(await page.evaluate('__solDunk.prefs.spStake') == 0.01 and '0.01' in rows[0] and 'Win 0.02 SOL' in rows[1] and 'Play 0.01' in rows[4], 'stepping down to 0.01: the rows win 2x, 3x and 5x of it: ' + json.dumps(rows))
+        await page.screenshot(path=OUT + 'stake.png')
+        b0 = await bal(); t0 = [k for k in sp3['specials'][0]['tiers'] if abs(k['stake'] - 0.01) < 1e-9][0]
+        await page.click('#chSpPlay0'); await page.wait_for_timeout(800)
+        hud = await page.evaluate("[document.getElementById('hudMult').textContent, document.getElementById('hudPot').textContent]")
+        check(abs((b0 - await bal()) - 0.01) < 1e-9 and hud[0] == '0/' + str(t0['course']['rings']) and abs(float(hud[1]) - 0.02) < 1e-6, 'a 0.01 SOL attempt: 0.01 debited, that stake\'s course, win 0.02: ' + json.dumps(hud))
+        await page.evaluate("__solDunk.tap()")
+        for i in range(400):
+            if await page.evaluate('__solDunk.phase()') == 'over': break
+            await page.wait_for_timeout(100)
+        await page.wait_for_timeout(1200)
+        lv = await page.evaluate("__solDunk.special().me.skill.stakes[0]")
+        check(lv[2] == sp3['me']['skill']['stakes'][0][2], 'the attempt at 0.01 leaves the 0.05 level where it was: ' + json.dumps([sp3['me']['skill']['stakes'][0], lv]))
+        await page.click('#lobbyBtn'); await page.wait_for_timeout(600)
         # the daily pot has its own page
         await page.click('#tabChallenges'); await page.wait_for_timeout(500)
         await page.click('#cBody [data-page="pot"]'); await page.wait_for_timeout(500)

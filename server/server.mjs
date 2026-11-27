@@ -726,50 +726,64 @@ export async function createServer(CFG, log) {
   // fair seed, HMAC-SHA256(serverSeed, clientSeed:nonce:special). Accounts limited for beating the house can't enter.
   // Each prize has SP.PER_SLOT specials a day, in an order that's the same for everyone: a player is on the one after
   // those they've cleared today (their wins), and once they've cleared them all that prize is done until tomorrow.
-  function specialsToday(u) {
-    const day = SP.dayKey(potNow()), fee = CFG.specialEntry, forced = CFG.specialRecipe && SP.BY[CFG.specialRecipe];
+  // The player picks the stake (CFG.specialStakes) and the prize is the stake times the special's multiple; each
+  // stake keeps its own level at each prize (src/special.cjs), so every stake has its own course for the player.
+  function specialsToday(u, stake = CFG.specialEntry) {
+    const day = SP.dayKey(potNow()), forced = CFG.specialRecipe && SP.BY[CFG.specialRecipe];
     const wins = u && u.special && u.special.day === day && Array.isArray(u.special.wins) ? u.special.wins : null;
     return {
-      day, fee,
+      day, fee: stake,
       list: SP.specialsFor(day, wins).map(({ slot, x, recipe, at, of, done, next }) => {
-        const R = forced || recipe, d = SP.levelOf(u && u.skill, slot), c = SP.courseFor(d, R.id, x);
-        return { slot, x, recipe: R, g: c.g, n: c.n, chance: c.chance, level: Math.round(d * 100) / 100, prize: Math.floor(fee * x), at, of, done, next: done ? null : forced && next ? forced : next };
+        const R = forced || recipe, d = SP.levelOf(u && u.skill, slot, stake / LAMPORTS), c = SP.courseFor(d, R.id, x);
+        const tiers = SP.tiersFor(u && u.skill, slot, R.id, x, CFG.specialStakes.map((st) => st / LAMPORTS)).map((c2, i) => ({ ...c2, stake: CFG.specialStakes[i], prize: Math.floor(CFG.specialStakes[i] * x) }));
+        return { slot, x, recipe: R, g: c.g, n: c.n, chance: c.chance, level: Math.round(d * 100) / 100, prize: Math.floor(stake * x), tiers, at, of, done, next: done ? null : forced && next ? forced : next };
       })
     };
   }
+  // a stake opens once the player's regular-run bets reach SP.UNLOCK of it (the specials themselves at CFG.specialUnlock)
+  const stakeUnlock = (stake) => Math.max(CFG.specialUnlock, Math.round(SP.UNLOCK * stake));
   const unlockText = () => `Bet ${solText(CFG.specialUnlock)} SOL in regular runs to unlock the special levels`;
   async function specialView(t, u) {
     const { day, fee, list } = specialsToday(u);
     const tl = u && u.special && u.special.day === day ? u.special : null;
+    const played = u ? await runPlayed(t, u) : 0;
     const out = {
       day, feeLamports: fee, closesAt: SP.closesAt(day) - potClock, target: SP.TARGET, unlockLamports: CFG.specialUnlock,
+      stakes: CFG.specialStakes.map((st) => ({ stakeLamports: st, unlockLamports: stakeUnlock(st), open: !!u && played >= stakeUnlock(st) })),
       specials: list.map((s) => ({
         slot: s.slot, x: s.x, prizeLamports: s.prize, recipe: { id: s.recipe.id, name: s.recipe.name, blurb: s.recipe.blurb },
         at: s.at, of: s.of, done: s.done, next: s.next ? { id: s.next.id, name: s.next.name } : null,
-        course: { grade: s.g, rings: s.n, chance: s.chance, level: s.level, levelName: SP.levelName(s.level) }, me: tl ? { tries: tl.tries[s.slot] || 0, wins: tl.wins[s.slot] || 0 } : { tries: 0, wins: 0 }
+        course: { grade: s.g, rings: s.n, chance: s.chance, level: s.level, levelName: SP.levelName(s.level) }, me: tl ? { tries: tl.tries[s.slot] || 0, wins: tl.wins[s.slot] || 0 } : { tries: 0, wins: 0 },
+        tiers: s.tiers.map((c) => ({ stakeLamports: c.stake, prizeLamports: c.prize, course: { grade: c.g, rings: c.n, chance: c.chance, level: c.level, levelName: c.levelName } }))
       }))
     };
-    if (u) { const played = await runPlayed(t, u); out.me = { blocked: !!u.flagged, skill: SP.rating(u.skill), playedLamports: played, locked: played < CFG.specialUnlock }; }
+    if (u) out.me = { blocked: !!u.flagged, skill: SP.rating(u.skill), playedLamports: played, locked: played < CFG.specialUnlock };
     return out;
   }
   app.get('/api/special', wrap(async (req) => tx(async (t) => specialView(t, await maybeAuth(t, req)))));
   app.post('/api/special/start', geo, limit('runs', 120, 60_000, who), wrap(async (req) => {
     const { clientSeed, slot } = req.body || {};
+    const stake = req.body && req.body.stakeLamports != null ? req.body.stakeLamports : CFG.specialEntry;
     if (typeof clientSeed !== 'string' || !/^[0-9a-zA-Z]{4,64}$/.test(clientSeed)) throw bad('Invalid client seed');
     if (!(slot >= 0 && slot < SP.SLOTS.length && slot === Math.floor(slot))) throw bad('Unknown special level');
+    if (!CFG.specialStakes.includes(stake)) throw bad('Pick one of the stakes on offer');
     await pausedPlay();
     const reserves = await chain.reserves();
     const out = await tx(async (t) => {
       const u = await auth(t, req);
       if (await t.openRun(u.address)) throw bad('Finish your current run first');
       if (u.flagged) throw bad('The special levels aren’t available on this account');
-      if ((await runPlayed(t, u)) < CFG.specialUnlock) throw bad(unlockText());
-      const { day, fee, list } = specialsToday(u), s = list[slot];
+      const played = await runPlayed(t, u);
+      if (played < CFG.specialUnlock) throw bad(unlockText());
+      if (played < stakeUnlock(stake)) throw bad(`Bet ${solText(stakeUnlock(stake))} SOL in regular runs to stake ${solText(stake)} SOL`);
+      const { day, fee, list } = specialsToday(u, stake), s = list[slot];
       if (s.done) throw bad(`You’ve cleared all ${s.of} of today’s ${s.x}× specials. New ones come at midnight UTC.`);
-      if (u.balance < fee) throw bad('Not enough balance for the entry');
+      if (u.balance < fee) throw bad('Not enough balance for that stake');
       await t.bankrollLock();
-      const owed = await t.owed();
-      if (reserves.total - owed.total - s.prize + fee < 0) throw bad('The house can’t cover the prize right now. Try again later.');
+      const owed = await t.owed(), free = reserves.total - owed.total;
+      // the prize is a bet's biggest win: within MAX_PAYOUT and RISK_FRACTION of the free bankroll, like a run's
+      if (s.prize > Math.min(CFG.maxPayout, Math.floor(CFG.riskFraction * Math.max(0, free)))) throw bad('That stake is too big for the house right now. Try a smaller one.');
+      if (free - s.prize + fee < 0) throw bad('The house can’t cover the prize right now. Try again later.');
       await t.credit(u, -fee, 'special_entry', null);
       u.wagered += fee;
       rakeAdd(u, 'special', fee);
@@ -811,7 +825,7 @@ export async function createServer(CFG, log) {
       }
       const won = r.result === 'clear';
       u.hoops += r.outcomes.length; u.swishes += r.outcomes.filter((o) => o === 'S').length;
-      u.skill = SP.addSpecial(u.skill, run.slot, won, r.outcomes.length); // that special's level moves: up after a clear, down after a miss
+      u.skill = SP.addSpecial(u.skill, run.slot, won, r.outcomes.length, run.bet / LAMPORTS); // that special's level at that stake moves: up after a clear, down after a miss
       await botCheck(t, u, def, taps, run.id);
       run.levels.push({ level: 1, taps: taps.length, outcomes: r.outcomes.join(''), result: r.result, ticks: r.ticks });
       run.total = won ? run.prize / run.bet : 0;
@@ -841,12 +855,16 @@ export async function createServer(CFG, log) {
   const duelDay = (u) => { const day = SP.dayKey(potNow()); if (!u.duel || u.duel.day !== day) u.duel = { day, w: 0, l: 0, d: 0, last: u.duel ? u.duel.last : null }; return u.duel; };
   async function duelView(t, u) {
     const fee = CFG.duelEntry, out = { feeLamports: fee, prizeLamports: DU.pot(fee), rake: DU.RAKE, rings: DU.RINGS, today: { w: 0, l: 0, d: 0 }, last: null, waiting: [] };
+    // the stakes on offer, each with what the winner takes and how many other players' marks are waiting at it
+    const m = await t.q(`select (doc->>'bet')::bigint as bet, count(*)::int as n from runs where kind = 'duel' and status = 'waiting' and address <> $1 group by 1`, [u ? u.address : '']);
+    const open = new Map(m.rows.map((x) => [Number(x.bet), x.n]));
+    out.stakes = CFG.duelStakes.map((st) => ({ stakeLamports: st, prizeLamports: DU.pot(st), waiting: open.get(st) || 0 }));
     if (!u) return out;
     const d = u.duel && u.duel.day === SP.dayKey(potNow()) ? u.duel : null;
     if (d) out.today = { w: d.w, l: d.l, d: d.d };
     out.last = (u.duel && u.duel.last) || null; out.blocked = !!u.flagged;
     const r = await t.q(`select doc from runs where address = $1 and kind = 'duel' and status in ('waiting', 'matched') order by created_at limit 5`, [u.address]);
-    out.waiting = r.rows.map((x) => ({ rings: x.doc.flight.rings, score: x.doc.flight.score, at: x.doc.endedAt }));
+    out.waiting = r.rows.map((x) => ({ rings: x.doc.flight.rings, score: x.doc.flight.score, at: x.doc.endedAt, stakeLamports: x.doc.bet }));
     return out;
   }
   // both flights are in: pay the pot, close both, count the entries as play and note the result for both players
@@ -880,17 +898,19 @@ export async function createServer(CFG, log) {
   app.get('/api/duel', wrap(async (req) => tx(async (t) => duelView(t, await maybeAuth(t, req)))));
   app.post('/api/duel/start', geo, limit('runs', 120, 60_000, who), wrap(async (req) => {
     const { clientSeed } = req.body || {};
+    const stake = req.body && req.body.stakeLamports != null ? req.body.stakeLamports : CFG.duelEntry;
     if (typeof clientSeed !== 'string' || !/^[0-9a-zA-Z]{4,64}$/.test(clientSeed)) throw bad('Invalid client seed');
+    if (!CFG.duelStakes.includes(stake)) throw bad('Pick one of the stakes on offer');
     await pausedPlay();
     return tx(async (t) => {
       const u = await auth(t, req);
       if (await t.openRun(u.address)) throw bad('Finish your current run first');
       if (u.flagged) throw bad('Duels aren’t available on this account');
-      // the oldest mark from another wallet, if there is one (skipping any that another player is taking right now)
-      const m = await t.q(`select id from runs where kind = 'duel' and status = 'waiting' and address <> $1 order by created_at limit 1 for update skip locked`, [u.address]);
+      if (u.balance < stake) throw bad('Not enough balance for that stake');
+      // the oldest mark at this stake from another wallet, if there is one (skipping any that another player is taking right now)
+      const m = await t.q(`select id from runs where kind = 'duel' and status = 'waiting' and address <> $1 and (doc->>'bet')::bigint = $2 order by created_at limit 1 for update skip locked`, [u.address, stake]);
       const mark = m.rows.length ? await t.run(m.rows[0].id) : null;
-      const fee = mark ? mark.bet : CFG.duelEntry;
-      if (u.balance < fee) throw bad('Not enough balance for the entry');
+      const fee = stake;
       if (!mark) {
         const w = await t.q(`select count(*)::int as n from runs where address = $1 and kind = 'duel' and status in ('waiting', 'matched')`, [u.address]);
         if (w.rows[0].n >= DUEL_MARKS) throw bad(`You have ${DUEL_MARKS} marks waiting for a rival. Come back when one has been taken on.`);

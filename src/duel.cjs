@@ -25,7 +25,11 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (E) {
   'use strict';
 
-  const ENTRY = 0.05;             // entry in SOL (the server can set its own)
+  const ENTRY = 0.05;             // entry in SOL (the server can set its own): the stake a duel starts at
+  // the stakes a player can pick (the owner asked to choose how much to play with); both players stake the same, so a
+  // mark is only raced by someone at its stake, and the winner takes 1.8x. The house can't lose on a duel, so these go
+  // higher than the specials' (the server's DUEL_MAX_STAKE_LAMPORTS caps them).
+  const STAKES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1], MAX_STAKE = 1;
   const RAKE = 0.1;               // the house's share of every entry
   const RINGS = 30;               // the course's length: hardly anyone sees the last ring
   const WAIT_MS = 24 * 3600000;   // a mark nobody takes on is refunded after this long
@@ -121,5 +125,5 @@
     return cmp > 0 ? { a: p, b: 0 } : cmp < 0 ? { a: 0, b: p } : { a: Math.floor(p / 2), b: Math.floor(p / 2) };
   }
 
-  return { ENTRY, RAKE, RINGS, WAIT_MS, START_Y, SPEED, W_MIN, RAMP, ringConfig, generate, score, flight, fly, compare, pot, payouts };
+  return { ENTRY, STAKES, MAX_STAKE, RAKE, RINGS, WAIT_MS, START_Y, SPEED, W_MIN, RAMP, ringConfig, generate, score, flight, fly, compare, pot, payouts };
 });
